@@ -6,6 +6,8 @@ import { nextId } from './store.js';
 
 export const BACKUP_INTERVAL_MS = 24 * 3600 * 1000;
 export const DEVICE_STALE_MS = 10 * 60 * 1000;
+// 3 meses de plano vencido => inativação automática (90 dias).
+export const AUTO_INACTIVE_MS = 90 * 24 * 3600 * 1000;
 
 function pendente(store, key) {
   return store.notifications.find((n) => n.key === key && !n.resolvida);
@@ -64,7 +66,24 @@ export function evaluateNotifications(store, now = new Date()) {
     if (n) criadas.push(n);
   }
 
-  // 4. Resumo diário de métricas (overview estilo admin/overview do wsi-invest-ai)
+  // 4. Inativação automática: 3 meses de plano vencido (ativo=false + sync).
+  for (const p of store.persons.values()) {
+    if (p.ativo !== false && p.validadeFim && now - new Date(p.validadeFim) > AUTO_INACTIVE_MS) {
+      p.ativo = false;
+      for (const d of store.devices.values()) {
+        store.syncQueue.push({ id: nextId('sync'), personId: p.id, deviceId: d.id, operacao: 'UPSERT', status: 'PENDING', tentativas: 0 });
+      }
+      const n = criar(store, {
+        key: `auto-inactive:${p.id}`, tipo: 'INATIVACAO',
+        titulo: `Inativado automaticamente: ${p.nome}`,
+        detalhe: `Plano vencido há mais de 3 meses (até ${p.validadeFim}). Reative manualmente se voltar.`,
+        now,
+      });
+      if (n) criadas.push(n);
+    }
+  }
+
+  // 5. Resumo diário de métricas (overview estilo admin/overview do wsi-invest-ai)
   const dia = now.toISOString().slice(0, 10);
   const evs = store.events.filter((e) => e.timestamp.slice(0, 10) === dia);
   const ok = evs.filter((e) => e.decisao === 'ALLOW').length;

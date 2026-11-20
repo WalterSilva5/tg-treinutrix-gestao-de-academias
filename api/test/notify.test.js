@@ -57,8 +57,7 @@ test('ack exige existir e marca responsável', () => {
   assert.equal(ackNotification(s, id, 'Beto'), null); // já resolvida
 });
 
-test('inativo não entra na inadimplência', () => {
-  const s = {
+test('inativo não entra na inadimplência', () => {  const s = {
     persons: new Map([
       ['a', { id: 'a', ativo: true, validadeFim: '2020-01-01T00:00:00Z' }],
       ['b', { id: 'b', ativo: false, validadeFim: '2020-01-01T00:00:00Z' }],
@@ -70,4 +69,25 @@ test('inativo não entra na inadimplência', () => {
   };
   const inad = listInadimplentes(s, new Date('2026-11-20T12:00:00'));
   assert.deepEqual(inad.map((p) => p.id), ['a']);
+});
+
+test('vencido há 3+ meses inativa automaticamente com sync + aviso', () => {
+  const s = {
+    persons: new Map([
+      ['old', { id: 'old', nome: 'Sumido', ativo: true, validadeFim: '2026-01-01T00:00:00Z' }],
+      ['new', { id: 'new', nome: 'Recente', ativo: true, validadeFim: '2026-11-01T00:00:00Z' }],
+    ]),
+    devices: new Map([['d1', { id: 'd1' }]]), rules: [], events: [], syncQueue: [],
+    notifications: [], meta: { lastBackupAt: new Date().toISOString() },
+  };
+  const now = new Date('2026-11-20T12:00:00');
+  const c = evaluateNotifications(s, now);
+  assert.equal(s.persons.get('old').ativo, false);
+  assert.equal(s.persons.get('new').ativo, true);
+  assert.ok(s.syncQueue.some((q) => q.personId === 'old' && q.operacao === 'UPSERT'));
+  assert.ok(c.some((n) => n.key === 'auto-inactive:old'));
+  // segunda avaliação não repete (já inativo)
+  const n1 = s.notifications.length;
+  evaluateNotifications(s, new Date(now.getTime() + 60000));
+  assert.ok(!s.notifications.slice(n1).some((n) => n.key === 'auto-inactive:old'));
 });
