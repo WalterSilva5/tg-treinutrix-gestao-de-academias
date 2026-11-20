@@ -108,3 +108,29 @@ test('vencido há 3+ meses inativa automaticamente com sync + aviso', () => {
   evaluateNotifications(s, new Date(now.getTime() + 60000));
   assert.ok(!s.notifications.slice(n1).some((n) => n.key === 'auto-inactive:old'));
 });
+
+test('cooldown: baixa não recria a mesma notificação no ciclo seguinte', () => {
+  const s = freshStore();
+  s.meta.lastBackupAt = null;
+  const now = new Date('2026-11-20T12:00:00');
+  const c = evaluateNotifications(s, now);
+  const n = c.find((x) => x.tipo === 'BACKUP');
+  assert.ok(n);
+  ackNotification(s, n.id, 'Ana');
+  // ack usa o relógio real; fixa a baixa no "now" do teste para ser determinístico.
+  n.resolvidaEm = now.toISOString();
+  const depois = evaluateNotifications(s, new Date(now.getTime() + 60000));
+  assert.ok(!depois.some((x) => x.tipo === 'BACKUP'));
+  // Depois do cooldown (24h), volta a avisar.
+  const amanha = evaluateNotifications(s, new Date(now.getTime() + 25 * 3600 * 1000));
+  assert.ok(amanha.some((x) => x.tipo === 'BACKUP'));
+});
+
+test('inativação automática enfileira sync com enable=false', () => {
+  const s = freshStore();
+  s.persons = new Map([['old', { id: 'old', nome: 'Sumido', tipo: 'ALUNO', ativo: true, validadeFim: '2026-01-01' }]]);
+  evaluateNotifications(s, new Date('2026-11-20T12:00:00'));
+  assert.equal(s.persons.get('old').ativo, false);
+  assert.equal(s.syncQueue.length, 1);
+  assert.equal(s.syncQueue[0].payload.enable, false);
+});

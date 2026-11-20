@@ -4,4 +4,4 @@ dist/
 *.log
 .DS_Store
 backups/*.json
-data/photos/
+data/

@@ -1,20 +1,36 @@
 // Notificações operacionais com confirmação manual.
 // Inspirado no módulo alerts do wsi-invest-ai: regras avaliadas
 // periodicamente, janela de dedup (não duplica pendente com mesma chave),
-// baixa manual obrigatória (ack com responsável).
+// baixa manual obrigatória (ack com responsável) e cooldown por chave para
+// não recriar a mesma notificação a cada ciclo depois da baixa.
 import { nextId, TIPOS_PESSOA } from './store.js';
+import { enqueueSync } from './sync.js';
+import { localDayKey, parseDate } from './time.js';
 
 export const BACKUP_INTERVAL_MS = 24 * 3600 * 1000;
 export const DEVICE_STALE_MS = 10 * 60 * 1000;
 // 3 meses de plano vencido => inativação automática (90 dias).
 export const AUTO_INACTIVE_MS = 90 * 24 * 3600 * 1000;
 
-function pendente(store, key) {
-  return store.notifications.find((n) => n.key === key && !n.resolvida);
-}
+// Cooldown por tipo: depois da baixa, a mesma condição só volta a avisar
+// depois desse tempo (evita fadiga de notificação com scheduler de 5 min).
+const COOLDOWN_MS = {
+  BACKUP: BACKUP_INTERVAL_MS,
+  DISPOSITIVO: 30 * 60 * 1000,
+  SINCRONISMO: 6 * 3600 * 1000,
+  INATIVACAO: 30 * 24 * 3600 * 1000,
+  METRICAS: BACKUP_INTERVAL_MS,
+};
 
 function criar(store, { key, tipo, titulo, detalhe, now }) {
-  if (pendente(store, key)) return null; // dedup
+  const recent = store.notifications.find((n) => {
+    if (n.key !== key) return false;
+    if (!n.resolvida) return true; // pendente: dedup
+    const when = n.resolvidaEm || n.createdAt;
+    const cooldown = COOLDOWN_MS[tipo] ?? BACKUP_INTERVAL_MS;
+    return now - new Date(when) < cooldown;
+  });
+  if (recent) return null;
   const n = {
     id: nextId('ntf'), key, tipo, titulo, detalhe,
     createdAt: now.toISOString(), resolvida: false,
@@ -27,6 +43,8 @@ function criar(store, { key, tipo, titulo, detalhe, now }) {
 // Avalia regras e cria notificações. Retorna as criadas.
 export function evaluateNotifications(store, now = new Date()) {
   const criadas = [];
+  store.notifications = store.notifications || [];
+  store.syncQueue = store.syncQueue || [];
 
   // 1. Lembrete de backup (base: scripts/backup.sh + alerts/evaluate do wsi-invest-ai)
   const last = store.meta.lastBackupAt ? new Date(store.meta.lastBackupAt) : null;
@@ -71,15 +89,14 @@ export function evaluateNotifications(store, now = new Date()) {
   for (const p of store.persons.values()) {
     const tipo = p.tipo || 'ALUNO';
     if (tipo !== 'ALUNO' && tipo !== 'PERSONAL') continue;
-    if (p.ativo !== false && p.validadeFim && now - new Date(p.validadeFim) > AUTO_INACTIVE_MS) {
+    const fim = parseDate(p.validadeFim, { endOfDay: true });
+    if (p.ativo !== false && fim && now - fim > AUTO_INACTIVE_MS) {
       p.ativo = false;
-      for (const d of store.devices.values()) {
-        store.syncQueue.push({ id: nextId('sync'), personId: p.id, deviceId: d.id, operacao: 'UPSERT', status: 'PENDING', tentativas: 0 });
-      }
+      enqueueSync(store, p);
       const n = criar(store, {
         key: `auto-inactive:${p.id}`, tipo: 'INATIVACAO',
         titulo: `Inativado automaticamente: ${p.nome}`,
-        detalhe: `Plano vencido há mais de 3 meses (até ${p.validadeFim}). Reative manualmente se voltar.`,
+        detalhe: `Plano vencido há mais de 3 meses (até ${localDayKey(fim)}). Reative manualmente se voltar.`,
         now,
       });
       if (n) criadas.push(n);
@@ -87,8 +104,8 @@ export function evaluateNotifications(store, now = new Date()) {
   }
 
   // 5. Resumo diário de métricas (overview estilo admin/overview do wsi-invest-ai)
-  const dia = now.toISOString().slice(0, 10);
-  const evs = store.events.filter((e) => e.timestamp.slice(0, 10) === dia);
+  const dia = localDayKey(now);
+  const evs = store.events.filter((e) => localDayKey(new Date(e.timestamp)) === dia);
   const ok = evs.filter((e) => e.decisao === 'ALLOW').length;
   const neg = evs.filter((e) => e.decisao === 'DENY').length;
   const inad = listInadimplentes(store, now);
@@ -116,7 +133,9 @@ export function ackNotification(store, id, por) {
 // Inadimplência = ALUNO com plano vencido. PERSONAL tem credencial com validade
 // própria (sem mensalidade) e VISITANTE é avulso: nenhum dos dois entra no atraso.
 export function listInadimplentes(store, now = new Date()) {
-  return [...store.persons.values()].filter(
-    (p) => (p.tipo || 'ALUNO') === 'ALUNO' && p.ativo !== false && p.validadeFim && new Date(p.validadeFim) < now
-  );
+  return [...store.persons.values()].filter((p) => {
+    if ((p.tipo || 'ALUNO') !== 'ALUNO' || p.ativo === false) return false;
+    const fim = parseDate(p.validadeFim, { endOfDay: true });
+    return Boolean(fim) && fim < now;
+  });
 }

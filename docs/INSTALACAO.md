@@ -10,12 +10,13 @@ externa.
 ## 1. Pré-requisitos
 
 | Item | Academia (Windows, com catraca) | Servidor alternativo (Linux) |
-|------|----------------------------------|-------------------------------|
+| --- | --- | --- |
 | SO | Windows 10/11 64-bit | qualquer distro atual |
 | Node.js | >= 18 (https://nodejs.org, LTS) | >= 18 via gerenciador de pacotes |
 | Rede | IP fixo + mesma sub-rede da catraca | IP fixo na LAN |
 | Hardware real | EasyInner.dll registrada + SDK facial | não (só simuladores) |
 | Portas livres | 3001 (API/PWA), 3002 (edge) | idem |
+| Fuso horário | correto (o painel usa o relógio local) | idem |
 
 Check Node:
 
@@ -34,27 +35,55 @@ cd wsi-topdata-catraca-painel
 
 Sem git: baixar o ZIP do repositório e extrair.
 
-## 3. Subir API + edge (validação manual)
+## 3. Configurar antes do primeiro boot (produção)
 
-Primeiro acesso: login `admin` / senha `admin123` (troque em seguida na aba
-Sistema → Operadores, ou via botão Trocar senha). Para produção, defina antes
-de subir: `SEED_ADMIN_LOGIN`, `SEED_ADMIN_PASSWORD`, `AUTH_SECRET` e
-`EDGE_LOGIN`/`EDGE_PASSWORD` iguais ao operador do edge.
+Defina no ambiente (ou use `.env.example` como referência):
+
+| Var | Produção |
+| --- | --- |
+| `SEED_ADMIN_PASSWORD` | senha forte — sem isso o padrão `admin123` é usado e logado |
+| `AUTH_SECRET` | segredo longo e fixo (tokens invalidam ao reiniciar sem ele) |
+| `EDGE_LOGIN`/`EDGE_PASSWORD` | conta de serviço do edge (hoje precisa ser gerência) |
+| `SEED_DEMO` | `0` para não criar alunos de demonstração |
+| `DATA_DIR` (ou `DATA_FILE`/`EVENTS_FILE`) | disco confiável/externo; o padrão é `./data` |
+| `BACKUP_DIR` | disco externo/rede |
+| `EDGE_URL` | URL do edge vista pela API (`http://localhost:3002` por padrão) |
+| `EDGE_TOKEN` | opcional: protege `POST /open` no edge |
+
+Windows (`cmd`), antes de iniciar:
+
+```cmd
+set API_PORT=3001
+set AUTH_SECRET=troque-por-um-segredo-longo
+set SEED_ADMIN_PASSWORD=troque-esta-senha
+set SEED_DEMO=0
+set EDGE_PASSWORD=troque-esta-senha
+```
+
+Linux (`bash`):
+
+```bash
+export API_PORT=3001 AUTH_SECRET=troque-por-um-segredo-longo \
+       SEED_ADMIN_PASSWORD=troque-esta-senha SEED_DEMO=0 \
+       EDGE_PASSWORD=troque-esta-senha
+```
+
+## 4. Subir API + edge (validação manual)
 
 Windows (`cmd`):
 
 ```cmd
-set API_PORT=3001
 start "painel-api" node api\src\server.js
 set EDGE_PORT=3002
+set API_URL=http://localhost:3001
 start "painel-edge" node edge-catraca\src\edge.js
 ```
 
 Linux (`bash`):
 
 ```bash
-API_PORT=3001 node api/src/server.js &
-EDGE_PORT=3002 node edge-catraca/src/edge.js &
+node api/src/server.js &
+EDGE_PORT=3002 API_URL=http://localhost:3001 node edge-catraca/src/edge.js &
 ```
 
 Checks (qualquer SO):
@@ -63,31 +92,42 @@ Checks (qualquer SO):
 curl http://localhost:3001/health
 # {"ok":true}
 curl http://localhost:3002/health
-# {"ok":true,"device":"dev_fit4_01","mode":"SIMULADO"}
-curl http://localhost:3001/api/system
-# JSON com hostname, ips[], counts{}
+# {"ok":true,"device":"dev_fit4_01","mode":"SIMULADO","api":"ok"}
 ```
 
-Teste de fluxo (liberação simulada):
+Fluxo de ponta a ponta (cadastro → regra → decisão → sync → liberação):
 
 ```bash
-curl -X POST http://localhost:3002/sim/identify ^
-  -H "Content-Type: application/json" ^
-  -d "{\"person_id\":\"per_personal_01\",\"score\":0.95}"
-# decisao.allow = true
+TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"login":"admin","senha":"SUA_SENHA"}' | python -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+
+curl -s -X POST http://localhost:3001/api/persons \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"nome":"Aluno Teste","tipo":"ALUNO"}'
+# -> enrollid/matrícula; já cria a regra padrão
+
+curl -s -X POST http://localhost:3001/api/identification \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"device_id":"dev_fit4_01","person_id":"ENROLLID_DO_CADASTRO","metodo":"CARTAO"}'
+# -> {"allow":true,"motivo":"OK"}
 ```
 
-## 4. Testes automatizados
+O primeiro boot cria `data/state.json` e `data/events.jsonl`. Reinicie a API e
+repita o login: cadastros e eventos devem continuar lá.
+
+## 5. Testes automatizados
 
 ```bash
-node --test api/test/
+node --test
 ```
 
-Esperado: `pass 28, fail 0` (o número cresce com o projeto; o que importa é `fail 0`).
+Esperado: `fail 0` (o número de testes cresce com o projeto). Cobre motor de
+decisão, autenticação, regras, fila, notificações, persistência e HTTP.
 
-## 5. Rede local: IP fixo + acesso mobile
+## 6. Rede local: IP fixo + acesso mobile
 
-1. Fixar IP do PC (ex.: `192.168.1.10`): painel de rede do SO ou reserva DHCP no roteador.
+1. Fixar IP do PC (ex.: `192.168.1.10`): painel de rede do SO ou reserva DHCP.
 2. Liberar firewall:
    - Windows: permitir entrada TCP 3001 e 3002 (ou o `node.exe`).
    - Linux: `sudo ufw allow 3001,3002/tcp`.
@@ -101,14 +141,18 @@ curl -s http://localhost:3001/api/system
 4. Gerar QR code com a URL e fixar na recepção.
 5. No celular (mesmo Wi-Fi): abrir o IP, "Adicionar à tela inicial".
 
-## 6. Subir junto com o PC (produção)
+> O PWA fala com a API na mesma origem. Não habilite `CORS_ORIGIN` a menos que
+> sirva o front em outra origem.
+
+## 7. Subir junto com o PC (produção)
 
 Windows — Agendador de Tarefas (recomendado, sem dependência extra):
 
 1. Agendador de Tarefas → Criar Tarefa → "Ao iniciar" + "com privilégios mais altos".
-2. Ação 1: `node.exe` args `C:\caminho\api\src\server.js`, com variável `API_PORT=3001`.
-3. Ação 2: `node.exe` args `...\edge-catraca\src\edge.js`, com `EDGE_PORT=3002` e `API_URL=http://localhost:3001`.
-4. Reiniciar e repetir os checks da seção 3.
+2. Ação 1: `node.exe` args `C:\caminho\api\src\server.js`, com as variáveis da seção 3.
+3. Ação 2: `node.exe` args `...\edge-catraca\src\edge.js`, com `EDGE_PORT=3002`,
+   `API_URL=http://localhost:3001` e `EDGE_LOGIN/EDGE_PASSWORD`.
+4. Reiniciar e repetir os checks da seção 4.
 
 Alternativa: NSSM (serviço Windows) com os mesmos comandos e envs.
 
@@ -122,6 +166,10 @@ After=network.target
 [Service]
 WorkingDirectory=/opt/wsi-topdata-catraca-painel
 Environment=API_PORT=3001
+Environment=AUTH_SECRET=troque-por-um-segredo-longo
+Environment=SEED_ADMIN_PASSWORD=troque-esta-senha
+Environment=SEED_DEMO=0
+Environment=DATA_DIR=/var/lib/painel
 Environment=BACKUP_DIR=/var/backups/painel
 ExecStart=/usr/bin/node api/src/server.js
 Restart=always
@@ -130,65 +178,94 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-Repetir para o edge (`EDGE_PORT=3002`, `API_URL=http://localhost:3001`).
-Ativar: `sudo systemctl enable --now painel-api painel-edge`.
+Repetir para o edge (`EDGE_PORT=3002`, `API_URL=http://localhost:3001`,
+`EDGE_LOGIN/EDGE_PASSWORD`). Ativar:
+`sudo systemctl enable --now painel-api painel-edge`.
 
-## 7. Backups em produção
+## 8. Backups em produção
 
-- Definir `BACKUP_DIR` para disco externo/rede (padrão: `backups/` do repo, ignorado no git).
+- Definir `BACKUP_DIR` para disco externo/rede (padrão: `backups/` do repo).
 - Cada backup gera o JSON do estado **e** a pasta `photos-<stamp>` com as fotos.
-- A aba Sistema lembra backup a cada 24h via notificação; retenção padrão: 7 (`BACKUP_KEEP`).
-- Check: `GET /api/backup` lista; `POST /api/backup` gera na hora.
+- A aba Sistema lembra backup a cada 24h, mas o backup é manual: agende
+  `POST /api/backup` (cron/Agendador) ou copie `data/` e `backups/` diariamente.
+- Retenção padrão: 7 (`BACKUP_KEEP`).
+- **Teste o restore** antes de confiar: aba Sistema → Restaurar (gerência) ou
+  `POST /api/backup/restore` com `{"file":"painel_....json"}`.
 
-## 7.1 Fotos e LGPD
+## 8.1 Fotos e LGPD
 
 - Fotos ficam em `data/photos/` (ou `PHOTO_DIR`), fora do git, e aparecem no painel.
 - São dado biométrico sensível: coletar com consentimento registrado, limitar acesso
-  (aluno vê só a própria; operação vê todas) e permitir exclusão (`DELETE .../photo`).
+  (aluno vê só a própria; operação vê todas) e permitir exclusão
+  (`DELETE /api/persons/:id/photo` ou exclusão do cadastro pela gerência).
 - O leitor facial recebe a foto no cadastro (`setuserinfo`, `backupnum 50`); o edge
-  busca a imagem pela API usando o `enrollid`.
+  baixa a imagem pela API e converte para base64.
 - Ao desligar um aluno, avalie excluir a foto depois do prazo de retenção definido
-  pela academia.
+  pela academia. Eventos históricos não contêm biometria.
 
-## 8. Com catraca real (Windows)
+## 9. Com catraca real (Windows)
 
 1. Obter no Portal do Integrador Topdata: instalador das DLLs + SDK EasyInner + SDK Leitor Facial.
 2. Instalar DLLs (instalador ou `regsvr32`) — ver `edge-catraca/dotnet-adapter/README.md`.
 3. Implementar `EasyInnerReal`/`FacialReal` em C# conforme `docs/SDK-EASYINNER-MAPEAMENTO.md` e `docs/SDK-FACIAL-MAPEAMENTO.md`.
 4. Configurar o leitor: IP do servidor no leitor, modo online (`setdevinfo.server_verify=1`), responder `reg` (obrigatório).
-5. Roteiro de bancada: `docs/CONTRATOS-HARDWARE.md` + checklist do `docs/PLANO-DESENVOLVIMENTO.md`.
+5. Subir o edge com `USE_REAL_HARDWARE=1` (desativa `/sim/*`) e testar o caminho
+   completo na bancada (`docs/CONTRATOS-HARDWARE.md`).
 
-## 9. Multi-academia (outras unidades)
+> Estado atual: os adaptadores reais são esqueleto. O edge avisa e continua em
+> simulador até a implementação C# estar pronta — não leve para a catraca antes
+> do teste de bancada.
 
-Repetir seções 1–6 em cada unidade (uma instalação por rede local). Regras:
+## 10. Multi-academia (outras unidades)
+
+Repetir seções 1–8 em cada unidade (uma instalação por rede local). Regras:
 
 - Um `DEVICE_ID` por catraca; `API_URL` do edge aponta para a API da mesma unidade.
-- Não compartilhar `backups/` entre unidades; cada uma tem o seu.
-- Futuro centralizado (treina.ai-api): trocar store em memória por Prisma/MySQL e apontar todas as unidades para a mesma API — contratos HTTP não mudam.
+- Não compartilhar `backups/` nem `data/` entre unidades; cada uma tem o seu.
+- Futuro centralizado (treina.ai-api): trocar a persistência JSON por Prisma/MySQL
+  e apontar todas as unidades para a mesma API — contratos HTTP não mudam.
 
-## 10. Solução de problemas
+## 11. Solução de problemas
 
 | Sintoma | Causa provável | Ação |
-|---------|----------------|------|
+| --- | --- | --- |
 | `curl :3001` recusa | API não subiu / porta ocupada | ver log, trocar `API_PORT` |
-| Celular não abre | Wi-Fi diferente, firewall, IP mudou | mesmo SSID, liberar 3001, refazer seção 5 |
+| Celular não abre | Wi-Fi diferente, firewall, IP mudou | mesmo SSID, liberar 3001, refazer seção 6 |
 | Edge `API fora do ar` | `API_URL` errado | exportar `API_URL=http://<IP-API>:3001` |
 | Notificação device-offline | sem heartbeat | subir edge, check `:3002/health` |
+| `SEM_REGRA` na decisão | pessoa sem regra no equipamento | aba Sistema → Horário (ou `PUT .../rules`) |
+| `DEVICE_NAO_ENCONTRADO` | `DEVICE_ID`/`device_id` divergente | conferir `GET /api/devices` e env do edge |
+| "Catraca não confirmou a abertura" | `EDGE_URL` errado, edge parado, `EDGE_TOKEN` | conferir `:3002/health` e env da API |
+| Login `429` | 5 tentativas erradas em 5 min | aguardar ou reiniciar a API |
+| Dados sumiram após reiniciar | `DATA_FILE` em pasta volátil/perdida | conferir `DATA_DIR` e permissões |
 | `fail > 0` nos testes | código alterado | corrigir antes de levar à academia |
 
-## 11. Variáveis de ambiente (resumo)
+## 12. Variáveis de ambiente (resumo)
 
 | Var | Default | Onde |
-|-----|---------|------|
+| --- | --- | --- |
 | `API_PORT` | 3001 | API |
 | `EDGE_PORT` | 3002 | edge |
 | `API_URL` | http://localhost:3001 | edge |
+| `EDGE_URL` | http://localhost:3002 | API |
+| `EDGE_TOKEN` | vazio | edge |
 | `DEVICE_ID` | dev_fit4_01 | edge |
+| `SYNC_INTERVAL_MS` | 30000 | edge |
+| `USE_REAL_HARDWARE` | 0 | edge |
+| `DATA_DIR` | ./data | API |
+| `DATA_FILE` / `EVENTS_FILE` | ./data/state.json / events.jsonl | API |
+| `PERSIST_INTERVAL_MS` | 3000 | API |
+| `EVENT_MAX` | 50000 | API |
 | `BACKUP_DIR` | ./backups | API |
 | `BACKUP_KEEP` | 7 | API |
 | `PHOTO_DIR` | ./data/photos | API — fora do git; incluir no backup |
 | `PHOTO_MAX_BYTES` | 409600 | API — limite por foto |
+| `MIN_SCORE` | 0.7 | API — score mínimo facial |
 | `NOTIFY_INTERVAL_MS` | 300000 | API |
 | `AUTH_SECRET` | aleatório (reinício invalida tokens) | API — defina um fixo em produção |
 | `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD` | admin / admin123 | API — primeiro operador |
+| `SEED_DEMO` | 1 | API |
+| `LOGIN_MAX_FAILS` / `LOGIN_WINDOW_MS` | 5 / 300000 | API |
+| `MAX_BODY_BYTES` | 2097152 | API |
+| `CORS_ORIGIN` | vazio | API — só se o front estiver em outra origem |
 | `EDGE_LOGIN` / `EDGE_PASSWORD` | admin / admin123 | edge — conta de serviço (operador) |

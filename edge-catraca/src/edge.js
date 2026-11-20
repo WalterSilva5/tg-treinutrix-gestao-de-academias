@@ -1,60 +1,139 @@
 // Edge de borda. Roda em Linux (simulado) e Windows (real via dotnet-adapter).
-// Responsabilidades: heartbeat, receber identificação, consultar API, liberar placa.
+// Responsabilidades: heartbeat, sincronizar cadastros com o leitor, receber
+// identificação, consultar a API e liberar a placa.
 import http from 'node:http';
 import { SimulatedPlaca, SimulatedFacial } from './simulators.js';
+import { buildSetUserinfo, buildDeleteUser, buildSetDevinfo } from './facial-ws.js';
 
-const API_URL = process.env.API_URL || 'http://localhost:3001';
+const API_URL = (process.env.API_URL || 'http://localhost:3001').replace(/\/$/, '');
 const EDGE_PORT = Number(process.env.EDGE_PORT || 3002);
 const DEVICE_ID = process.env.DEVICE_ID || 'dev_fit4_01';
+const USE_REAL = process.env.USE_REAL_HARDWARE === '1';
+const EDGE_TOKEN = process.env.EDGE_TOKEN || '';
+const SYNC_INTERVAL_MS = Number(process.env.SYNC_INTERVAL_MS || 30000);
+const API_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS || 5000);
 // Conta de serviço do edge (operador). Padrão = admin seed; troque via env.
 const EDGE_LOGIN = process.env.EDGE_LOGIN || process.env.SEED_ADMIN_LOGIN || 'admin';
 const EDGE_PASSWORD = process.env.EDGE_PASSWORD || process.env.SEED_ADMIN_PASSWORD || 'admin123';
 
 const placa = new SimulatedPlaca(DEVICE_ID);
-const facial = new SimulatedFacial();
+const facial = new SimulatedFacial(DEVICE_ID);
 let edgeToken = null;
+let ultimoErro = null;
+
+function logErro(msg) {
+  if (msg !== ultimoErro) console.log('[edge]', msg);
+  ultimoErro = msg;
+}
+function logOk() { ultimoErro = null; }
 
 async function edgeLogin() {
   try {
     const res = await fetch(`${API_URL}/api/auth/login`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ login: EDGE_LOGIN, senha: EDGE_PASSWORD }),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
-    if (!res.ok) { console.log('[edge] login falhou:', res.status); return false; }
+    if (!res.ok) { logErro(`login falhou (${res.status})`); return false; }
     edgeToken = (await res.json()).token;
+    logOk();
     return true;
-  } catch (e) {
-    console.log('[edge] API fora do ar no login');
+  } catch {
+    logErro('API fora do ar no login');
     return false;
   }
 }
 
-async function postJson(url, body, retry = true) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(edgeToken ? { Authorization: `Bearer ${edgeToken}` } : {}) },
-    body: JSON.stringify(body),
+async function request(method, path, body, retry = true) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (edgeToken) headers.Authorization = `Bearer ${edgeToken}`;
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
   });
   if (res.status === 401 && retry) {
-    if (await edgeLogin()) return postJson(url, body, false);
+    if (await edgeLogin()) return request(method, path, body, false);
   }
-  return res.json();
+  const text = await res.text();
+  let json = null;
+  try { json = text ? JSON.parse(text) : {}; } catch { /* resposta não-JSON */ }
+  if (!res.ok) throw new Error(`API ${res.status}: ${(json && json.error) || text.slice(0, 120)}`);
+  logOk();
+  return json || {};
 }
+
+const postJson = (path, body) => request('POST', path, body);
+const getJson = (path) => request('GET', path);
 
 async function heartbeat() {
   try {
-    await postJson(`${API_URL}/api/devices/${DEVICE_ID}/heartbeat`, {});
-  } catch (e) {
-    console.log('[edge] API fora do ar, tentando de novo em 15s');
+    await postJson(`/api/devices/${encodeURIComponent(DEVICE_ID)}/heartbeat`, {});
+  } catch {
+    logErro('API fora do ar, tentando de novo em 15s');
   }
 }
-setInterval(heartbeat, 15000);
-await edgeLogin();
-heartbeat();
 
+// ---------------------------------------------------------------------------
+// sincronização de cadastros com o leitor facial
+// ---------------------------------------------------------------------------
+async function baixarFoto(url) {
+  if (!url) return null;
+  const res = await fetch(`${API_URL}${url}`, {
+    headers: edgeToken ? { Authorization: `Bearer ${edgeToken}` } : {},
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`foto ${res.status}`);
+  return Buffer.from(await res.arrayBuffer()).toString('base64');
+}
+
+async function sincronizarItem(item) {
+  const payload = item.payload || {};
+  if (item.operacao === 'DELETE') {
+    await facial.enviarComando(buildDeleteUser(payload.enrollid));
+    return;
+  }
+  const fotoBase64 = payload.foto ? await baixarFoto(payload.foto) : null;
+  await facial.enviarComando(buildSetUserinfo({
+    enrollid: payload.enrollid,
+    name: payload.name,
+    fotoBase64,
+    enable: payload.enable !== false,
+  }));
+}
+
+async function sincronizarPendentes() {
+  try {
+    const list = await getJson(`/api/sync?device_id=${encodeURIComponent(DEVICE_ID)}&status=PENDING&limit=20`);
+    for (const item of Array.isArray(list) ? list : []) {
+      try {
+        await sincronizarItem(item);
+        await postJson(`/api/sync/${encodeURIComponent(item.id)}/ack`, { status: 'SENT' });
+      } catch (e) {
+        console.log('[edge] sync falhou', item.id, e.message);
+        try { await postJson(`/api/sync/${encodeURIComponent(item.id)}/ack`, { status: 'ERROR', erro: e.message }); } catch {}
+      }
+    }
+  } catch (e) {
+    logErro(`sync indisponível (${e.message})`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// decisão de acesso
+// ---------------------------------------------------------------------------
 async function handleIdentification(evt) {
-  const decisao = await postJson(`${API_URL}/api/identification`, evt);
-  console.log('[edge] decisão:', decisao);
+  let decisao;
+  try {
+    decisao = await postJson('/api/identification', evt);
+  } catch (e) {
+    // API fora do ar: falha fechada (não abre) e avisa no display.
+    console.log('[edge] decisão indisponível:', e.message);
+    decisao = { allow: false, motivo: 'API_OFFLINE', display_msg: 'Sistema indisponível.' };
+  }
+  console.log('[edge] decisão:', decisao.motivo, decisao.allow ? 'ALLOW' : 'DENY');
   if (decisao.allow) {
     await placa.mensagem('Acesso liberado');
     await placa.liberar(evt.direcao || 'IN');
@@ -64,27 +143,86 @@ async function handleIdentification(evt) {
   return decisao;
 }
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  if (req.method === 'GET' && url.pathname === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ ok: true, device: DEVICE_ID, mode: 'SIMULADO' }));
-  }
-  if (req.method === 'POST' && url.pathname === '/sim/identify') {
+function lerJson(req) {
+  return new Promise((resolve, reject) => {
     let raw = '';
-    req.on('data', (c) => (raw += c));
-    req.on('end', async () => {
-      const b = raw ? JSON.parse(raw) : {};
-      const evt = await facial.simularIdentificacao(b.person_id || 'per_demo_01', b.score ?? 0.95);
-      const decisao = await handleIdentification(evt);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ evento: evt, decisao }));
+    let done = false;
+    req.on('data', (c) => {
+      if (done) return;
+      raw += c;
+      if (raw.length > 1024 * 1024) { done = true; reject(new Error('corpo grande')); req.destroy(); }
     });
-    return;
+    req.on('end', () => {
+      if (done) return;
+      done = true;
+      if (!raw) return resolve({});
+      try { resolve(JSON.parse(raw)); } catch { reject(new Error('JSON inválido')); }
+    });
+    req.on('error', (e) => { if (!done) { done = true; reject(e); } });
+  });
+}
+
+function json(res, status, body) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(body));
+}
+
+const server = http.createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url, 'http://localhost');
+
+    if (req.method === 'GET' && url.pathname === '/health') {
+      return json(res, 200, { ok: true, device: DEVICE_ID, mode: USE_REAL ? 'REAL' : 'SIMULADO', api: ultimoErro ? 'indisponivel' : 'ok' });
+    }
+
+    // Abre o giro a pedido da API (liberação manual do operador).
+    if (req.method === 'POST' && url.pathname === '/open') {
+      if (EDGE_TOKEN && req.headers['x-edge-token'] !== EDGE_TOKEN) return json(res, 401, { error: 'não autorizado' });
+      const b = await lerJson(req);
+      if (b.device_id && b.device_id !== DEVICE_ID) return json(res, 404, { error: 'device_not_found' });
+      await placa.mensagem('Liberado pela recepção');
+      const out = await placa.liberar(b.direcao === 'OUT' ? 'OUT' : 'IN');
+      return json(res, 200, { ok: true, ...out });
+    }
+
+    // Simulador de leitor: só existe sem hardware real.
+    if (url.pathname.startsWith('/sim/') && USE_REAL) {
+      return json(res, 404, { error: 'simulador desativado (USE_REAL_HARDWARE=1)' });
+    }
+    if (url.pathname.startsWith('/sim/')) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+    }
+    if (req.method === 'POST' && url.pathname === '/sim/identify') {
+      const b = await lerJson(req);
+      const evt = await facial.simularIdentificacao(b.person_id || 'per_demo_01', b.score ?? 0.95, {
+        direcao: b.direcao === 'OUT' ? 'OUT' : 'IN',
+        mode: Number(b.mode || 8),
+      });
+      const decisao = await handleIdentification(evt);
+      return json(res, 200, { evento: evt, decisao });
+    }
+
+    return json(res, 404, { error: 'not_found' });
+  } catch (e) {
+    console.log('[edge] erro na requisição:', e.message);
+    if (!res.headersSent) return json(res, 400, { error: e.message });
+    res.end();
   }
-  res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'not_found' }));
 });
 
-server.listen(EDGE_PORT, () => console.log(`Edge simulado em http://localhost:${EDGE_PORT} (device ${DEVICE_ID})`));
+// ---------------------------------------------------------------------------
+// boot
+// ---------------------------------------------------------------------------
+if (USE_REAL) console.log('[edge] USE_REAL_HARDWARE=1: implemente EasyInnerReal/FacialReal (dotnet-adapter).');
+await edgeLogin();
+heartbeat();
+setInterval(heartbeat, 15000).unref();
+// Configura o leitor em modo online e sincroniza a fila a cada ciclo.
+facial.enviarComando(buildSetDevinfo({ server_verify: 1 })).catch(() => {});
+sincronizarPendentes();
+setInterval(sincronizarPendentes, SYNC_INTERVAL_MS).unref();
+
+server.listen(EDGE_PORT, () => console.log(`Edge em http://localhost:${EDGE_PORT} (device ${DEVICE_ID}, ${USE_REAL ? 'REAL' : 'SIMULADO'})`));

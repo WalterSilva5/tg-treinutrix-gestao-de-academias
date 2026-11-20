@@ -337,7 +337,7 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
           <div class="card">
             <div class="card-head"><div><h2>Liberação manual</h2><p class="sub">Simulação e operação assistida</p></div></div>
             <div class="form-grid">
-              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Pessoa (ID)</span><input id="person" value="per_personal_01"></label>
+              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Pessoa (ID, matrícula ou cartão)</span><input id="person" placeholder="ex.: 1002 ou M1002"></label>
               <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Score</span><input id="score" value="0.95"></label>
               <div class="form-actions"><button class="btn" onclick="identify()">Identificar</button><button class="btn ghost" onclick="release()">Liberar</button></div>
             </div>
@@ -427,6 +427,11 @@ function hora(iso) {
   const d = new Date(iso);
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
+// Dia local do navegador/servidor (o painel usa o relógio da academia).
+function diaLocal(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 function dataCurta(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -490,6 +495,8 @@ async function req(p, opts = {}) {
 async function jget(p) { return (await req(p)).json(); }
 async function jpost(p, b) { const r = await req(p, { method: 'POST', body: JSON.stringify(b) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; }
 async function jpatch(p, b) { const r = await req(p, { method: 'PATCH', body: JSON.stringify(b) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; }
+async function jput(p, b) { const r = await req(p, { method: 'PUT', body: JSON.stringify(b) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; }
+async function jdel(p) { const r = await req(p, { method: 'DELETE' }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; }
 
 // ---------- sessão ----------
 function entraUI() {
@@ -644,9 +651,15 @@ async function carregarOper() {
   $('edgeUrl').value = `http://${location.hostname}:3002`;
   await loadDevices(); await load(); await loadSync();
 }
-async function heartbeat() { await jpost('/api/devices/dev_fit4_01/heartbeat', {}); await loadDevices(); }
+async function heartbeat() {
+  const d = (window.__devices || [])[0];
+  if (!d) return alert('Nenhum dispositivo cadastrado.');
+  await jpost(`/api/devices/${encodeURIComponent(d.id)}/heartbeat`, {});
+  await loadDevices();
+}
 async function loadDevices() {
   const list = await jget('/api/devices');
+  window.__devices = list;
   $('devices').innerHTML = list.map(d => `
     <div class="list-item"><div><div class="t">${esc(d.nome)}</div><div class="d">${esc(d.ip)}:${esc(d.porta)} · ${esc(d.tipo)}</div></div>
     ${d.online ? '<span class="badge ok dot">online</span>' : '<span class="badge bad dot">offline</span>'}</div>`).join('') || '<div class="empty">Nenhum dispositivo.</div>';
@@ -666,7 +679,7 @@ async function load() {
   window.__pessoasObj = Object.fromEntries(persons.map(p => [p.id, p]));
   window.__pessoas = Object.fromEntries(persons.map(p => [p.id, p.nome]));
   lastEvents = events;
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = diaLocal();
   const h = events.filter(e => e.timestamp.slice(0, 10) === hoje);
   $('resumo').innerHTML = `
     <div class="kpi info"><div class="v">${h.length}</div><div class="l">Hoje</div></div>
@@ -688,8 +701,8 @@ async function identify() {
   load();
 }
 async function release() {
-  const r = await jpost('/api/release', { device_id: 'dev_fit4_01', person_id: $('person').value || null, motivo: 'MANUAL_OPERADOR' });
-  alert(r.display_msg || 'Liberado pelo operador.'); load();
+  const r = await jpost('/api/release', { device_id: ($('devices') && (window.__devices || [])[0] ? window.__devices[0].id : 'dev_fit4_01'), person_id: $('person').value || null, motivo: 'MANUAL_OPERADOR' });
+  alert(r.display_msg || 'Liberado pelo operador.'); load(); loadSync();
 }
 async function cadastrarPessoa() {
   const nome = $('visNome').value.trim(); if (!nome) return alert('Informe o nome.');
@@ -699,7 +712,7 @@ async function cadastrarPessoa() {
   const fim = tipo === 'VISITANTE' ? new Date(Date.now() + 864e5).toISOString() : null;
   try {
     const p = await jpost('/api/persons', { nome, tipo, treinutrix, foto, ativo: true, validadeFim: fim });
-    alert(`${tipo} cadastrado: matrícula ${p.matricula}.` + (fim ? ' Válido até ' + dataCurta(fim) : ''));
+    alert(`${tipo} cadastrado: matrícula ${p.matricula} (cartão ${p.enrollid}).` + (fim ? ' Válido até ' + dataCurta(fim) : '') + `\nSenha inicial: ${p.matricula}`);
     $('visNome').value = ''; $('visTreinutrix').value = ''; $('visFoto').value = ''; $('visFoto').dataset.data = '';
     $('visFotoPreview').innerHTML = '';
     load();
@@ -781,16 +794,71 @@ async function loadPessoas(inad) {
   const vencidas = new Set((inad || []).map(p => p.id));
   $('pessoas').innerHTML = list.map(p => `
     <tr>
-      <td><div class="stack">${avatarHtml(p, 30)}<div><b>${esc(p.nome)}</b><div class="muted">${esc(p.matricula)} · Treinutrix: ${treinutrixLink(p.treinutrix)}</div></div></div></td>
+      <td><div class="stack">${avatarHtml(p, 30)}<div><b>${esc(p.nome)}</b><div class="muted">${esc(p.matricula)} · cartão ${esc(p.enrollid)} · Treinutrix: ${treinutrixLink(p.treinutrix)}</div></div></div></td>
       <td>${badgeTipo(p.tipo)}</td>
       <td class="mono muted">${p.validadeFim ? dataCurta(p.validadeFim) : '—'}</td>
       <td>${!p.ativo ? '<span class="badge neutral dot">inativo</span>' : vencidas.has(p.id) ? '<span class="badge bad dot">em atraso</span>' : '<span class="badge ok dot">ativo</span>'}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn ghost sm" onclick="trocarFoto('${esc(p.id)}')">Foto</button>
+        <button class="btn ghost sm" onclick="editarHorario('${esc(p.id)}')">Horário</button>
+        <button class="btn ghost sm" onclick="renovarValidade('${esc(p.id)}')">Validade</button>
         <button class="btn ghost sm" onclick="vincularTreinutrix('${esc(p.id)}', '${esc((p.treinutrix || '').replace(/'/g, ''))}')">Vincular</button>
         <button class="btn ${p.ativo ? 'danger' : 'ghost'} sm" onclick="toggleAtivo('${esc(p.id)}', ${p.ativo ? 'false' : 'true'})">${p.ativo ? 'Inativar' : 'Reativar'}</button>
+        ${sess.perfil === 'gerencia' ? `<button class="btn danger sm" onclick="excluirPessoa('${esc(p.id)}', '${esc((p.nome || '').replace(/'/g, ''))}')">Excluir</button>` : ''}
       </td>
     </tr>`).join('') || '<tr><td colspan="5"><div class="empty">Nenhuma pessoa cadastrada.</div></td></tr>';
+}
+
+// Máscara oficial: dom=1 seg=2 ter=4 qua=8 qui=16 sex=32 sab=64.
+function diasParaTexto(mask) {
+  return [1, 2, 3, 4, 5, 6, 7].filter(n => mask & (1 << (n - 1))).join('');
+}
+function textoParaDias(txt) {
+  let mask = 0;
+  for (const c of String(txt || '').replace(/\D/g, '')) {
+    const n = Number(c);
+    if (n >= 1 && n <= 7) mask |= 1 << (n - 1);
+  }
+  return mask || null;
+}
+// Ajusta a janela de acesso em TODOS os equipamentos (servidor decide online).
+async function editarHorario(id) {
+  try {
+    const rules = await jget(`/api/persons/${encodeURIComponent(id)}/rules`);
+    const atual = rules[0] || { diasSemana: 127, horaIni: '00:00', horaFim: '23:59' };
+    const dias = prompt('Dias (1=dom 2=seg 3=ter 4=qua 5=qui 6=sex 7=sáb). Ex.: 23456 para seg-sex:', diasParaTexto(atual.diasSemana));
+    if (dias === null) return;
+    const mask = textoParaDias(dias);
+    if (mask === null) return alert('Informe ao menos um dia (1 a 7).');
+    const ini = prompt('Hora inicial (HH:MM):', atual.horaIni);
+    if (ini === null) return;
+    const fim = prompt('Hora final (HH:MM):', atual.horaFim);
+    if (fim === null) return;
+    const devices = await jget('/api/devices');
+    await jput(`/api/persons/${encodeURIComponent(id)}/rules`, {
+      rules: devices.map(d => ({ deviceId: d.id, diasSemana: mask, horaIni: ini.trim(), horaFim: fim.trim() })),
+    });
+    alert('Horário atualizado.');
+    carregarSistema();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+async function renovarValidade(id) {
+  const sug = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+  const fim = prompt('Nova validade (AAAA-MM-DD; vazio remove o vencimento):', sug);
+  if (fim === null) return;
+  try {
+    await jpatch(`/api/persons/${encodeURIComponent(id)}`, { validadeFim: fim.trim() || null });
+    alert(fim.trim() ? 'Validade atualizada.' : 'Vencimento removido.');
+    carregarSistema();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+async function excluirPessoa(id, nome) {
+  if (!confirm(`Excluir ${nome}? Cadastro, foto, regras e acesso no leitor serão removidos. O histórico de eventos é mantido.`)) return;
+  try {
+    await jdel(`/api/persons/${encodeURIComponent(id)}`);
+    alert('Cadastro excluído.');
+    carregarSistema();
+  } catch (e) { alert('Erro: ' + e.message); }
 }
 async function toggleAtivo(id, ativo) {
   await jpatch(`/api/persons/${encodeURIComponent(id)}`, { ativo });
