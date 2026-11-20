@@ -2,7 +2,7 @@
 // Inspirado no módulo alerts do wsi-invest-ai: regras avaliadas
 // periodicamente, janela de dedup (não duplica pendente com mesma chave),
 // baixa manual obrigatória (ack com responsável).
-import { nextId } from './store.js';
+import { nextId, TIPOS_PESSOA } from './store.js';
 
 export const BACKUP_INTERVAL_MS = 24 * 3600 * 1000;
 export const DEVICE_STALE_MS = 10 * 60 * 1000;
@@ -66,8 +66,11 @@ export function evaluateNotifications(store, now = new Date()) {
     if (n) criadas.push(n);
   }
 
-  // 4. Inativação automática: 3 meses de plano vencido (ativo=false + sync).
+  // 4. Inativação automática: 3 meses de plano/credencial vencida (ativo=false + sync).
+  // Vale para ALUNO e PERSONAL; VISITANTE é avulso descartável e não gera aviso.
   for (const p of store.persons.values()) {
+    const tipo = p.tipo || 'ALUNO';
+    if (tipo !== 'ALUNO' && tipo !== 'PERSONAL') continue;
     if (p.ativo !== false && p.validadeFim && now - new Date(p.validadeFim) > AUTO_INACTIVE_MS) {
       p.ativo = false;
       for (const d of store.devices.values()) {
@@ -110,10 +113,10 @@ export function ackNotification(store, id, por) {
   return n;
 }
 
-// Inadimplência = plano vencido (validadeFim passada). Inativo não conta:
-// aluno pausado/transferido some das métricas de atraso sem ser deletado.
+// Inadimplência = ALUNO com plano vencido. PERSONAL tem credencial com validade
+// própria (sem mensalidade) e VISITANTE é avulso: nenhum dos dois entra no atraso.
 export function listInadimplentes(store, now = new Date()) {
   return [...store.persons.values()].filter(
-    (p) => p.ativo !== false && p.validadeFim && new Date(p.validadeFim) < now
+    (p) => (p.tipo || 'ALUNO') === 'ALUNO' && p.ativo !== false && p.validadeFim && new Date(p.validadeFim) < now
   );
 }

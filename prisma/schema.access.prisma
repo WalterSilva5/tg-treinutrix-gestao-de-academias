@@ -5,6 +5,7 @@ model AccessPerson {
   id         String    @id @default(cuid())
   nome       String
   matricula  String    @unique
+  tipo       String    @default("ALUNO") // ALUNO | PERSONAL | VISITANTE
   cpf        String?
   ativo      Boolean   @default(true)
   fotoUrl    String?

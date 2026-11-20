@@ -57,18 +57,35 @@ test('ack exige existir e marca responsável', () => {
   assert.equal(ackNotification(s, id, 'Beto'), null); // já resolvida
 });
 
-test('inativo não entra na inadimplência', () => {  const s = {
+test('inativo não entra na inadimplência', () => {
+  const s = {
     persons: new Map([
-      ['a', { id: 'a', ativo: true, validadeFim: '2020-01-01T00:00:00Z' }],
-      ['b', { id: 'b', ativo: false, validadeFim: '2020-01-01T00:00:00Z' }],
-      ['c', { id: 'c', ativo: true, validadeFim: '2099-01-01T00:00:00Z' }],
-      ['d', { id: 'd', ativo: true, validadeFim: null }],
+      ['a', { id: 'a', tipo: 'ALUNO', ativo: true, validadeFim: '2020-01-01T00:00:00Z' }],
+      ['b', { id: 'b', tipo: 'ALUNO', ativo: false, validadeFim: '2020-01-01T00:00:00Z' }],
+      ['c', { id: 'c', tipo: 'ALUNO', ativo: true, validadeFim: '2099-01-01T00:00:00Z' }],
+      ['d', { id: 'd', tipo: 'ALUNO', ativo: true, validadeFim: null }],
+      ['pt', { id: 'pt', tipo: 'PERSONAL', ativo: true, validadeFim: '2020-01-01T00:00:00Z' }],
+      ['v', { id: 'v', tipo: 'VISITANTE', ativo: true, validadeFim: '2020-01-01T00:00:00Z' }],
     ]),
     devices: new Map(), rules: [], events: [], syncQueue: [],
     notifications: [], meta: { lastBackupAt: new Date().toISOString() },
   };
   const inad = listInadimplentes(s, new Date('2026-11-20T12:00:00'));
   assert.deepEqual(inad.map((p) => p.id), ['a']);
+});
+
+test('personal vencido há 3+ meses inativa; visitante não', () => {
+  const s = {
+    persons: new Map([
+      ['pt', { id: 'pt', nome: 'PT', tipo: 'PERSONAL', ativo: true, validadeFim: '2026-01-01T00:00:00Z' }],
+      ['v', { id: 'v', nome: 'Vis', tipo: 'VISITANTE', ativo: true, validadeFim: '2026-01-01T00:00:00Z' }],
+    ]),
+    devices: new Map(), rules: [], events: [], syncQueue: [],
+    notifications: [], meta: { lastBackupAt: new Date().toISOString() },
+  };
+  evaluateNotifications(s, new Date('2026-11-20T12:00:00'));
+  assert.equal(s.persons.get('pt').ativo, false);
+  assert.equal(s.persons.get('v').ativo, true);
 });
 
 test('vencido há 3+ meses inativa automaticamente com sync + aviso', () => {

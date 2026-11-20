@@ -18,7 +18,9 @@ Base de padrões: `wsi-invest-ai` (`back/src/modules/admin` overview,
 1. **BACKUP** — sem backup há 24h (`BACKUP_INTERVAL_MS`, env `NOTIFY_INTERVAL_MS` p/ scheduler).
 2. **DISPOSITIVO** — sem heartbeat há 10 min (`DEVICE_STALE_MS`).
 3. **SINCRONISMO** — itens `PENDING` na fila.
-4. **METRICAS** — resumo diário (eventos allow/deny, pessoas, dispositivos), chave `digest:AAAA-MM-DD`.
+4. **INATIVACAO** — plano vencido há 90 dias: marca `ativo=false` sozinho, enfileira
+   `UPSERT` no leitor e avisa (reativação é manual no card Pessoas).
+5. **METRICAS** — resumo diário (eventos allow/deny, pessoas, dispositivos), chave `digest:AAAA-MM-DD`.
 
 Dedup por `key`: pendente com mesma chave não duplica. Baixa exige responsável;
 resolvida não reabre (novo ciclo gera nova chave — ex. digest do dia seguinte).
