@@ -10,6 +10,8 @@ import { getSystemInfo } from './system.js';
 import { evaluateNotifications, ackNotification, listInadimplentes } from './notify.js';
 import { doBackup, listBackups, doRestore } from './backup.js';
 import { hashPassword, verifyPassword, issueToken, verifyToken, authenticate } from './auth.js';
+import { visiblePersons, visibleEvents, canSeeOperations } from './scope.js';
+import { parsePhoto, validatePhoto, savePhoto, readPhoto, deletePhoto } from './photos.js';
 
 const FRONT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'front');
 const STATIC_TYPES = {
@@ -56,13 +58,53 @@ function readBody(req) {
 }
 
 // Auth: tudo em /api/* exige Bearer, exceto o login. Shell PWA é público.
+// A foto aceita token por query (?t=) porque <img> não envia cabeçalho.
 function getUser(req) {
   const h = req.headers.authorization || '';
   const m = h.match(/^Bearer (.+)$/);
-  return m ? verifyToken(m[1]) : null;
+  if (m) return verifyToken(m[1]);
+  const url = new URL(req.url, 'http://localhost');
+  if (url.pathname.endsWith('/photo')) {
+    const t = url.searchParams.get('t');
+    if (t) return verifyToken(t);
+  }
+  return null;
 }
 const isOperador = (u) => u && (u.perfil === 'recepcao' || u.perfil === 'gerencia');
 const isGerencia = (u) => u && u.perfil === 'gerencia';
+
+// Resolve pessoa por id interno, matrícula ou enrollid (número do cartão no facial).
+function resolvePerson(key) {
+  if (!key) return null;
+  const direct = store.persons.get(String(key));
+  if (direct) return direct;
+  return [...store.persons.values()].find(
+    (p) => p.matricula === String(key) || String(p.enrollid) === String(key)
+  ) || null;
+}
+
+// Enfileira o cadastro para o leitor. O payload é leve: o edge busca a foto
+// pela própria API quando houver (evita carregar base64 na fila).
+function enqueueSync(person) {
+  for (const d of store.devices.values()) {
+    store.syncQueue.push({
+      id: nextId('sync'), personId: person.id, deviceId: d.id, operacao: 'UPSERT',
+      status: 'PENDING', tentativas: 0,
+      payload: {
+        cmd: 'setuserinfo',
+        enrollid: person.enrollid,
+        name: person.nome,
+        backupnum: person.foto ? 50 : 0,
+        foto: person.foto ? `/api/persons/${person.id}/photo` : null,
+      },
+    });
+  }
+}
+
+function publicPerson(p) {
+  const { senhaHash, ...rest } = p;
+  return rest;
+}
 
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
@@ -125,7 +167,7 @@ const server = http.createServer(async (req, res) => {
   };
 
   if (req.method === 'GET' && url.pathname === '/api/persons') {
-    return send(res, 200, [...store.persons.values()].map(({ senhaHash, ...p }) => p));
+    return send(res, 200, visiblePersons([...store.persons.values()].map(publicPerson), user));
   }
   if (req.method === 'POST' && url.pathname === '/api/persons') {
     if (!operadorOnly()) return;
@@ -133,12 +175,60 @@ const server = http.createServer(async (req, res) => {
     const id = b.id || nextId('per');
     const tipo = TIPOS_PESSOA.includes(b.tipo) ? b.tipo : 'ALUNO';
     const treinutrix = typeof b.treinutrix === 'string' && b.treinutrix.trim() ? b.treinutrix.trim() : null;
-    const person = { id, nome: b.nome || 'Sem nome', matricula: b.matricula || id, tipo, treinutrix, ativo: b.ativo !== false, validadeIni: b.validadeIni || null, validadeFim: b.validadeFim || null, senhaHash: hashPassword(b.senha || b.matricula || id) };
-    store.persons.set(id, person);
-    for (const d of store.devices.values()) {
-      store.syncQueue.push({ id: nextId('sync'), personId: id, deviceId: d.id, operacao: 'UPSERT', status: 'PENDING', tentativas: 0 });
+    const person = {
+      id, nome: b.nome || 'Sem nome', matricula: b.matricula || id, tipo, treinutrix,
+      enrollid: Number(b.enrollid) || store.meta.nextEnrollid++,
+      ativo: b.ativo !== false, validadeIni: b.validadeIni || null, validadeFim: b.validadeFim || null,
+      foto: null, senhaHash: hashPassword(b.senha || b.matricula || id),
+    };
+    if (b.foto) {
+      const parsed = parsePhoto(b.foto);
+      const ok = parsed && validatePhoto(parsed);
+      if (!ok || !ok.ok) return send(res, 400, { error: ok ? ok.error : 'foto inválida' });
+      savePhoto(id, parsed.buffer, ok.ext);
+      person.foto = { ext: ok.ext, mime: ok.mime, bytes: ok.bytes, updatedAt: new Date().toISOString() };
     }
-    return send(res, 201, person);
+    store.persons.set(id, person);
+    enqueueSync(person);
+    return send(res, 201, publicPerson(person));
+  }
+
+  // Foto do cadastro: ver, enviar e remover.
+  const photoRoute = url.pathname.match(/^\/api\/persons\/([^/]+)\/photo$/);
+  if (photoRoute) {
+    const id = decodeURIComponent(photoRoute[1]);
+    const p = store.persons.get(id);
+    if (!p) return send(res, 404, { error: 'person_not_found' });
+    const self = user.perfil === 'aluno' && user.sub === id;
+
+    if (req.method === 'GET') {
+      if (user.perfil === 'aluno' && !self) return send(res, 403, { error: 'sem permissão' });
+      if (!p.foto) return send(res, 404, { error: 'sem_foto' });
+      const img = readPhoto(id, p.foto.ext);
+      if (!img) return send(res, 404, { error: 'arquivo_ausente' });
+      res.writeHead(200, { 'Content-Type': img.mime, 'Cache-Control': 'private, max-age=60' });
+      return res.end(img.buffer);
+    }
+
+    if (req.method === 'POST') {
+      if (!isOperador(user) && !self) return send(res, 403, { error: 'sem permissão' });
+      const b = await readBody(req);
+      const parsed = parsePhoto(b.foto);
+      const ok = parsed && validatePhoto(parsed);
+      if (!ok || !ok.ok) return send(res, 400, { error: ok ? ok.error : 'foto inválida' });
+      savePhoto(id, parsed.buffer, ok.ext);
+      p.foto = { ext: ok.ext, mime: ok.mime, bytes: ok.bytes, updatedAt: new Date().toISOString() };
+      enqueueSync(p);
+      return send(res, 200, { ok: true, foto: p.foto });
+    }
+
+    if (req.method === 'DELETE') {
+      if (!operadorOnly()) return;
+      deletePhoto(id);
+      p.foto = null;
+      enqueueSync(p);
+      return send(res, 200, { ok: true });
+    }
   }
 
   // Ativar/inativar aluno (inativo some das métricas de inadimplência e nega acesso).
@@ -155,13 +245,13 @@ const server = http.createServer(async (req, res) => {
     if (b.senha) p.senhaHash = hashPassword(b.senha);
     if (b.validadeIni !== undefined) p.validadeIni = b.validadeIni;
     if (b.validadeFim !== undefined) p.validadeFim = b.validadeFim;
-    for (const d of store.devices.values()) {
-      store.syncQueue.push({ id: nextId('sync'), personId: id, deviceId: d.id, operacao: 'UPSERT', status: 'PENDING', tentativas: 0 });
-    }
-    return send(res, 200, p);
+    if (b.foto === null) { deletePhoto(id); p.foto = null; }
+    enqueueSync(p);
+    return send(res, 200, publicPerson(p));
   }
 
   if (req.method === 'GET' && url.pathname === '/api/devices') {
+    if (!canSeeOperations(user)) return send(res, 403, { error: 'sem permissão' });
     return send(res, 200, [...store.devices.values()]);
   }
   if (req.method === 'POST' && url.pathname.match(/^\/api\/devices\/.+\/heartbeat$/)) {
@@ -175,7 +265,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/events') {
-    return send(res, 200, store.events.slice(-200).reverse());
+    return send(res, 200, visibleEvents(store.events, user).slice(-200).reverse());
   }
 
   if (req.method === 'GET' && url.pathname === '/api/sync') {
@@ -187,7 +277,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/identification') {
     if (!operadorOnly()) return;
     const b = await readBody(req);
-    const person = store.persons.get(b.person_id) || null;
+    const person = resolvePerson(b.person_id);
     const result = decideAccess({
       person,
       rules: store.rules.filter((r) => !b.person_id || r.personId === b.person_id),

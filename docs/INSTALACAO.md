@@ -136,8 +136,19 @@ Ativar: `sudo systemctl enable --now painel-api painel-edge`.
 ## 7. Backups em produção
 
 - Definir `BACKUP_DIR` para disco externo/rede (padrão: `backups/` do repo, ignorado no git).
-- A aba Sistema lembra backup a cada 24h via notificação; retenção padrão: 7 arquivos (`BACKUP_KEEP`).
+- Cada backup gera o JSON do estado **e** a pasta `photos-<stamp>` com as fotos.
+- A aba Sistema lembra backup a cada 24h via notificação; retenção padrão: 7 (`BACKUP_KEEP`).
 - Check: `GET /api/backup` lista; `POST /api/backup` gera na hora.
+
+## 7.1 Fotos e LGPD
+
+- Fotos ficam em `data/photos/` (ou `PHOTO_DIR`), fora do git, e aparecem no painel.
+- São dado biométrico sensível: coletar com consentimento registrado, limitar acesso
+  (aluno vê só a própria; operação vê todas) e permitir exclusão (`DELETE .../photo`).
+- O leitor facial recebe a foto no cadastro (`setuserinfo`, `backupnum 50`); o edge
+  busca a imagem pela API usando o `enrollid`.
+- Ao desligar um aluno, avalie excluir a foto depois do prazo de retenção definido
+  pela academia.
 
 ## 8. Com catraca real (Windows)
 
@@ -175,6 +186,8 @@ Repetir seções 1–6 em cada unidade (uma instalação por rede local). Regras
 | `DEVICE_ID` | dev_fit4_01 | edge |
 | `BACKUP_DIR` | ./backups | API |
 | `BACKUP_KEEP` | 7 | API |
+| `PHOTO_DIR` | ./data/photos | API — fora do git; incluir no backup |
+| `PHOTO_MAX_BYTES` | 409600 | API — limite por foto |
 | `NOTIFY_INTERVAL_MS` | 300000 | API |
 | `AUTH_SECRET` | aleatório (reinício invalida tokens) | API — defina um fixo em produção |
 | `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD` | admin / admin123 | API — primeiro operador |

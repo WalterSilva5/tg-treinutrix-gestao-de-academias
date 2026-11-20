@@ -24,6 +24,7 @@ front (HTML) <-> api (Node, :3001) <-> store em memória
   Servido pela própria API: um único endereço IP local, ex. `http://192.168.0.10:3001`.
   QR code na recepção aponta para esse endereço.
 - `backups/` — snapshots JSON (retidos 7, ignorados no git). Ver `docs/PAINEL-SISTEMA.md`.
+- `data/photos/` — fotos de cadastro (fora do git; entram no backup). Aluno vê só a própria.
 - `prisma/` — modelo de dados de referência para portar ao MySQL/Prisma do `treina.ai-api`.
 - `docs/` — plano, contratos e roteiros de teste.
 

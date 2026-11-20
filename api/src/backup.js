@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PHOTO_DIR } from './photos.js';
 
 export const BACKUP_DIR = process.env.BACKUP_DIR
   || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'backups');
@@ -31,12 +32,17 @@ export function doBackup(store) {
   const data = snapshot(store);
   fs.writeFileSync(path.join(BACKUP_DIR, file), JSON.stringify(data));
   store.meta.lastBackupAt = data.at;
-  // Retenção: mantém os N mais recentes
+  // Fotos ficam em pasta própria ao lado do JSON do mesmo snapshot.
+  const photoDest = path.join(BACKUP_DIR, `photos-${stamp}`);
+  if (fs.existsSync(PHOTO_DIR)) fs.cpSync(PHOTO_DIR, photoDest, { recursive: true });
+  // Retenção: mantém os N snapshots mais recentes (JSON + fotos).
   const all = listBackups().map((b) => b.file).sort();
   for (const old of all.slice(0, Math.max(0, all.length - BACKUP_KEEP))) {
-    fs.unlinkSync(path.join(BACKUP_DIR, old));
+    fs.rmSync(path.join(BACKUP_DIR, old), { force: true });
+    const oldStamp = old.replace(/^painel_/, '').replace(/\.json$/, '');
+    fs.rmSync(path.join(BACKUP_DIR, `photos-${oldStamp}`), { recursive: true, force: true });
   }
-  return { file, at: data.at };
+  return { file, at: data.at, photos: fs.existsSync(photoDest) };
 }
 
 export function listBackups() {
@@ -60,5 +66,16 @@ export function doRestore(store, file) {
   store.syncQueue = data.syncQueue || [];
   store.notifications = data.notifications || [];
   store.meta = data.meta || { lastBackupAt: null };
+  if (!store.meta.nextEnrollid) {
+    const maxEnroll = Math.max(1000, ...[...store.persons.values()].map((p) => Number(p.enrollid) || 0));
+    store.meta.nextEnrollid = maxEnroll + 1;
+  }
+  // Devolve as fotos do snapshot, quando existirem.
+  const stamp = path.basename(file).replace(/^painel_/, '').replace(/\.json$/, '');
+  const photoSrc = path.join(BACKUP_DIR, `photos-${stamp}`);
+  if (fs.existsSync(photoSrc)) {
+    fs.mkdirSync(PHOTO_DIR, { recursive: true });
+    fs.cpSync(photoSrc, PHOTO_DIR, { recursive: true });
+  }
   return { file, at: data.at };
 }

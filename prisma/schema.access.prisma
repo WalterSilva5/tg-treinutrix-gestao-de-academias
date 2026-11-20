@@ -5,11 +5,12 @@ model AccessPerson {
   id         String    @id @default(cuid())
   nome       String
   matricula  String    @unique
+  enrollid   Int       @unique // número do cartão usado pelo leitor facial
   tipo       String    @default("ALUNO") // ALUNO | PERSONAL | VISITANTE
   treinutrix String?   // link ou @usuário do perfil na Treinutrix
   cpf        String?
   ativo      Boolean   @default(true)
-  fotoUrl    String?
+  foto       String?   // caminho/extensão no diretório de fotos (não o binário)
   validadeIni DateTime?
   validadeFim DateTime?
   createdAt  DateTime  @default(now())

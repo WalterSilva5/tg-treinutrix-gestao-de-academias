@@ -34,9 +34,21 @@ resolvida não reabre (novo ciclo gera nova chave — ex. digest do dia seguinte
 
 ## Backup (`api/src/backup.js`)
 
-Snapshot JSON do store em `backups/painel_<iso>.json`, retenção dos 7 mais
-recentes. `BACKUP_DIR` via env (testes usam tmp; produção: disco externo/rede).
-Restore valida o nome (`painel_*.json`, anti path-traversal) e o schema (`v:1`).
+Snapshot JSON do store em `backups/painel_<iso>.json` mais a pasta
+`photos-<iso>/` com as fotos do cadastro. Retenção dos 7 mais recentes.
+`BACKUP_DIR` via env (testes usam tmp; produção: disco externo/rede).
+Restore valida o nome (`painel_*.json`, anti path-traversal) e o schema (`v:1`),
+e devolve as fotos do snapshot quando a pasta existir.
+
+## Fotos (`api/src/photos.js`)
+
+- Armazenadas em disco (`PHOTO_DIR`, padrão `data/photos/`), fora do git.
+- Validação por assinatura real do arquivo (JPEG/PNG/WebP) e limite `PHOTO_MAX_BYTES`.
+- `POST /api/persons/:id/photo` — operação ou o próprio aluno; `GET` aceita `?t=<token>`
+  para funcionar em `<img>`; `DELETE` só operação.
+- Resposta da pessoa traz `foto: { ext, mime, bytes, updatedAt }` e `enrollid` numérico.
+- A fila de sincronização leva `setuserinfo` com `backupnum 50` e a URL da foto,
+  que o edge baixa para enviar ao leitor facial.
 
 ## PWA — aba Sistema (perfil gerência)
 

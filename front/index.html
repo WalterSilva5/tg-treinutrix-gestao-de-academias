@@ -64,7 +64,10 @@ body{background:var(--canvas);color:var(--ink);font-family:Inter,system-ui,-appl
 .nav button .ico{width:18px;text-align:center;opacity:.85}
 .sidebar-foot{margin-top:auto;border-top:1px solid var(--line);padding-top:14px}
 .user-chip{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px}
-.avatar{width:34px;height:34px;border-radius:50%;background:var(--primary-soft);color:var(--primary-text);display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--primary-soft);color:var(--primary-text);display:grid;place-items:center;font-weight:700;font-size:13px;flex:none;overflow:hidden}
+.avatar img,.avatar-inline img{width:100%;height:100%;object-fit:cover;display:block}
+.foto-preview{margin-top:10px;display:flex;align-items:center;gap:10px}
+.foto-preview img{width:96px;height:128px;object-fit:cover;border-radius:10px;border:1px solid var(--line-strong)}
 .user-chip .who{line-height:1.2;min-width:0}
 .user-chip .who b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .user-chip .who span{display:block;font-size:11px;color:var(--ink-3);text-transform:capitalize}
@@ -140,7 +143,7 @@ tbody tr:hover{background:#fcfcfb}
 .list-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fcfcfb;flex-wrap:wrap}
 .list-item .t{font-weight:600;font-size:13px}
 .list-item .d{color:var(--ink-3);font-size:12px;margin-top:2px}
-.avatar-inline{width:30px;height:30px;border-radius:50%;background:var(--surface-hover);display:grid;place-items:center;font-weight:600;font-size:12px;color:var(--ink-2);flex:none}
+.avatar-inline{width:30px;height:30px;border-radius:50%;background:var(--surface-hover);display:grid;place-items:center;font-weight:600;font-size:12px;color:var(--ink-2);flex:none;overflow:hidden}
 .stack{display:flex;align-items:center;gap:10px;min-width:0}
 
 .info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
@@ -216,13 +219,14 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
       </label>
       <button class="btn" type="submit" style="width:100%;padding:11px">Entrar</button>
     </form>
-    <div class="hint">Primeiro acesso do operador: <b>admin</b> / <b>admin123</b>. Aluno: matrícula e senha inicial igual à matrícula.</div>
+    <div class="hint">Acesso restrito. Aluno: use sua matrícula e a senha cadastrada. Em caso de dúvida, procure a recepção.</div>
     <div class="login-foot"><a href="https://treinutrix.com" target="_blank" rel="noopener">Treinutrix</a> · Sua musculação mais inteligente</div>
   </div>
 </div>
 
 <!-- ============ APP ============ -->
 <div id="app" class="app hidden">
+  <input type="file" id="fotoFile" accept="image/jpeg,image/png,image/webp" style="display:none">
   <aside class="sidebar">
     <a class="brand" href="#" onclick="mostrarNav('inicio');return false">
       <div class="brand-mark">
@@ -298,8 +302,10 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
               <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Nome</span><input id="visNome" placeholder="Nome completo"></label>
               <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Tipo</span><select id="visTipo"><option>ALUNO</option><option>PERSONAL</option><option>VISITANTE</option></select></label>
               <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Treinutrix</span><input id="visTreinutrix" placeholder="@usuario ou link"></label>
+              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Foto do rosto</span><input id="visFoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
               <div class="form-actions"><button class="btn" onclick="cadastrarPessoa()">Cadastrar</button></div>
             </div>
+            <div class="foto-preview" id="visFotoPreview"></div>
             <p class="help">Visitante recebe validade de 1 dia. Aluno e personal entram sem vencimento inicial.</p>
           </div>
 
@@ -413,6 +419,39 @@ function iniciais(nome) {
   const p = String(nome || '?').trim().split(/\s+/);
   return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
 }
+// Avatar: foto do cadastro quando existir, senão iniciais.
+function avatarHtml(p, size = 30, cls = 'avatar-inline') {
+  const id = typeof p === 'string' ? p : p && p.id;
+  const nome = typeof p === 'string' ? ((window.__pessoasObj || {})[id] || {}).nome || id : p && p.nome;
+  const temFoto = typeof p === 'object' && p && p.foto;
+  const style = `width:${size}px;height:${size}px;font-size:${Math.max(10, Math.round(size * 0.38))}px`;
+  if (temFoto) {
+    const t = sess ? encodeURIComponent(sess.token) : '';
+    return `<div class="${cls}" style="${style}"><img src="/api/persons/${encodeURIComponent(id)}/photo?t=${t}" alt="${esc(nome || '')}" loading="lazy"></div>`;
+  }
+  return `<div class="${cls}" style="${style}">${iniciais(nome)}</div>`;
+}
+// Redimensiona e comprime para o padrão do leitor facial (480x640, até 150 KB).
+function comprimirFoto(file, maxW = 480, maxH = 640, maxBytes = 150 * 1024) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const ratio = Math.min(maxW / img.width, maxH / img.height, 1);
+      const w = Math.max(1, Math.round(img.width * ratio));
+      const h = Math.max(1, Math.round(img.height * ratio));
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      let q = 0.85, data = c.toDataURL('image/jpeg', q);
+      while (data.length * 0.75 > maxBytes && q > 0.4) { q -= 0.1; data = c.toDataURL('image/jpeg', q); }
+      resolve(data);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('selecione um arquivo de imagem')); };
+    img.src = url;
+  });
+}
 function badgeDecisao(d) {
   return d === 'ALLOW'
     ? '<span class="badge ok dot">liberado</span>'
@@ -440,6 +479,13 @@ function entraUI() {
   $('login-screen').classList.toggle('hidden', !!sess);
   $('app').classList.toggle('hidden', !sess);
   if (!sess) return;
+  // Aluno tem acesso limitado: remove do DOM tudo que é operacional.
+  if (sess.perfil === 'aluno') {
+    for (const id of ['v-inicio', 'v-oper', 'v-sistema']) {
+      const el = $(id); if (el) el.remove();
+    }
+    const top = $('topActions'); if (top) top.remove();
+  }
   $('quemNome').textContent = sess.nome || sess.perfil;
   $('quemPerfil').textContent = sess.perfil;
   $('avatar').textContent = iniciais(sess.nome || sess.perfil);
@@ -464,10 +510,10 @@ function mostrar(id) {
   const pg = PAGINAS[id] || PAGINAS.inicio;
   $('pageTitle').textContent = pg[0];
   $('pageSub').textContent = pg[1];
-  if (id === 'sistema') carregarSistema();
-  if (id === 'inicio') carregarInicio();
-  if (id === 'oper' && sess && sess.perfil !== 'aluno') carregarOper();
-  if (id === 'aluno') carregarAluno();
+  if (id === 'sistema' && $('v-sistema')) carregarSistema();
+  if (id === 'inicio' && $('v-inicio')) carregarInicio();
+  if (id === 'oper' && $('v-oper') && sess && sess.perfil !== 'aluno') carregarOper();
+  if (id === 'aluno' && $('v-aluno')) carregarAluno();
 }
 function mostrarNav(id) {
   mostrar(id);
@@ -479,10 +525,11 @@ async function entrar() {
     if (!r.token) return alert(r.error || 'Falha no login.');
     sess = r;
     localStorage.setItem('pwa_session', JSON.stringify(sess));
-    entraUI();
+    // Recarrega para montar apenas a interface permitida ao perfil.
+    location.reload();
   } catch (e) { alert('API fora do ar.'); }
 }
-function sair() { sess = null; localStorage.removeItem('pwa_session'); entraUI(); }
+function sair() { sess = null; localStorage.removeItem('pwa_session'); location.reload(); }
 async function trocarSenha() {
   const atual = prompt('Senha atual:'); if (atual === null) return;
   const nova = prompt('Nova senha (mín. 4):'); if (!nova) return;
@@ -493,6 +540,7 @@ async function trocarSenha() {
 // ---------- início ----------
 async function carregarInicio() {
   const [o, persons] = await Promise.all([jget('/api/overview'), jget('/api/persons')]);
+  window.__pessoasObj = Object.fromEntries(persons.map(p => [p.id, p]));
   window.__pessoas = Object.fromEntries(persons.map(p => [p.id, p.nome]));
   const k = o.kpis;
   $('ovKpis').innerHTML = `
@@ -507,7 +555,7 @@ async function carregarInicio() {
   $('ovEntradas').innerHTML = entradas.length ? entradas.map(e => `
     <tr>
       <td class="mono muted">${hora(e.timestamp)}</td>
-      <td><div class="stack"><div class="avatar-inline">${iniciais(nomePorId(e.personId))}</div><div><b>${esc(nomePorId(e.personId))}</b><div class="muted">${esc(e.personId || '')}</div></div></div></td>
+      <td><div class="stack">${avatarHtml(e.personId || '', 30)}<div><b>${esc(nomePorId(e.personId))}</b><div class="muted">${esc(e.personId || '')}</div></div></div></td>
       <td><span class="badge neutral">${esc(e.metodo)}</span></td>
       <td>${badgeDecisao(e.decisao)}</td>
     </tr>`).join('') : '<tr><td colspan="4"><div class="empty">Nenhuma movimentação hoje.</div></td></tr>';
@@ -530,30 +578,48 @@ async function carregarInicio() {
 }
 
 // ---------- aluno ----------
+const MOTIVOS = {
+  OK: 'Liberado',
+  PESSOA_NAO_ENCONTRADA: 'Cadastro não encontrado',
+  PESSOA_INATIVA: 'Cadastro inativo',
+  FORA_VALIDADE: 'Plano vencido',
+  SCORE_BAIXO: 'Rosto não reconhecido',
+  SEM_REGRA: 'Sem permissão de acesso',
+  DIA_NAO_PERMITIDO: 'Dia não permitido',
+  HORA_NAO_PERMITIDA: 'Fora do horário permitido',
+  MANUAL_OPERADOR: 'Liberação da recepção',
+};
+function motivoHumano(m) { return MOTIVOS[m] || 'Não liberado'; }
+
 async function carregarAluno() {
   const persons = await jget('/api/persons');
   window.__pessoas = Object.fromEntries(persons.map(p => [p.id, p.nome]));
   const p = persons.find(x => x.id === sess.sub);
-  if (!p) { $('plano').innerHTML = '<div class="empty">Matrícula não encontrada.</div>'; return; }
+  if (!p) { $('plano').innerHTML = '<div class="empty">Cadastro não encontrado. Procure a recepção.</div>'; return; }
   const vencido = p.validadeFim && new Date(p.validadeFim) < new Date();
+  const inativo = p.ativo === false;
+  const situacao = inativo ? '<span class="badge neutral dot">inativo</span>'
+    : vencido ? '<span class="badge bad dot">vencido</span>'
+    : '<span class="badge ok dot">ativo</span>';
   $('plano').innerHTML = `
     <div class="stack" style="margin-bottom:14px">
-      <div class="avatar" style="width:48px;height:48px;font-size:16px">${iniciais(p.nome)}</div>
+      ${avatarHtml(p, 48, 'avatar')}
       <div><div style="font-size:17px;font-weight:700">${esc(p.nome)}</div><div class="muted">Matrícula ${esc(p.matricula)}</div></div>
     </div>
     <div class="info-grid">
-      <div class="info-item"><div class="k">Situação</div><div class="v">${vencido ? '<span class="badge bad dot">vencido</span>' : '<span class="badge ok dot">ativo</span>'}</div></div>
-      <div class="info-item"><div class="k">Tipo</div><div class="v">${badgeTipo(p.tipo)}</div></div>
-      <div class="info-item"><div class="k">Validade</div><div class="v">${p.validadeFim ? dataCurta(p.validadeFim) : 'sem vencimento'}</div></div>
-      <div class="info-item"><div class="k">Treinutrix</div><div class="v">${treinutrixLink(p.treinutrix)}</div></div>
-    </div>`;
+      <div class="info-item"><div class="k">Situação</div><div class="v">${situacao}</div></div>
+      <div class="info-item"><div class="k">Plano</div><div class="v">${p.validadeFim ? 'válido até ' + dataCurta(p.validadeFim) : 'sem vencimento'}</div></div>
+      ${p.treinutrix ? `<div class="info-item"><div class="k">Treinutrix</div><div class="v">${treinutrixLink(p.treinutrix)}</div></div>` : ''}
+    </div>
+    ${vencido || inativo ? '<p class="help">Seu acesso está bloqueado. Fale com a recepção para regularizar.</p>' : '<p class="help">Apresente seu rosto no leitor para entrar.</p>'}
+    <div class="form-actions" style="margin-top:10px"><button class="btn ghost sm" onclick="trocarFoto('${esc(p.id)}')">Atualizar minha foto</button></div>`;
   const evs = (await jget('/api/events')).filter(e => e.personId === sess.sub);
   $('freqStats').innerHTML = `
     <div class="kpi ok"><div class="v">${evs.filter(e => e.decisao === 'ALLOW').length}</div><div class="l">Entradas</div></div>
     <div class="kpi bad"><div class="v">${evs.filter(e => e.decisao === 'DENY').length}</div><div class="l">Negados</div></div>`;
   $('freqList').innerHTML = evs.slice(-10).reverse().map(e => `
-    <tr><td class="mono muted">${dataCurta(e.timestamp)} ${hora(e.timestamp)}</td><td>${badgeDecisao(e.decisao)}</td><td class="muted">${esc(e.motivo || '')}</td></tr>`).join('')
-    || '<tr><td colspan="3"><div class="empty">Nenhum acesso registrado.</div></td></tr>';
+    <tr><td class="mono muted">${dataCurta(e.timestamp)} ${hora(e.timestamp)}</td><td>${badgeDecisao(e.decisao)}</td><td class="muted">${esc(motivoHumano(e.motivo))}</td></tr>`).join('')
+    || '<tr><td colspan="3"><div class="empty">Nenhum acesso registrado ainda.</div></td></tr>';
 }
 
 // ---------- operação ----------
@@ -580,6 +646,7 @@ async function loadSync() {
 let lastEvents = [];
 async function load() {
   const [events, persons] = await Promise.all([jget('/api/events'), jget('/api/persons')]);
+  window.__pessoasObj = Object.fromEntries(persons.map(p => [p.id, p]));
   window.__pessoas = Object.fromEntries(persons.map(p => [p.id, p.nome]));
   lastEvents = events;
   const hoje = new Date().toISOString().slice(0, 10);
@@ -611,12 +678,45 @@ async function cadastrarPessoa() {
   const nome = $('visNome').value.trim(); if (!nome) return alert('Informe o nome.');
   const tipo = $('visTipo').value;
   const treinutrix = $('visTreinutrix').value.trim() || null;
+  const foto = $('visFoto').dataset.data || null;
   const fim = tipo === 'VISITANTE' ? new Date(Date.now() + 864e5).toISOString() : null;
-  const p = await jpost('/api/persons', { nome, tipo, treinutrix, ativo: true, validadeFim: fim });
-  alert(`${tipo} cadastrado: matrícula ${p.matricula}.` + (fim ? ' Válido até ' + dataCurta(fim) : ''));
-  $('visNome').value = ''; $('visTreinutrix').value = '';
-  load();
+  try {
+    const p = await jpost('/api/persons', { nome, tipo, treinutrix, foto, ativo: true, validadeFim: fim });
+    alert(`${tipo} cadastrado: matrícula ${p.matricula}.` + (fim ? ' Válido até ' + dataCurta(fim) : ''));
+    $('visNome').value = ''; $('visTreinutrix').value = ''; $('visFoto').value = ''; $('visFoto').dataset.data = '';
+    $('visFotoPreview').innerHTML = '';
+    load();
+  } catch (e) { alert('Erro: ' + e.message); }
 }
+
+// Foto: prévia no cadastro e troca em cadastro existente (inclusive pelo aluno).
+let fotoTarget = null;
+function trocarFoto(id) { fotoTarget = id; const el = $('fotoFile'); el.value = ''; el.click(); }
+async function enviarFoto(dataUrl) {
+  await jpost(`/api/persons/${encodeURIComponent(fotoTarget)}/photo`, { foto: dataUrl });
+  alert('Foto atualizada.');
+  if (sess.perfil === 'aluno') carregarAluno(); else carregarSistema();
+}
+function ligarFotos() {
+  const input = $('visFoto');
+  if (input) input.addEventListener('change', async () => {
+    const f = input.files[0];
+    if (!f) { input.dataset.data = ''; $('visFotoPreview').innerHTML = ''; return; }
+    try {
+      const data = await comprimirFoto(f);
+      input.dataset.data = data;
+      $('visFotoPreview').innerHTML = `<img src="${data}" alt="prévia da foto"><span class="muted">${Math.round(data.length * 0.75 / 1024)} KB</span>`;
+    } catch (e) { alert(e.message); }
+  });
+  const file = $('fotoFile');
+  if (file) file.addEventListener('change', async () => {
+    const f = file.files[0];
+    if (!f || !fotoTarget) return;
+    try { await enviarFoto(await comprimirFoto(f)); }
+    catch (e) { alert('Erro: ' + e.message); }
+  });
+}
+ligarFotos();
 function csv() {
   const rows = [['timestamp', 'device', 'person', 'direcao', 'metodo', 'decisao', 'motivo']];
   lastEvents.forEach(e => rows.push([e.timestamp, e.deviceId, e.personId || '', e.direcao, e.metodo, e.decisao, e.motivo || '']));
@@ -664,11 +764,12 @@ async function loadPessoas(inad) {
   const vencidas = new Set((inad || []).map(p => p.id));
   $('pessoas').innerHTML = list.map(p => `
     <tr>
-      <td><div class="stack"><div class="avatar-inline">${iniciais(p.nome)}</div><div><b>${esc(p.nome)}</b><div class="muted">${esc(p.matricula)} · Treinutrix: ${treinutrixLink(p.treinutrix)}</div></div></div></td>
+      <td><div class="stack">${avatarHtml(p, 30)}<div><b>${esc(p.nome)}</b><div class="muted">${esc(p.matricula)} · Treinutrix: ${treinutrixLink(p.treinutrix)}</div></div></div></td>
       <td>${badgeTipo(p.tipo)}</td>
       <td class="mono muted">${p.validadeFim ? dataCurta(p.validadeFim) : '—'}</td>
       <td>${!p.ativo ? '<span class="badge neutral dot">inativo</span>' : vencidas.has(p.id) ? '<span class="badge bad dot">em atraso</span>' : '<span class="badge ok dot">ativo</span>'}</td>
       <td style="text-align:right;white-space:nowrap">
+        <button class="btn ghost sm" onclick="trocarFoto('${esc(p.id)}')">Foto</button>
         <button class="btn ghost sm" onclick="vincularTreinutrix('${esc(p.id)}', '${esc((p.treinutrix || '').replace(/'/g, ''))}')">Vincular</button>
         <button class="btn ${p.ativo ? 'danger' : 'ghost'} sm" onclick="toggleAtivo('${esc(p.id)}', ${p.ativo ? 'false' : 'true'})">${p.ativo ? 'Inativar' : 'Reativar'}</button>
       </td>
