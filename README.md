@@ -9,6 +9,7 @@ Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces
 + simuladores. O teste físico entra só na validação final.
 
 > Revisão técnica completa (achados, correções e pendências): `docs/REVISAO.md`.
+> Plano consolidado de tudo que foi solicitado e ainda falta: `docs/PLANO-COMPLETO.md`.
 
 ## Recursos
 

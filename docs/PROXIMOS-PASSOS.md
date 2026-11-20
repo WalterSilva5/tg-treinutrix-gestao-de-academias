@@ -1,5 +1,9 @@
 # Próximos passos
 
+> **Plano consolidado (todas as solicitações e lacunas):** `docs/PLANO-COMPLETO.md`.
+> Este documento continua como roteiro curto por fase; em caso de divergência,
+> vale o plano completo.
+
 Roadmap de execução, em ordem. Cada item tem **como validar** — se a validação
 não passar, não avance. Contexto completo em `docs/HANDOFF-WINDOWS.md`.
 
