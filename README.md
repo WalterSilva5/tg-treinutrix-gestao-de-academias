@@ -144,14 +144,16 @@ ver `docs/INSTALACAO.md` — guia passo a passo para agente de IA.
 1. Ler `docs/PROXIMOS-PASSOS.md` (ordem de execução) e `docs/HANDOFF-WINDOWS.md`
    (estado atual e backlog priorizado). Roteiro de bancada:
    `docs/VALIDACOES-PENDENTES.md`.
-2. Rodar `scripts\iniciar-painel.cmd` e depois `scripts\verificar.cmd`.
-3. Compilar a ponte da catraca: `powershell -ExecutionPolicy Bypass -File
+2. Instalar como serviço: `scripts\instalar-servico.cmd` (logs em `logs/`,
+   health em `/api/health`). Ver `docs/SERVICO-WINDOWS.md`.
+3. Rodar `scripts\liberar-firewall.cmd` como administrador (3001–3003).
+4. Compilar a ponte da catraca: `powershell -ExecutionPolicy Bypass -File
    edge-catraca\dotnet-adapter\build.ps1`.
-4. Subir o edge com `USE_REAL_HARDWARE=1` (bridge EasyInner + servidor WebSocket
+5. Subir o edge com `USE_REAL_HARDWARE=1` (bridge EasyInner + servidor WebSocket
    do facial, conforme `edge-catraca/dotnet-adapter/README.md` e
    `docs/SDK-*-MAPEAMENTO.md`).
-5. Outras marcas com API HTTP: `DEVICE_DRIVER=generic_http` e `DEVICE_ENDPOINT`.
-6. Seguir o roteiro de bancada em `docs/CONTRATOS-HARDWARE.md`.
+6. Outras marcas com API HTTP: `DEVICE_DRIVER=generic_http` e `DEVICE_ENDPOINT`.
+7. Seguir o roteiro de bancada em `docs/CONTRATOS-HARDWARE.md`.
 
 Agentes de IA: ler `AGENTS.md` antes de alterar o código.
 

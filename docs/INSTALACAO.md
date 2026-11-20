@@ -129,6 +129,8 @@ decisão, autenticação, regras, fila, notificações, persistência e HTTP.
 
 ## 6. Rede local: IP fixo + acesso mobile
 
+> Instalação como serviço, firewall, logs e restore: `docs/SERVICO-WINDOWS.md`.
+
 1. Fixar IP do PC (ex.: `192.168.1.10`): painel de rede do SO ou reserva DHCP.
 2. Liberar firewall:
    - Windows: permitir entrada TCP 3001 e 3002 (ou o `node.exe`).

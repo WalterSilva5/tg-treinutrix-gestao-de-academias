@@ -16,7 +16,7 @@ aceite. Este documento substitui a leitura solta de `PROXIMOS-PASSOS` e
 |---|-------------|--------|-------------|
 | 1 | Revisar código/arquitetura/plano e continuar | ✅ feito | manter `docs/REVISAO.md` atualizado |
 | 2 | `git pull` / integrar remote | ✅ feito | push (aguardando autorização) |
-| 3 | Subir a aplicação acessível na rede | 🟡 parcial | serviço automático, IP fixo, firewall, logs persistentes |
+| 3 | Subir a aplicação acessível na rede | ✅ feito | firewall exige admin; serviço instalado nesta máquina |
 | 4 | Suportar catraca real | 🟡 parcial | validar bridge/leitor na bancada; offline; multi-catraca |
 | 5 | IP `192.168.001.100` / menu da catraca | ✅ orientado | executar a mudança de rede na bancada |
 | 6 | “Todas as funcionalidades pendentes” | 🟡 parcial | ver §3 (offline, relatórios, multi-device, Prisma etc.) |
@@ -139,12 +139,21 @@ Legenda: ✅ pronto · 🟡 parcial · ⛔ bloqueado por hardware/terceiros.
 
 ## 4. Fases de execução
 
-### Fase 1 — Fechar a operação local (1–2 dias)
+### Fase 1 — Fechar a operação local (1–2 dias) — ✅ concluída em 2026-11-20
 
 1. Scripts de serviço Windows + documentação de IP/firewall.
 2. Logs com rotação e health consolidado.
 3. Teste de restore em diretório/máquina limpa.
 4. E2E navegador do fluxo atual.
+
+**Entregue:** `scripts/servico.js|ps1`, `instalar|iniciar|parar|status|remover-servico.cmd`,
+`liberar-firewall.cmd`, `GET /api/health`, `logs/` com rotação,
+`api/test/restore-clean.test.js`, `docs/SERVICO-WINDOWS.md`,
+`docs/E2E-OPERACAO.md`. Tarefas `PainelCatracaAPI` e `PainelCatracaEdge`
+instaladas e testadas (queda + reinício automático).
+
+**Pendência menor:** rodar `liberar-firewall.cmd` como administrador e fixar o
+IP no roteador — depende da máquina/rede da academia.
 
 **Aceite:** reiniciar o PC e abrir o painel pelo celular sem comando manual;
 backup restaurado em pasta limpa.

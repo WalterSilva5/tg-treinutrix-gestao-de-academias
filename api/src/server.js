@@ -47,6 +47,20 @@ const EDGE_TOKEN = process.env.EDGE_TOKEN || '';
 const NOTIFY_INTERVAL_MS = Number(process.env.NOTIFY_INTERVAL_MS || 5 * 60 * 1000);
 const LOGIN_MAX_FAILS = Number(process.env.LOGIN_MAX_FAILS || 5);
 const LOGIN_WINDOW_MS = Number(process.env.LOGIN_WINDOW_MS || 5 * 60 * 1000);
+const PKG = (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(HERE, '..', '..', 'package.json'), 'utf8')); }
+  catch { return { version: '0.0.0' }; }
+})();
+function commitAtual() {
+  if (process.env.GIT_COMMIT) return process.env.GIT_COMMIT.slice(0, 12);
+  try {
+    const git = path.join(HERE, '..', '..', '.git');
+    const head = fs.readFileSync(path.join(git, 'HEAD'), 'utf8').trim();
+    if (head.startsWith('ref: ')) return fs.readFileSync(path.join(git, head.slice(5)), 'utf8').trim().slice(0, 12);
+    return head.slice(0, 12);
+  } catch { return 'desconhecido'; }
+}
+const GIT_COMMIT = commitAtual();
 const DISCOVER_MIN_MS = Number(process.env.DISCOVER_MIN_MS || 5000);
 const RAFFLE_INTERVAL_MS = Number(process.env.RAFFLE_INTERVAL_MS || 60000);
 let ultimaVarredura = 0;
@@ -403,7 +417,7 @@ async function route(req, res) {
   const url = new URL(req.url, 'http://localhost');
 
   if (req.method === 'GET' && url.pathname === '/health') {
-    return send(res, 200, { ok: true, storage: 'sqlite' });
+    return send(res, 200, { ok: true, storage: 'sqlite', version: PKG.version, commit: GIT_COMMIT });
   }
 
   // Login público (com limite de tentativas por IP).
@@ -1055,6 +1069,39 @@ async function route(req, res) {
   }
 
   // ------------------------------------------------------------------ eventos
+  // Health consolidado (equipe): versão, banco, fila e edge.
+  if (req.method === 'GET' && url.pathname === '/api/health') {
+    operadorOnly();
+    let edge = null;
+    try {
+      const r = await fetch(`${EDGE_URL.replace(/\/$/, '')}/health`, {
+        signal: AbortSignal.timeout(Number(process.env.EDGE_TIMEOUT_MS || 1500)),
+      });
+      if (r.ok) edge = await r.json();
+    } catch { /* edge offline */ }
+    let dbBytes = 0;
+    try { dbBytes = fs.statSync(DB_FILE).size; } catch { /* sem arquivo ainda */ }
+    return send(res, 200, {
+      ok: true,
+      version: PKG.version,
+      commit: GIT_COMMIT,
+      uptimeSec: Math.round(process.uptime()),
+      now: new Date().toISOString(),
+      storage: { engine: 'sqlite', file: DB_FILE, bytes: dbBytes },
+      counts: {
+        persons: store.persons.size,
+        devices: store.devices.size,
+        events: store.events.length,
+        socialEvents: store.socialEvents.length,
+        raffles: store.raffles.length,
+        syncPending: store.syncQueue.filter((s) => s.status === 'PENDING').length,
+        notifications: store.notifications.filter((n) => !n.resolvida).length,
+      },
+      edge: edge ? { ok: true, ...edge } : { ok: false, error: 'edge offline', url: EDGE_URL },
+      lastBackupAt: store.meta.lastBackupAt,
+    });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/events') {
     return send(res, 200, visibleEvents(store.events, user).slice(-200).reverse());
   }
@@ -1263,6 +1310,7 @@ async function route(req, res) {
     try {
       const out = doRestore(store, b.file);
       compactEvents(store);
+      saveNow(store);
       return send(res, 200, out);
     } catch (e) {
       throw fail(400, e.message);

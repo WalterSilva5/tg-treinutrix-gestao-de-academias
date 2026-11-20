@@ -6,4 +6,5 @@ dist/
 backups/*.json
 data/
 .merge-plans/
+logs/
 edge-catraca/dotnet-adapter/*.exe

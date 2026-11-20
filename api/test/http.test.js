@@ -18,6 +18,7 @@ process.env.SEED_ADMIN_PASSWORD = 'admin123';
 process.env.SEED_DEMO = '1';
 process.env.NOTIFY_INTERVAL_MS = '3600000';
 process.env.PERSIST_INTERVAL_MS = '3600000';
+process.env.EDGE_URL = 'http://127.0.0.1:1';
 
 const { createServer } = await import('../src/server.js');
 
@@ -56,10 +57,21 @@ after(() => new Promise((resolve) => server.close(resolve)));
 
 test('health e login', async () => {
   assert.equal((await api('/health')).json.ok, true);
+  assert.equal((await api('/health')).json.storage, 'sqlite');
   const bad = await api('/api/auth/login', { method: 'POST', body: { login: 'admin', senha: 'x' } });
   assert.equal(bad.status, 401);
   const noToken = await api('/api/persons');
   assert.equal(noToken.status, 401);
+});
+
+test('health consolidado mostra banco, contadores e edge', async () => {
+  const r = await api('/api/health', { token: admin });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.json.storage.engine, 'sqlite');
+  assert.ok(r.json.storage.bytes > 0);
+  assert.ok(r.json.counts.persons >= 1);
+  assert.equal(r.json.edge.ok, false);
+  assert.match(r.json.commit, /^[0-9a-f]{7,40}$|^desconhecido$/);
 });
 
 test('cadastro cria regra padrão e libera pelo cartão (person_id = enrollid)', async () => {
