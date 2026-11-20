@@ -25,39 +25,22 @@ Leia junto com `docs/PROXIMOS-PASSOS.md` (ordem de execução) e `docs/INSTALACA
 
 ### P0 — sem isso não opera de verdade
 
-1. **Persistência real.** O store é em memória: reiniciar perde tudo.
-   Opções: SQLite (`node:sqlite` no Node 22+ ou `better-sqlite3` com aprovação)
-   ou portar para o Prisma/MySQL do `treina.ai-api` (`prisma/schema.access.prisma`).
-   Recomendado para a academia: **SQLite local** + backup do arquivo.
-   Critério de aceite: reiniciar o serviço e manter pessoas, eventos e fotos.
-
-2. **Driver EasyInner real (Windows).**
-   Implementar em C# o equivalente a `edge-catraca/dotnet-adapter/EasyInnerReal.cs`
-   seguindo `docs/SDK-EASYINNER-MAPEAMENTO.md`:
-   conectar → firmware → relógio → configurar entradas → polling →
-   `POST /api/identification` → liberar/negar. Critério: um giro real liberado
-   e um negado, com evento aparecendo no painel.
-
-3. **Servidor WebSocket do leitor facial.**
-   Implementar o lado servidor (`reg`, `sendlog`, `senduser`) conforme
-   `docs/SDK-FACIAL-MAPEAMENTO.md`, usando `edge-catraca/src/facial-ws.js`
-   para montar/parsear mensagens. Critério: leitor conecta, recebe `reg`,
-   envia `sendlog` e recebe `access`.
-
-4. **Consumidor da fila de sincronização.**
-   `GET /api/sync` já lista pendências com `payload` (`setuserinfo`,
-   `enrollid`, `backupnum`, URL da foto). O edge deve consumir, buscar a foto
-   e **marcar como SENT/ERROR**. Hoje só a API enfileira.
-   Critério: cadastrar aluno no painel e ele aparecer no leitor.
+1. ~~Persistência real~~ **feito em SQLite** (`data/painel.db`, migra o JSON antigo).
+   Falta apenas validar restore em máquina limpa.
+2. ~~Driver EasyInner real (Windows)~~ **implementado** (bridge C#); falta o
+   teste de bancada em `docs/VALIDACOES-PENDENTES.md`.
+3. ~~Servidor WebSocket do leitor facial~~ **implementado** (`facial-real.js`);
+   falta validar com o leitor físico.
+4. ~~Consumidor da fila de sincronização~~ **implementado** (ack + foto).
 
 ### P1 — operação confiável
 
-5. Heartbeat por dispositivo (hoje o edge usa `dev_fit4_01` fixo). Ler o `id`
-   do device do `/api/devices` ou de configuração e enviar por equipamento.
-6. Direção de saída (`OUT`) para presença correta; hoje só entrada.
-7. `AUTH_SECRET` fixo em produção (sem isso, tokens invalidam ao reiniciar).
-8. Rate limit simples no login (tentativas por IP/login).
-9. Modo offline do leitor (`server_verify: 2`) com sincronização posterior via `getalllog`.
+5. ~~Heartbeat por dispositivo~~ **feito** (edge usa o `DEVICE_ID` cadastrado).
+6. ~~Direção de saída (`OUT`)~~ **feito** (`inout`/`origem`).
+7. ~~AUTH_SECRET fixo~~ **feito** (`data/auth.secret` criado no 1º boot).
+8. ~~Rate limit no login~~ **feito** (5 tentativas/5 min por IP).
+9. Modo offline do leitor (`server_verify: 2`) com sincronização posterior via
+   `getalllog` — **pendente**.
 
 ### P2 — evolução
 
@@ -74,7 +57,7 @@ Leia junto com `docs/PROXIMOS-PASSOS.md` (ordem de execução) e `docs/INSTALACA
 4. Liberar firewall TCP 3001 e 3002.
 5. Abrir `http://<IP-da-máquina>:3001`, entrar com `admin` / `admin123` e trocar a senha.
 6. Verificar: `curl http://localhost:3001/health` e `curl http://localhost:3002/health`.
-7. Rodar `node --test api/test/` antes de qualquer alteração.
+7. Rodar `node --test` antes de qualquer alteração (não usar `node --test api/test/`).
 
 ## 4. Contratos que não devem mudar sem versionar
 
@@ -96,7 +79,7 @@ Leia junto com `docs/PROXIMOS-PASSOS.md` (ordem de execução) e `docs/INSTALACA
 
 ## 6. Definição de pronto
 
-- `node --test api/test/` sem falhas.
+- `node --test` sem falhas (não usar `node --test api/test/`).
 - Fluxo real na bancada: cadastro com foto → aparece no leitor →
   reconhecimento → decisão → giro liberado → evento no painel.
 - Negado por plano vencido também testado.

@@ -3,6 +3,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -250,4 +251,194 @@ test('excluir pessoa é só gerência e limpa regras/fila', async () => {
   const pessoa = await api(`/api/persons/${aluno.id}`, { method: 'PATCH', token: admin, body: { ativo: true } });
   assert.equal(pessoa.status, 404);
   assert.ok(login.json.token); // sessão antiga não derruba a API
+});
+
+test('importação em lote: prévia não grava, confirmação cria sem foto e deduplica', async () => {
+  const antes = (await api('/api/persons', { token: admin })).json;
+  const linhas = [
+    { nome: `Importado ${run}`, matricula: `IMP${run}`, tipo: 'ALUNO', validadeFim: '2027-12-31' },
+    { nome: 'Duplicado', matricula: antes[0] ? antes[0].matricula : `DUP${run}` },
+    { nome: '', matricula: `SEMNOME${run}` },
+  ];
+  const previa = await api('/api/persons/import', { method: 'POST', token: admin, body: { confirmar: false, pessoas: linhas } });
+  assert.equal(previa.status, 200, previa.text);
+  assert.equal(previa.json.confirmado, false);
+  assert.equal(previa.json.criados, 0);
+  assert.equal(previa.json.itens[0].status, 'NOVO');
+  assert.equal(previa.json.itens[1].status, 'JA_EXISTE');
+  assert.equal(previa.json.itens[2].status, 'ERRO');
+  assert.equal((await api('/api/persons', { token: admin })).json.length, antes.length);
+
+  const conf = await api('/api/persons/import', { method: 'POST', token: admin, body: { confirmar: true, pessoas: linhas } });
+  assert.equal(conf.status, 200, conf.text);
+  assert.equal(conf.json.criados, 1);
+  assert.equal(conf.json.ignorados, 1);
+  assert.equal(conf.json.erros, 1);
+
+  const pessoas = (await api('/api/persons', { token: admin })).json;
+  const nova = pessoas.find((p) => p.matricula === `IMP${run}`);
+  assert.ok(nova, 'pessoa importada existe');
+  assert.equal(nova.foto, null, 'importação não exige biometria');
+  assert.equal(nova.validadeFim, '2027-12-31');
+
+  const sync = (await api(`/api/sync?device_id=dev_fit4_01&status=PENDING`, { token: admin })).json;
+  assert.ok(sync.some((s) => s.personId === nova.id && s.payload?.enrollid === nova.enrollid));
+});
+
+test('catraca: editar, testar conexão e excluir com limpeza de regras/fila', async () => {
+  const srv = net.createServer((s) => s.end());
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const porta = srv.address().port;
+
+  const criado = await api('/api/devices', {
+    method: 'POST', token: admin,
+    body: { nome: `Controlador ${run}`, driver: 'generic_http', ip: '127.0.0.1', porta },
+  });
+  assert.equal(criado.status, 201, criado.text);
+  const dev = criado.json;
+  assert.equal(dev.endpoint, `http://127.0.0.1:${porta}/open`);
+
+  const editado = await api(`/api/devices/${encodeURIComponent(dev.id)}`, {
+    method: 'PATCH', token: admin, body: { nome: `Controlador ${run} editado`, porta },
+  });
+  assert.equal(editado.status, 200, editado.text);
+  assert.match(editado.json.nome, /editado/);
+
+  const teste = await api(`/api/devices/${encodeURIComponent(dev.id)}/test`, { method: 'POST', token: admin, body: {} });
+  assert.equal(teste.status, 200, teste.text);
+  assert.equal(teste.json.ok, true);
+  assert.ok(teste.json.latencyMs >= 0);
+  await new Promise((r) => srv.close(r));
+
+  // A pessoa do teste de cadastro ganhou regra e sync para o novo device.
+  const regras = (await api('/api/rules', { token: admin })).json;
+  assert.ok(regras.some((r) => r.deviceId === dev.id));
+
+  const del = await api(`/api/devices/${encodeURIComponent(dev.id)}`, { method: 'DELETE', token: admin });
+  assert.equal(del.status, 200, del.text);
+  const regrasDepois = (await api('/api/rules', { token: admin })).json;
+  assert.equal(regrasDepois.some((r) => r.deviceId === dev.id), false);
+  const sync = (await api('/api/sync?device_id=' + encodeURIComponent(dev.id), { token: admin })).json;
+  assert.equal(sync.length, 0);
+});
+
+test('descoberta recusa faixa pública sem varrer a rede', async () => {
+  const r = await api('/api/devices/discover', { method: 'POST', token: admin, body: { subnet: '8.8.8.0/24' } });
+  assert.equal(r.status, 400);
+  assert.match(r.json.error, /privadas/);
+});
+
+test('recuperação local do administrador padrão', async () => {
+  const r = await api('/api/auth/recover-admin', { method: 'POST', body: { login: 'admin', senha: 'senhaNova123' } });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.json.login, 'admin');
+
+  const velha = await api('/api/auth/login', { method: 'POST', body: { login: 'admin', senha: 'admin123' } });
+  assert.equal(velha.status, 401);
+  const nova = await api('/api/auth/login', { method: 'POST', body: { login: 'admin', senha: 'senhaNova123' } });
+  assert.equal(nova.status, 200);
+  assert.equal(nova.json.perfil, 'gerencia');
+
+  // Devolve a senha padrão para o restante da suíte/ambiente de teste.
+  const volta = await api('/api/auth/recover-admin', { method: 'POST', body: { login: 'admin', senha: 'admin123' } });
+  assert.equal(volta.status, 200);
+});
+
+
+test('eventos: aluno e externo, check-in e export CSV/PDF', async () => {
+  const p = await api('/api/persons', {
+    method: 'POST', token: admin,
+    body: { nome: 'Aluno Evento ' + run, tipo: 'ALUNO', validadeFim: '2027-12-31' },
+  });
+  assert.equal(p.status, 201, p.text);
+
+  const ev = await api('/api/eventos', {
+    method: 'POST', token: admin,
+    body: { nome: 'Aul?o ' + run, inicio: '2026-12-01T19:00', local: 'Sala 1', capacidade: 10, permiteVisitantes: true },
+  });
+  assert.equal(ev.status, 201, ev.text);
+  const id = ev.json.id;
+
+  const a = await api('/api/eventos/' + id + '/participantes', { method: 'POST', token: admin, body: { personId: p.json.id } });
+  assert.equal(a.status, 201, a.text);
+  assert.equal(a.json.tipo, 'ALUNO');
+  const x = await api('/api/eventos/' + id + '/participantes', { method: 'POST', token: admin, body: { nome: 'Externo ' + run, contato: '11 9999' } });
+  assert.equal(x.status, 201, x.text);
+  assert.equal(x.json.tipo, 'EXTERNO');
+
+  const dup = await api('/api/eventos/' + id + '/participantes', { method: 'POST', token: admin, body: { personId: p.json.id } });
+  assert.equal(dup.status, 400);
+
+  const det = await api('/api/eventos/' + id, { token: admin });
+  assert.equal(det.status, 200);
+  assert.equal(det.json.participantes.length, 2);
+
+  const chk = await api('/api/eventos/' + id + '/participantes/' + x.json.id, { method: 'PATCH', token: admin, body: { checkin: true } });
+  assert.equal(chk.status, 200);
+  assert.equal(chk.json.status, 'PRESENTE');
+
+  const csv = await fetch(base + '/api/eventos/' + id + '/export.csv', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers.get('content-type'), /text\/csv/);
+  const csvText = await csv.text();
+  assert.match(csvText, /Aluno Evento/);
+  assert.match(csvText, /Externo/);
+  assert.match(csvText, /;PRESENTE;/);
+
+  const pdf = await fetch(base + '/api/eventos/' + id + '/export.pdf', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(pdf.status, 200);
+  assert.match(pdf.headers.get('content-type'), /application\/pdf/);
+  const pdfBuf = Buffer.from(await pdf.arrayBuffer());
+  assert.equal(pdfBuf.subarray(0, 8).toString(), '%PDF-1.4');
+  assert.match(pdfBuf.subarray(-20).toString('latin1'), /%%EOF/);
+});
+
+test('sorteio de evento: eleg?veis, roleta, desabilitar, reset e entrega', async () => {
+  const ev = await api('/api/eventos', {
+    method: 'POST', token: admin,
+    body: { nome: 'Evento Sorteio ' + run, inicio: '2026-12-02T19:00', permiteVisitantes: true },
+  });
+  const id = ev.json.id;
+  await api('/api/eventos/' + id + '/participantes', { method: 'POST', token: admin, body: { nome: 'Concorrente A ' + run } });
+  await api('/api/eventos/' + id + '/participantes', { method: 'POST', token: admin, body: { nome: 'Concorrente B ' + run } });
+
+  const s = await api('/api/sorteios', {
+    method: 'POST', token: admin,
+    body: { nome: 'Sorteio ' + run, premio: '1 m?s', publico: 'EVENTO', eventId: id, entradasBase: 1, ativo: true },
+  });
+  assert.equal(s.status, 201, s.text);
+  const sid = s.json.id;
+
+  const eleg = await api('/api/sorteios/' + sid + '/elegiveis', { token: admin });
+  assert.equal(eleg.status, 200);
+  assert.equal(eleg.json.participantes.length, 2);
+
+  const draw = await api('/api/sorteios/' + sid + '/sortear', { method: 'POST', token: admin, body: {} });
+  assert.equal(draw.status, 200, draw.text);
+  assert.ok(['Concorrente A ' + run, 'Concorrente B ' + run].includes(draw.json.vencedor.nome));
+  assert.equal(draw.json.totalEntradas, 2);
+
+  const lista = await api('/api/sorteios', { token: admin });
+  assert.equal(lista.json.find((x) => x.id === sid).status, 'SORTEADA');
+  const notif = await api('/api/notifications', { token: admin });
+  assert.ok(notif.json.some((n) => n.tipo === 'SORTEIO' && n.titulo.includes('Sorteio ' + run)));
+
+  const entrega = await api('/api/sorteios/' + sid + '/entregar', { method: 'POST', token: admin, body: { por: 'Recep??o' } });
+  assert.equal(entrega.status, 200);
+  assert.equal(entrega.json.entrega.entregue, true);
+
+  const off = await api('/api/sorteios/' + sid, { method: 'PATCH', token: admin, body: { ativo: false } });
+  assert.equal(off.status, 200);
+  const reset = await api('/api/sorteios/' + sid + '/reset', { method: 'POST', token: admin, body: {} });
+  assert.equal(reset.status, 200);
+  assert.equal(reset.json.vencedor, null);
+  const negado = await api('/api/sorteios/' + sid + '/sortear', { method: 'POST', token: admin, body: {} });
+  assert.equal(negado.status, 409);
+});
+
+test('sorteio valida p?blico e evento', async () => {
+  const semEvento = await api('/api/sorteios', { method: 'POST', token: admin, body: { nome: 'X', publico: 'EVENTO' } });
+  assert.equal(semEvento.status, 400);
+  const publicoRuim = await api('/api/sorteios', { method: 'POST', token: admin, body: { nome: 'X', publico: 'NADA' } });
+  assert.equal(publicoRuim.status, 400);
 });

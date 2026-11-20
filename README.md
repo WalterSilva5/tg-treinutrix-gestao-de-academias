@@ -10,11 +10,24 @@ Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces
 
 > Revisão técnica completa (achados, correções e pendências): `docs/REVISAO.md`.
 
+## Recursos
+
+- Catraca Topdata/leitor facial + controladores HTTP, com detecção na rede e
+  teste de conexão.
+- Cadastro de pessoas, planos, regras de horário e frequência por dias distintos.
+- **Eventos** com inscrições de alunos, visitantes e externos, check-in e
+  exportação **CSV/PDF**.
+- **Sorteios/premiações** programáveis (matrícula da sorte, mensalidade em dia,
+  participantes de evento) com roleta e entrega do prêmio.
+- Importação de cadastros por CSV/JSON (sem biometria; foto depois).
+- Backup automático, restauração, notificações e PWA na rede local.
+- Persistência em **SQLite**, sem Docker.
+
 ## Arquitetura
 
 ```
-front (HTML) <-> api (Node, :3001) <-> store persistido (data/state.json)
-                      ^                     + log de acessos (data/events.jsonl)
+front (HTML) <-> api (Node, :3001) <-> SQLite (data/painel.db)
+                      ^                     + eventos na mesma base
                       | HTTP (heartbeat + sync + identificações + /open)
                edge-catraca (Node, :3002, simulado)
                 /                    \
@@ -23,7 +36,7 @@ front (HTML) <-> api (Node, :3001) <-> store persistido (data/state.json)
 ```
 
 - `api/` — API central + motor de decisão ALLOW/DENY + persistência local.
-  Zero dependências, roda em Linux e Windows com Node 18+.
+  Zero dependências, roda em Linux e Windows com Node 22+.
 - `edge-catraca/` — serviço de borda: heartbeat, worker de sincronização da
   fila (envia `setuserinfo`/`deleteuser` ao leitor), decisão e abertura do giro.
   No Linux usa simuladores; no Windows usa os adaptadores reais (bridge
@@ -34,8 +47,9 @@ front (HTML) <-> api (Node, :3001) <-> store persistido (data/state.json)
   compartilhamento por link/QR.
 - `backups/` — snapshots JSON + fotos (retidos 7, ignorados no git). Ver
   `docs/PAINEL-SISTEMA.md`.
-- `data/` — estado persistido (`state.json`), log de acessos (`events.jsonl`)
-  e fotos (`data/photos/`). Fora do git; entra no backup.
+- `data/` — banco SQLite (`painel.db`), fotos (`data/photos/`) e segredo de
+  autenticação (`data/auth.secret`). Fora do git; entra no backup. O formato
+  antigo (`state.json` + `events.jsonl`) é migrado sozinho no primeiro boot.
 - `prisma/` — modelo de dados de referência para portar ao MySQL/Prisma do
   `treina.ai-api`.
 - `docs/` — plano, contratos, drivers de catraca, instalação e revisão.
@@ -43,7 +57,7 @@ front (HTML) <-> api (Node, :3001) <-> store persistido (data/state.json)
 ## Rodar no Linux (sem catraca)
 
 ```bash
-node --version                  # >= 18
+node --version                  # >= 22 (node:sqlite nativo)
 node --test                     # testes (unitários + HTTP + persistência)
 node api/src/server.js          # API em http://localhost:3001
 node edge-catraca/src/edge.js   # edge em http://localhost:3002
@@ -51,8 +65,9 @@ node edge-catraca/src/edge.js   # edge em http://localhost:3002
 ```
 
 Primeiro acesso: `admin` / `admin123` (defina `SEED_ADMIN_PASSWORD` antes de
-subir em produção). O primeiro boot cria `data/state.json`; reinícios preservam
-cadastros, senhas, regras e eventos.
+subir em produção). O primeiro boot cria `data/painel.db`; reinícios preservam
+cadastros, senhas, regras e eventos. Se perder a senha do administrador:
+`scripts\restaurar-admin.bat` (Windows) ou `bash scripts/restaurar-admin.sh`.
 
 Instalação na academia (Windows/Linux, IP local, boot automático, multi-unidades):
 ver `docs/INSTALACAO.md` — guia passo a passo para agente de IA.
@@ -87,7 +102,7 @@ ver `docs/INSTALACAO.md` — guia passo a passo para agente de IA.
 | `SEED_DEMO` | 1 | `0` instala sem alunos de demonstração |
 | `DATA_DIR` / `DATA_FILE` / `EVENTS_FILE` | ./data | persistência (disco externo) |
 | `PERSIST_INTERVAL_MS` | 3000 | intervalo de gravação do estado |
-| `EVENT_MAX` | 50000 | eventos em memória/JSONL (poda + compactação) |
+| `EVENT_MAX` | 50000 | eventos mantidos no SQLite (poda automática) |
 | `BACKUP_DIR` / `BACKUP_KEEP` | ./backups / 7 | snapshots |
 | `PHOTO_DIR` / `PHOTO_MAX_BYTES` | ./data/photos / 400 KB | fotos de cadastro |
 | `MIN_SCORE` | 0.7 | score mínimo no método facial |
@@ -126,7 +141,8 @@ ver `docs/INSTALACAO.md` — guia passo a passo para agente de IA.
 ## No Windows com catraca
 
 1. Ler `docs/PROXIMOS-PASSOS.md` (ordem de execução) e `docs/HANDOFF-WINDOWS.md`
-   (estado atual e backlog priorizado).
+   (estado atual e backlog priorizado). Roteiro de bancada:
+   `docs/VALIDACOES-PENDENTES.md`.
 2. Rodar `scripts\iniciar-painel.cmd` e depois `scripts\verificar.cmd`.
 3. Compilar a ponte da catraca: `powershell -ExecutionPolicy Bypass -File
    edge-catraca\dotnet-adapter\build.ps1`.

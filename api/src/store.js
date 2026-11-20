@@ -1,4 +1,4 @@
-// Store em memória + hidratação/persistência em data/state.json.
+// Store em memória + persistência SQLite (api/src/persist.js).
 // Tipos: ALUNO (mensalidade), PERSONAL (credencial com validade, sem mensalidade),
 // VISITANTE (avulso/dia, validade curta).
 
@@ -16,7 +16,10 @@ export const store = {
   devices: new Map(),
   users: new Map(), // operadores: { id, nome, login, senhaHash, perfil: recepcao|gerencia }
   rules: [], // { personId, deviceId, diasSemana, horaIni, horaFim }
-  events: [], // { id, deviceId, personId, timestamp, direcao, metodo, score, decisao, motivo }
+  events: [], // eventos de ACESSO da catraca
+  socialEvents: [], // eventos/agenda (participantes podem ser visitantes)
+  eventParticipants: [], // { id, eventId, personId|null, nome, tipo, documento, contato, status, checkinAt }
+  raffles: [], // sorteios/premiações programáveis
   syncQueue: [], // { id, personId, deviceId, operacao, status, tentativas, payload }
   notifications: [], // { id, key, tipo, titulo, detalhe, createdAt, resolvida, resolvidaPor, resolvidaEm }
   meta: { lastBackupAt: null, nextEnrollid: 1001, dedup: {} },

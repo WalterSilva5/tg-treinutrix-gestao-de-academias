@@ -19,9 +19,15 @@ import { visiblePersons, visibleEvents, canSeeOperations } from './scope.js';
 import { parsePhoto, validatePhoto, savePhoto, readPhoto, deletePhoto } from './photos.js';
 import { localDayKey, parseDate, isDateOnly } from './time.js';
 import { enqueueSync, enqueueDelete, ackSync } from './sync.js';
-import { DATA_FILE, loadState, saveIfDirty, startAutoSave, markDirty, appendEvent, compactEvents } from './persist.js';
+import { DB_FILE, loadState, saveNow, saveIfDirty, startAutoSave, markDirty, appendEvent, compactEvents, closeDb } from './persist.js';
 import { catalogo, normalizarDevice } from './devices.js';
 import { diasFrequentados, alunosNoDia } from './frequency.js';
+import { descobrirCatracas, probarTcp, redesLocais, normalizarSubnet } from './discovery.js';
+import {
+  normalizarEvento, normalizarSorteio, novoEvento, novaInscricao, elegiveis, sortear,
+  STATUS_PARTICIPANTE,
+} from './social.js';
+import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento } from './report.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FRONT_DIR = path.join(HERE, '..', '..', 'front');
@@ -41,23 +47,34 @@ const EDGE_TOKEN = process.env.EDGE_TOKEN || '';
 const NOTIFY_INTERVAL_MS = Number(process.env.NOTIFY_INTERVAL_MS || 5 * 60 * 1000);
 const LOGIN_MAX_FAILS = Number(process.env.LOGIN_MAX_FAILS || 5);
 const LOGIN_WINDOW_MS = Number(process.env.LOGIN_WINDOW_MS || 5 * 60 * 1000);
+const DISCOVER_MIN_MS = Number(process.env.DISCOVER_MIN_MS || 5000);
+const RAFFLE_INTERVAL_MS = Number(process.env.RAFFLE_INTERVAL_MS || 60000);
+let ultimaVarredura = 0;
+let varrendo = false;
+let raffleTimer = null;
 
 // ---------------------------------------------------------------------------
 // bootstrap
 // ---------------------------------------------------------------------------
 let booted = false;
 let notifyTimer = null;
+let backupTimer = null;
 
 export function bootstrap() {
   if (booted) return store;
   booted = true;
   try {
-    if (loadState(store)) console.log('[persist] estado restaurado de data/state.json');
+    if (loadState(store)) console.log(`[persist] estado restaurado de ${DB_FILE}`);
   } catch (e) {
-    // Não apaga o arquivo: renomeia para inspeção e sobe com o seed.
-    const broken = `${DATA_FILE}.corrupt-${Date.now()}`;
-    try { fs.renameSync(DATA_FILE, broken); } catch {}
-    console.log('[persist] estado corrompido, preservado em', broken, '—', e.message);
+    // Não apaga o banco: renomeia para inspeção e sobe com o seed.
+    try { closeDb(); } catch {}
+    const stamp = Date.now();
+    for (const sufixo of ['', '-wal', '-shm']) {
+      const origem = `${DB_FILE}${sufixo}`;
+      if (!fs.existsSync(origem)) continue;
+      try { fs.renameSync(origem, `${origem}.corrupt-${stamp}`); } catch {}
+    }
+    console.log('[persist] banco corrompido, preservado com sufixo .corrupt-', stamp, '—', e.message);
   }
   seed();
   store.meta.dedup = store.meta.dedup || {};
@@ -68,7 +85,65 @@ export function bootstrap() {
   }, NOTIFY_INTERVAL_MS);
   notifyTimer.unref();
   startAutoSave(store);
+  const backupHoras = Number(process.env.BACKUP_INTERVAL_HOURS ?? 24);
+  if (backupHoras > 0) {
+    backupTimer = setInterval(() => {
+      try {
+        doBackup(store);
+        markDirty();
+        console.log('[backup] automático concluído');
+      } catch (e) { console.log('[backup]', e.message); }
+    }, backupHoras * 3600 * 1000);
+    backupTimer.unref();
+  }
+  // Sorteios programados: avalia no boot e a cada minuto.
+  if (RAFFLE_INTERVAL_MS > 0) {
+    try { sortearProgramados(); } catch (e) { console.log('[sorteio]', e.message); }
+    raffleTimer = setInterval(() => {
+      try { sortearProgramados(); } catch (e) { console.log('[sorteio]', e.message); }
+    }, RAFFLE_INTERVAL_MS);
+    raffleTimer.unref();
+  }
   return store;
+}
+
+// Executa sorteios ATIVOS cuja data programada já passou.
+function sortearProgramados(agora = new Date()) {
+  for (const r of store.raffles) {
+    if (!r.ativo || r.status !== 'ATIVA' || !r.sorteioEm) continue;
+    const quando = new Date(r.sorteioEm);
+    if (Number.isNaN(quando.getTime()) || quando > agora) continue;
+    try {
+      realizarSorteio(r, { agora });
+      console.log(`[sorteio] ${r.nome}: ganhador ${r.vencedor.nome}`);
+    } catch (e) {
+      if (r.ultimoErro !== e.message) console.log(`[sorteio] ${r.nome}: ${e.message}`);
+      r.ultimoErro = e.message;
+    }
+  }
+}
+
+function realizarSorteio(r, { agora = new Date(), randomInt } = {}) {
+  const out = sortear(store, r, { agora, randomInt });
+  r.vencedor = out.vencedor;
+  r.totalParticipantes = out.totalParticipantes;
+  r.totalEntradas = out.totalEntradas;
+  r.status = 'SORTEADA';
+  r.sorteadoEm = out.vencedor.sorteadoEm;
+  r.ultimoErro = null;
+  store.notifications.push({
+    id: nextId('ntf'),
+    key: `sorteio:${r.id}:${r.sorteadoEm}`,
+    tipo: 'SORTEIO',
+    titulo: `Sorteio realizado: ${r.nome}`,
+    detalhe: `Ganhador: ${r.vencedor.nome}${r.vencedor.matricula ? ` (${r.vencedor.matricula})` : ''} — prêmio: ${r.premio || 'não informado'}.`,
+    createdAt: agora.toISOString(),
+    resolvida: false,
+    resolvidaPor: null,
+    resolvidaEm: null,
+  });
+  markDirty();
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +164,11 @@ function fail(status, message) {
   const e = new Error(message);
   e.status = status;
   return e;
+}
+
+function ehLoopback(req) {
+  const ip = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+  return ip === '127.0.0.1' || ip === '::1';
 }
 
 function readBody(req, limit = MAX_BODY) {
@@ -226,6 +306,54 @@ function uniqueEnrollid() {
   return n;
 }
 
+// Valida e monta a pessoa (não grava). Usado pelo cadastro unitário e pela
+// importação em lote, para as duas rotas terem exatamente as mesmas regras.
+function criarPessoa(b) {
+  const nome = cleanText(b.nome, 120);
+  if (!nome) throw fail(400, 'nome obrigatório');
+  const tipo = TIPOS_PESSOA.includes(b.tipo) ? b.tipo : 'ALUNO';
+
+  const id = b.id ? cleanId(b.id) : nextId('per');
+  if (!id) throw fail(400, 'id inválido (letras, números, _ e -)');
+  if (store.persons.has(id)) throw fail(409, 'pessoa já existe com este id');
+
+  let enrollid;
+  if (b.enrollid !== undefined && b.enrollid !== null && String(b.enrollid).trim() !== '') {
+    enrollid = Number(b.enrollid);
+    if (!Number.isInteger(enrollid) || enrollid < 1 || enrollid > 99999999) {
+      throw fail(400, 'enrollid deve ser inteiro entre 1 e 99999999');
+    }
+    if ([...store.persons.values()].some((p) => Number(p.enrollid) === enrollid)) {
+      throw fail(409, 'enrollid já usado por outra pessoa');
+    }
+  } else {
+    enrollid = uniqueEnrollid();
+  }
+
+  const matricula = cleanText(b.matricula, 40) || defaultMatricula(tipo, enrollid);
+  if ([...store.persons.values()].some((p) => p.matricula === matricula)) {
+    throw fail(409, 'matrícula já existe');
+  }
+
+  const person = {
+    id, nome, matricula, tipo, treinutrix: cleanText(b.treinutrix, 200) || null,
+    enrollid, ativo: b.ativo !== false,
+    validadeIni: normalizeValidity(b.validadeIni),
+    validadeFim: normalizeValidity(b.validadeFim),
+    foto: null,
+    senhaHash: hashPassword(b.senha || matricula),
+    criadoEm: new Date().toISOString(),
+  };
+  if (b.foto) {
+    const parsed = parsePhoto(b.foto);
+    const ok = parsed && validatePhoto(parsed);
+    if (!ok || !ok.ok) throw fail(400, ok ? ok.error : 'foto inválida');
+    savePhoto(id, parsed.buffer, ok.ext);
+    person.foto = { ext: ok.ext, mime: ok.mime, bytes: ok.bytes, updatedAt: new Date().toISOString() };
+  }
+  return person;
+}
+
 function pushEvent(evt) {
   const event = { id: nextId('evt'), ...evt };
   store.events.push(event);
@@ -274,7 +402,9 @@ async function route(req, res) {
 
   const url = new URL(req.url, 'http://localhost');
 
-  if (req.method === 'GET' && url.pathname === '/health') return send(res, 200, { ok: true });
+  if (req.method === 'GET' && url.pathname === '/health') {
+    return send(res, 200, { ok: true, storage: 'sqlite' });
+  }
 
   // Login público (com limite de tentativas por IP).
   if (req.method === 'POST' && url.pathname === '/api/auth/login') {
@@ -288,6 +418,32 @@ async function route(req, res) {
     }
     loginAttempts.delete(ip);
     return send(res, 200, { ...who, token: issueToken(who) });
+  }
+
+  // Recuperação do administrador padrão: só aceita conexão da própria máquina
+  // (loopback). Usada pelos scripts restaurar-admin.bat/.sh quando a senha do
+  // admin foi perdida. Não fica exposta na rede.
+  if (req.method === 'POST' && url.pathname === '/api/auth/recover-admin') {
+    if (!ehLoopback(req)) return send(res, 403, { error: 'somente na máquina local' });
+    const b = await readBody(req);
+    const login = (String(b.login || process.env.SEED_ADMIN_LOGIN || 'admin').trim() || 'admin').slice(0, 60);
+    const senha = String(b.senha || process.env.SEED_ADMIN_PASSWORD || 'admin123');
+    if (senha.length < 4) return send(res, 400, { error: 'senha curta (mín. 4)' });
+    let admin = [...store.users.values()].find((u) => u.login === login)
+      || store.users.get('usr_admin')
+      || [...store.users.values()].find((u) => u.perfil === 'gerencia');
+    if (!admin) {
+      admin = { id: 'usr_admin', nome: 'Administrador', login };
+      store.users.set(admin.id, admin);
+    }
+    admin.login = login;
+    admin.nome = admin.nome || 'Administrador';
+    admin.perfil = 'gerencia';
+    admin.senhaHash = hashPassword(senha);
+    loginAttempts.clear();
+    saveNow(store);
+    console.log(`[auth] administrador restaurado (${login})`);
+    return send(res, 200, { ok: true, login });
   }
 
   // Demais /api/* exigem token.
@@ -344,53 +500,82 @@ async function route(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/persons') {
     operadorOnly();
     const b = await readBody(req);
-    const nome = cleanText(b.nome, 120);
-    if (!nome) return send(res, 400, { error: 'nome obrigatório' });
-    const tipo = TIPOS_PESSOA.includes(b.tipo) ? b.tipo : 'ALUNO';
-
-    const id = b.id ? cleanId(b.id) : nextId('per');
-    if (!id) return send(res, 400, { error: 'id inválido (letras, números, _ e -)' });
-    if (store.persons.has(id)) return send(res, 409, { error: 'pessoa já existe com este id' });
-
-    let enrollid;
-    if (b.enrollid !== undefined && b.enrollid !== null && String(b.enrollid).trim() !== '') {
-      enrollid = Number(b.enrollid);
-      if (!Number.isInteger(enrollid) || enrollid < 1 || enrollid > 99999999) {
-        return send(res, 400, { error: 'enrollid deve ser inteiro entre 1 e 99999999' });
-      }
-      if ([...store.persons.values()].some((p) => Number(p.enrollid) === enrollid)) {
-        return send(res, 409, { error: 'enrollid já usado por outra pessoa' });
-      }
-    } else {
-      enrollid = uniqueEnrollid();
-    }
-
-    const matricula = cleanText(b.matricula, 40) || defaultMatricula(tipo, enrollid);
-    if ([...store.persons.values()].some((p) => p.matricula === matricula)) {
-      return send(res, 409, { error: 'matrícula já existe' });
-    }
-
-    const person = {
-      id, nome, matricula, tipo, treinutrix: cleanText(b.treinutrix, 200) || null,
-      enrollid, ativo: b.ativo !== false,
-      validadeIni: normalizeValidity(b.validadeIni),
-      validadeFim: normalizeValidity(b.validadeFim),
-      foto: null,
-      senhaHash: hashPassword(b.senha || matricula),
-      criadoEm: new Date().toISOString(),
-    };
-    if (b.foto) {
-      const parsed = parsePhoto(b.foto);
-      const ok = parsed && validatePhoto(parsed);
-      if (!ok || !ok.ok) return send(res, 400, { error: ok ? ok.error : 'foto inválida' });
-      savePhoto(id, parsed.buffer, ok.ext);
-      person.foto = { ext: ok.ext, mime: ok.mime, bytes: ok.bytes, updatedAt: new Date().toISOString() };
-    }
-    store.persons.set(id, person);
+    const person = criarPessoa(b);
+    store.persons.set(person.id, person);
     // Sem regra não há acesso: o cadastro já nasce liberado no horário padrão.
-    ensureRules(store, id);
+    ensureRules(store, person.id);
     enqueueSync(store, person);
     return send(res, 201, publicPerson(person));
+  }
+
+  // Importação em lote de outro sistema (sem biometria): JSON ou CSV já
+  // convertido pelo painel. `confirmar:false` faz a prévia sem gravar nada.
+  if (req.method === 'POST' && url.pathname === '/api/persons/import') {
+    gerenciaOnly();
+    const b = await readBody(req);
+    const linhas = Array.isArray(b.pessoas) ? b.pessoas : null;
+    if (!linhas) return send(res, 400, { error: 'pessoas deve ser uma lista' });
+    if (linhas.length > 5000) return send(res, 413, { error: 'máximo de 5000 linhas por importação' });
+    const confirmar = b.confirmar === true;
+    const itens = [];
+    let criados = 0;
+    let ignorados = 0;
+    let erros = 0;
+
+    linhas.forEach((linha, i) => {
+      const numero = i + 1;
+      const nome = cleanText(linha && linha.nome, 120);
+      const matricula = cleanText(linha && linha.matricula, 40);
+      const enrollidTexto = linha && linha.enrollid !== undefined && linha.enrollid !== null
+        ? String(linha.enrollid).trim() : '';
+      try {
+        if (!nome) throw new Error('nome obrigatório');
+        if (enrollidTexto !== '') {
+          const n = Number(enrollidTexto);
+          if (!Number.isInteger(n) || n < 1 || n > 99999999) throw new Error('enrollid inválido');
+        }
+        if (linha && linha.validadeFim) normalizeValidity(linha.validadeFim);
+
+        const jaMatricula = matricula
+          ? [...store.persons.values()].find((p) => p.matricula === matricula) : null;
+        const jaEnrollid = enrollidTexto !== ''
+          ? [...store.persons.values()].find((p) => String(p.enrollid) === enrollidTexto) : null;
+        const existente = jaMatricula || jaEnrollid;
+        if (existente) {
+          ignorados += 1;
+          itens.push({
+            linha: numero, nome, matricula: matricula || existente.matricula,
+            status: 'JA_EXISTE', id: existente.id, enrollid: existente.enrollid,
+          });
+          return;
+        }
+
+        if (!confirmar) {
+          itens.push({ linha: numero, nome, matricula: matricula || null, status: 'NOVO' });
+          return;
+        }
+
+        const person = criarPessoa({ ...linha, nome, matricula: matricula || undefined });
+        store.persons.set(person.id, person);
+        ensureRules(store, person.id);
+        enqueueSync(store, person);
+        criados += 1;
+        itens.push({
+          linha: numero, nome: person.nome, matricula: person.matricula,
+          status: 'CRIADO', id: person.id, enrollid: person.enrollid,
+        });
+      } catch (e) {
+        erros += 1;
+        itens.push({ linha: numero, nome: nome || null, matricula: matricula || null, status: 'ERRO', erro: e.message });
+      }
+    });
+
+    if (confirmar && criados > 0) markDirty();
+    return send(res, 200, {
+      confirmado: confirmar, total: linhas.length, criados, ignorados, erros,
+      itens: itens.slice(0, 500),
+      truncado: itens.length > 500,
+    });
   }
 
   // Foto do cadastro: ver, enviar e remover.
@@ -524,6 +709,37 @@ async function route(req, res) {
     operadorOnly();
     return send(res, 200, catalogo());
   }
+  // Detecção de catracas/controladores na rede local (somente gerência).
+  if (req.method === 'POST' && url.pathname === '/api/devices/discover') {
+    gerenciaOnly();
+    const b = await readBody(req);
+    const redes = redesLocais();
+    const subnet = b.subnet ? normalizarSubnet(b.subnet) : (redes[0] && redes[0].cidr);
+    if (!subnet) return send(res, 400, { error: 'informe a faixa (ex.: 192.168.0.0/24)', redes });
+    if (varrendo) return send(res, 429, { error: 'varredura em andamento' });
+    if (Date.now() - ultimaVarredura < DISCOVER_MIN_MS) {
+      return send(res, 429, { error: 'aguarde alguns segundos antes de varrer novamente' });
+    }
+    varrendo = true;
+    try {
+      const out = await descobrirCatracas({
+        subnet,
+        portas: Array.isArray(b.portas) ? b.portas : undefined,
+        timeoutMs: b.timeoutMs,
+      });
+      ultimaVarredura = Date.now();
+      const cadastrados = new Set([...store.devices.values()].map((d) => `${d.ip}:${d.porta}`));
+      const encontrados = out.encontrados.map((e) => ({
+        ...e, cadastrado: e.portas.some((p) => cadastrados.has(`${e.ip}:${p}`)),
+      }));
+      return send(res, 200, { ...out, encontrados, redes });
+    } catch (e) {
+      return send(res, 400, { error: e.message, redes });
+    } finally {
+      varrendo = false;
+    }
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/devices') {
     gerenciaOnly();
     const b = await readBody(req);
@@ -543,6 +759,50 @@ async function route(req, res) {
     }
     return send(res, 201, dev);
   }
+  const deviceTestRoute = url.pathname.match(/^\/api\/devices\/([^/]+)\/test$/);
+  if (req.method === 'POST' && deviceTestRoute) {
+    operadorOnly();
+    const id = safeDecode(deviceTestRoute[1]);
+    const dev = id ? store.devices.get(id) : null;
+    if (!dev) return send(res, 404, { error: 'device_not_found' });
+    if (!dev.ip) return send(res, 400, { error: 'equipamento sem IP' });
+    const b = await readBody(req);
+    const r = await probarTcp(dev.ip, dev.porta, Number(b.timeoutMs) || undefined);
+    dev.online = r.ok;
+    if (r.ok) dev.lastSeen = new Date().toISOString();
+    markDirty();
+    return send(res, 200, {
+      ok: r.ok, deviceId: dev.id, ip: dev.ip, porta: dev.porta,
+      latencyMs: r.latencyMs, error: r.error,
+    });
+  }
+  const deviceRoute = url.pathname.match(/^\/api\/devices\/([^/]+)$/);
+  if (deviceRoute && (req.method === 'PATCH' || req.method === 'DELETE')) {
+    gerenciaOnly();
+    const id = safeDecode(deviceRoute[1]);
+    const dev = id ? store.devices.get(id) : null;
+    if (!dev) return send(res, 404, { error: 'device_not_found' });
+    if (req.method === 'DELETE') {
+      store.devices.delete(id);
+      store.rules = store.rules.filter((r) => r.deviceId !== id);
+      store.syncQueue = store.syncQueue.filter((s) => s.deviceId !== id);
+      markDirty();
+      return send(res, 200, { ok: true });
+    }
+    const b = await readBody(req);
+    const merged = { ...dev, ...b };
+    // Trocar de driver limpa endpoint herdado do driver anterior.
+    if (b.driver && b.driver !== dev.driver && b.endpoint === undefined) merged.endpoint = null;
+    const r = normalizarDevice(merged);
+    if (!r.ok) return send(res, 400, { error: r.error });
+    Object.assign(dev, r.device, {
+      id,
+      online: b.ip !== undefined || b.porta !== undefined ? false : dev.online,
+      atualizadoEm: new Date().toISOString(),
+    });
+    markDirty();
+    return send(res, 200, dev);
+  }
   const hbRoute = url.pathname.match(/^\/api\/devices\/([^/]+)\/heartbeat$/);
   if (req.method === 'POST' && hbRoute) {
     operadorOnly();
@@ -552,6 +812,246 @@ async function route(req, res) {
     dev.online = true;
     dev.lastSeen = new Date().toISOString();
     return send(res, 200, dev);
+  }
+
+  // ------------------------------------------------------- eventos (agenda)
+  if (req.method === 'GET' && url.pathname === '/api/eventos') {
+    operadorOnly();
+    const lista = [...store.socialEvents]
+      .sort((a, b) => String(a.inicio).localeCompare(String(b.inicio)))
+      .map((e) => {
+        const ps = store.eventParticipants.filter((p) => p.eventId === e.id && p.status !== 'CANCELADO');
+        return { ...e, participantes: ps.length, presentes: ps.filter((p) => p.status === 'PRESENTE').length };
+      });
+    return send(res, 200, lista);
+  }
+  if (req.method === 'POST' && url.pathname === '/api/eventos') {
+    operadorOnly();
+    const b = await readBody(req);
+    let evento;
+    try { evento = novoEvento(b); } catch (e) { return send(res, 400, { error: e.message }); }
+    store.socialEvents.push(evento);
+    markDirty();
+    return send(res, 201, evento);
+  }
+  const eventoRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)$/);
+  if (eventoRoute) {
+    const id = safeDecode(eventoRoute[1]);
+    const evento = id ? store.socialEvents.find((e) => e.id === id) : null;
+    if (!evento) return send(res, 404, { error: 'evento_not_found' });
+    if (req.method === 'GET') {
+      operadorOnly();
+      const participantes = store.eventParticipants
+        .filter((p) => p.eventId === id)
+        .sort((a, b) => String(a.criadoEm).localeCompare(String(b.criadoEm)));
+      return send(res, 200, { ...evento, participantes });
+    }
+    if (req.method === 'PATCH') {
+      operadorOnly();
+      const b = await readBody(req);
+      let normalizado;
+      try { normalizado = normalizarEvento(b, evento); } catch (e) { return send(res, 400, { error: e.message }); }
+      Object.assign(evento, normalizado, { atualizadoEm: new Date().toISOString() });
+      markDirty();
+      return send(res, 200, evento);
+    }
+    if (req.method === 'DELETE') {
+      gerenciaOnly();
+      store.socialEvents = store.socialEvents.filter((e) => e.id !== id);
+      store.eventParticipants = store.eventParticipants.filter((p) => p.eventId !== id);
+      markDirty();
+      return send(res, 200, { ok: true });
+    }
+  }
+
+  const eventoParticipantesRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/participantes$/);
+  if (req.method === 'POST' && eventoParticipantesRoute) {
+    operadorOnly();
+    const eventId = safeDecode(eventoParticipantesRoute[1]);
+    const b = await readBody(req);
+    let participante;
+    try { participante = novaInscricao(store, eventId, b); } catch (e) { return send(res, 400, { error: e.message }); }
+    store.eventParticipants.push(participante);
+    markDirty();
+    return send(res, 201, participante);
+  }
+  const eventoParticipanteRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/participantes\/([^/]+)$/);
+  if (eventoParticipanteRoute) {
+    operadorOnly();
+    const eventId = safeDecode(eventoParticipanteRoute[1]);
+    const pid = safeDecode(eventoParticipanteRoute[2]);
+    const p = store.eventParticipants.find((x) => x.id === pid && x.eventId === eventId);
+    if (!p) return send(res, 404, { error: 'participante_not_found' });
+    if (req.method === 'PATCH') {
+      const b = await readBody(req);
+      if (b.status && STATUS_PARTICIPANTE.includes(String(b.status).toUpperCase())) {
+        p.status = String(b.status).toUpperCase();
+        p.checkinAt = p.status === 'PRESENTE' ? (b.checkinAt ? new Date(b.checkinAt).toISOString() : new Date().toISOString()) : null;
+      }
+      if (b.checkin === true) { p.status = 'PRESENTE'; p.checkinAt = new Date().toISOString(); }
+      if (b.checkin === false) { p.status = 'INSCRITO'; p.checkinAt = null; }
+      if (b.nome !== undefined && !p.personId) p.nome = cleanText(b.nome, 120);
+      if (b.contato !== undefined) p.contato = cleanText(b.contato, 120);
+      if (b.documento !== undefined) p.documento = cleanText(b.documento, 60);
+      markDirty();
+      return send(res, 200, p);
+    }
+    if (req.method === 'DELETE') {
+      store.eventParticipants = store.eventParticipants.filter((x) => x.id !== pid);
+      markDirty();
+      return send(res, 200, { ok: true });
+    }
+  }
+
+  const eventoExportRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/export\.(csv|pdf)$/);
+  if (req.method === 'GET' && eventoExportRoute) {
+    operadorOnly();
+    const id = safeDecode(eventoExportRoute[1]);
+    const formato = eventoExportRoute[2];
+    const evento = id ? store.socialEvents.find((e) => e.id === id) : null;
+    if (!evento) return send(res, 404, { error: 'evento_not_found' });
+    const participantes = store.eventParticipants
+      .filter((p) => p.eventId === id && p.status !== 'CANCELADO')
+      .sort((a, b) => String(a.criadoEm).localeCompare(String(b.criadoEm)));
+    if (formato === 'csv') {
+      const corpo = eventoParaCsv(evento, participantes);
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${nomeArquivoEvento(evento, 'csv')}"`,
+        ...corsHeaders(),
+      });
+      return res.end(corpo);
+    }
+    const pdf = eventoParaPdf(evento, participantes);
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${nomeArquivoEvento(evento, 'pdf')}"`,
+      'Content-Length': pdf.length,
+      ...corsHeaders(),
+    });
+    return res.end(pdf);
+  }
+
+  // ------------------------------------------------------- sorteios/premiações
+  if (req.method === 'GET' && url.pathname === '/api/sorteios') {
+    operadorOnly();
+    const lista = store.raffles.map((r) => {
+      let elegiveisQtd = 0;
+      let entradas = 0;
+      try {
+        const e = elegiveis(store, r);
+        elegiveisQtd = e.participantes.length;
+        entradas = e.totalEntradas;
+      } catch { /* configuração incompleta */ }
+      return { ...r, elegiveisQtd, entradas };
+    });
+    return send(res, 200, lista);
+  }
+  if (req.method === 'POST' && url.pathname === '/api/sorteios') {
+    gerenciaOnly();
+    const b = await readBody(req);
+    let sorteio;
+    try { sorteio = { id: nextId('sor'), ...normalizarSorteio(b), criadoEm: new Date().toISOString() }; }
+    catch (e) { return send(res, 400, { error: e.message }); }
+    if (sorteio.publico === 'EVENTO' && !store.socialEvents.some((e) => e.id === sorteio.eventId)) {
+      return send(res, 400, { error: 'evento do sorteio não encontrado' });
+    }
+    store.raffles.push(sorteio);
+    markDirty();
+    return send(res, 201, sorteio);
+  }
+  const sorteioRoute = url.pathname.match(/^\/api\/sorteios\/([^/]+)$/);
+  if (sorteioRoute) {
+    const id = safeDecode(sorteioRoute[1]);
+    const sorteio = id ? store.raffles.find((r) => r.id === id) : null;
+    if (!sorteio) return send(res, 404, { error: 'sorteio_not_found' });
+    if (req.method === 'GET') {
+      operadorOnly();
+      return send(res, 200, sorteio);
+    }
+    if (req.method === 'PATCH') {
+      gerenciaOnly();
+      const b = await readBody(req);
+      let atualizado;
+      try { atualizado = normalizarSorteio(b, sorteio); } catch (e) { return send(res, 400, { error: e.message }); }
+      if (atualizado.publico === 'EVENTO' && !store.socialEvents.some((e) => e.id === atualizado.eventId)) {
+        return send(res, 400, { error: 'evento do sorteio não encontrado' });
+      }
+      Object.assign(sorteio, atualizado, { atualizadoEm: new Date().toISOString() });
+      markDirty();
+      return send(res, 200, sorteio);
+    }
+    if (req.method === 'DELETE') {
+      gerenciaOnly();
+      store.raffles = store.raffles.filter((r) => r.id !== id);
+      markDirty();
+      return send(res, 200, { ok: true });
+    }
+  }
+  const sorteioElegiveisRoute = url.pathname.match(/^\/api\/sorteios\/([^/]+)\/elegiveis$/);
+  if (req.method === 'GET' && sorteioElegiveisRoute) {
+    operadorOnly();
+    const id = safeDecode(sorteioElegiveisRoute[1]);
+    const sorteio = id ? store.raffles.find((r) => r.id === id) : null;
+    if (!sorteio) return send(res, 404, { error: 'sorteio_not_found' });
+    try {
+      return send(res, 200, elegiveis(store, sorteio));
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+  const sorteioSortearRoute = url.pathname.match(/^\/api\/sorteios\/([^/]+)\/sortear$/);
+  if (req.method === 'POST' && sorteioSortearRoute) {
+    gerenciaOnly();
+    const id = safeDecode(sorteioSortearRoute[1]);
+    const sorteio = id ? store.raffles.find((r) => r.id === id) : null;
+    if (!sorteio) return send(res, 404, { error: 'sorteio_not_found' });
+    if (!sorteio.ativo) return send(res, 409, { error: 'sorteio desabilitado' });
+    const b = await readBody(req);
+    if (sorteio.status === 'SORTEADA' && b.forcar !== true) {
+      return send(res, 409, { error: 'sorteio já realizado; use reset para sortear de novo' });
+    }
+    try {
+      if (sorteio.status === 'SORTEADA') {
+        sorteio.vencedor = null; sorteio.sorteadoEm = null; sorteio.status = 'ATIVA';
+      }
+      const out = realizarSorteio(sorteio, { agora: new Date() });
+      return send(res, 200, out);
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
+  }
+  const sorteioResetRoute = url.pathname.match(/^\/api\/sorteios\/([^/]+)\/reset$/);
+  if (req.method === 'POST' && sorteioResetRoute) {
+    gerenciaOnly();
+    const id = safeDecode(sorteioResetRoute[1]);
+    const sorteio = id ? store.raffles.find((r) => r.id === id) : null;
+    if (!sorteio) return send(res, 404, { error: 'sorteio_not_found' });
+    sorteio.vencedor = null;
+    sorteio.sorteadoEm = null;
+    sorteio.totalParticipantes = null;
+    sorteio.totalEntradas = null;
+    sorteio.entrega = null;
+    sorteio.status = 'ATIVA';
+    sorteio.ultimoErro = null;
+    markDirty();
+    return send(res, 200, sorteio);
+  }
+  const sorteioEntregaRoute = url.pathname.match(/^\/api\/sorteios\/([^/]+)\/entregar$/);
+  if (req.method === 'POST' && sorteioEntregaRoute) {
+    gerenciaOnly();
+    const id = safeDecode(sorteioEntregaRoute[1]);
+    const sorteio = id ? store.raffles.find((r) => r.id === id) : null;
+    if (!sorteio) return send(res, 404, { error: 'sorteio_not_found' });
+    if (!sorteio.vencedor) return send(res, 409, { error: 'sorteio ainda não realizado' });
+    const b = await readBody(req);
+    sorteio.entrega = {
+      entregue: true,
+      por: cleanText(b.por, 80) || 'operador',
+      em: new Date().toISOString(),
+    };
+    markDirty();
+    return send(res, 200, sorteio);
   }
 
   // ------------------------------------------------------------------ eventos
@@ -720,6 +1220,11 @@ async function route(req, res) {
         inadimplentes: inad.length,
       },
       inadimplentes: inad.map((p) => ({ id: p.id, nome: p.nome, matricula: p.matricula, validadeFim: p.validadeFim })),
+      storage: {
+        engine: 'sqlite',
+        file: DB_FILE,
+        bytes: (() => { try { return fs.statSync(DB_FILE).size; } catch { return 0; } })(),
+      },
       lastBackupAt: store.meta.lastBackupAt,
     });
   }

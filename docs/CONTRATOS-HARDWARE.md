@@ -87,6 +87,26 @@ Duas SDKs, dois momentos (artigo oficial "Como Funciona o Fluxo..."):
    `POST /api/identification` decide → `LiberarCatraca*` ou negado.
    Ver `docs/SDK-EASYINNER-MAPEAMENTO.md`.
 
+## Cadastro e detecção de catracas (API)
+
+- `GET /api/device-catalog` — catálogo de drivers/modelos.
+- `POST /api/devices` — cadastra (gerência). Campos: `nome`, `driver`
+  (`topdata_easyinner` | `topdata_facial_ws` | `generic_http` | `simulator`),
+  `modelo`, `fabricante`, `ip`, `porta`, `endpoint`.
+- `PATCH /api/devices/:id` — edita os mesmos campos.
+- `DELETE /api/devices/:id` — remove o equipamento, suas regras e a fila de sync.
+- `POST /api/devices/:id/test` — testa TCP em `ip:porta` e devolve
+  `{ ok, latencyMs, error }`; atualiza `online/lastSeen`.
+- `POST /api/devices/discover` — varre **um /24 privado** (portas padrão
+  3570 e 3000) e devolve `{ subnet, portas, encontrados:[{ ip, portas }] }`.
+  Corpo opcional: `{ subnet: "192.168.0.0/24", portas: [3000], timeoutMs: 700 }`.
+  Limites: gerência, faixa privada, /24, 4 portas, intervalo mínimo
+  `DISCOVER_MIN_MS` (5 s).
+
+O edge lê o cadastro pelo `DEVICE_ID` (`GET /api/devices`) e, no Windows com
+`DEVICE_DRIVER=easyinner`, inicia o bridge C# com `--ip`/`--porta-inner` do
+equipamento (`EASYINNER_AUTOSTART=0` desliga).
+
 ## Fotos
 
 Padrão de cadastro: JPEG frontal, mínimo 480x640, menor que 200KB, fundo claro.

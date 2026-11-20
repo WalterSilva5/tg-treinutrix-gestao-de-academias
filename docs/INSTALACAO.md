@@ -12,7 +12,7 @@ externa.
 | Item | Academia (Windows, com catraca) | Servidor alternativo (Linux) |
 | --- | --- | --- |
 | SO | Windows 10/11 64-bit | qualquer distro atual |
-| Node.js | >= 18 (https://nodejs.org, LTS) | >= 18 via gerenciador de pacotes |
+| Node.js | >= 22 (https://nodejs.org, LTS; `node:sqlite` nativo) | >= 22 via gerenciador de pacotes |
 | Rede | IP fixo + mesma sub-rede da catraca | IP fixo na LAN |
 | Hardware real | EasyInner.dll registrada + SDK facial | não (só simuladores) |
 | Portas livres | 3001 (API/PWA), 3002 (edge) | idem |
@@ -113,8 +113,10 @@ curl -s -X POST http://localhost:3001/api/identification \
 # -> {"allow":true,"motivo":"OK"}
 ```
 
-O primeiro boot cria `data/state.json` e `data/events.jsonl`. Reinicie a API e
-repita o login: cadastros e eventos devem continuar lá.
+O primeiro boot cria o banco SQLite em `data/painel.db` (e migra automaticamente
+um `state.json`/`events.jsonl` antigo, se existir). Reinicie a API e repita o
+login: cadastros e eventos devem continuar lá. Não é necessário Docker: o banco
+é um arquivo local e entra no backup.
 
 ## 5. Testes automatizados
 
@@ -246,6 +248,7 @@ Repetir seções 1–8 em cada unidade (uma instalação por rede local). Regras
 | `DEVICE_NAO_ENCONTRADO` | `DEVICE_ID`/`device_id` divergente | conferir `GET /api/devices` e env do edge |
 | "Catraca não confirmou a abertura" | `EDGE_URL` errado, edge parado, `EDGE_TOKEN` | conferir `:3002/health` e env da API |
 | Login `429` | 5 tentativas erradas em 5 min | aguardar ou reiniciar a API |
+| Senha do admin perdida | precisa voltar ao padrão | `scripts\restaurar-admin.bat` (Windows) ou `bash scripts/restaurar-admin.sh` |
 | Dados sumiram após reiniciar | `DATA_FILE` em pasta volátil/perdida | conferir `DATA_DIR` e permissões |
 | `fail > 0` nos testes | código alterado | corrigir antes de levar à academia |
 
@@ -262,9 +265,11 @@ Repetir seções 1–8 em cada unidade (uma instalação por rede local). Regras
 | `SYNC_INTERVAL_MS` | 30000 | edge |
 | `USE_REAL_HARDWARE` | 0 | edge |
 | `DATA_DIR` | ./data | API |
-| `DATA_FILE` / `EVENTS_FILE` | ./data/state.json / events.jsonl | API |
+| `DB_FILE` | ./data/painel.db | API — banco SQLite (arquivo local) |
+| `DATA_FILE` / `EVENTS_FILE` | legado | API — só para migração do formato antigo |
 | `PERSIST_INTERVAL_MS` | 3000 | API |
 | `EVENT_MAX` | 50000 | API |
+| `BACKUP_INTERVAL_HOURS` | 24 | API — 0 desliga o backup automático |
 | `BACKUP_DIR` | ./backups | API |
 | `BACKUP_KEEP` | 7 | API |
 | `PHOTO_DIR` | ./data/photos | API — fora do git; incluir no backup |
@@ -279,4 +284,7 @@ Repetir seções 1–8 em cada unidade (uma instalação por rede local). Regras
 | `CORS_ORIGIN` | vazio | API — só se o front estiver em outra origem |
 | `EDGE_LOGIN` / `EDGE_PASSWORD` | admin / admin123 | edge — conta de serviço (operador) |
 | `DEVICE_DRIVER` | simulator (easyinner com `USE_REAL_HARDWARE=1`) | edge - `simulator` \| `generic_http` \| `easyinner` \| `topdata_facial_ws` |
-| `DEVICE_ENDPOINT` | — | edge — URL do controlador quando `generic_http` |
+| `EASYINNER_AUTOSTART` | 1 (Windows) | edge - sobe o bridge C# usando IP/porta do cadastro |
+| `EASYINNER_PORT` / `EASYINNER_INNER_PORT` | 5011 / 3000 | edge - porta local do bridge / porta TCP da catraca |
+| `FACIAL_WS_PORT` | 3003 | edge - porta do servidor WebSocket do leitor |
+| `DEVICE_ENDPOINT` | - | edge - URL do controlador quando `generic_http` |

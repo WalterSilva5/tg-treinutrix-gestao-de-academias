@@ -1,9 +1,33 @@
 // Auth local zero-dep: scrypt para senhas, HMAC-SHA256 para tokens.
 // Equivale ao auth JWT do treina.ai-api; na portabilidade trocar por Passport/JWT.
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const SECRET = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex');
-if (!process.env.AUTH_SECRET) console.log('[auth] AUTH_SECRET não definido — usando segredo aleatório (tokens invalidam ao reiniciar).');
+// Segredo fixo: usa AUTH_SECRET ou cria data/auth.secret (fora do git) para que
+// os tokens sobrevivam ao reinício sem exigir variável de ambiente.
+function carregarSegredo() {
+  if (process.env.AUTH_SECRET) return process.env.AUTH_SECRET;
+  const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const dir = process.env.DATA_DIR || path.join(raiz, 'data');
+  const arquivo = process.env.AUTH_SECRET_FILE || path.join(dir, 'auth.secret');
+  try {
+    const salvo = fs.readFileSync(arquivo, 'utf8').trim();
+    if (salvo.length >= 32) return salvo;
+  } catch { /* ainda não existe */ }
+  const novo = crypto.randomBytes(32).toString('hex');
+  try {
+    fs.mkdirSync(path.dirname(arquivo), { recursive: true });
+    fs.writeFileSync(arquivo, novo, { mode: 0o600 });
+    console.log('[auth] segredo criado em', arquivo);
+  } catch (e) {
+    console.log('[auth] não foi possível gravar o segredo:', e.message);
+  }
+  return novo;
+}
+
+const SECRET = carregarSegredo();
 
 export const TOKEN_TTL_MS = 12 * 3600 * 1000;
 

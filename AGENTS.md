@@ -5,8 +5,8 @@ Leia `docs/HANDOFF-WINDOWS.md` antes de implementar qualquer coisa.
 
 ## Stack
 
-- Node.js >= 18 (recomendado 22 LTS), **sem dependências externas**.
-- API: `node:http` puro, store em memória, autenticação própria (scrypt + HMAC).
+- Node.js >= 22 (obrigatório: `node:sqlite` nativo), **sem dependências externas**.
+- API: `node:http` puro, persistência em **SQLite** (`data/painel.db`), autenticação própria (scrypt + HMAC).
 - Front: HTML/CSS/JS único em `front/index.html` + `front/qr.js`, PWA.
 - Edge: serviço local que fala com o hardware (`edge-catraca/`).
 - Testes: `node --test` (nativo).
@@ -14,7 +14,7 @@ Leia `docs/HANDOFF-WINDOWS.md` antes de implementar qualquer coisa.
 ## Comandos
 
 ```bash
-node --test api/test/                 # testes (obrigatório antes de entregar)
+node --test                          # testes (obrigatório antes de entregar)
 node api/src/server.js                # API + PWA em http://localhost:3001
 node edge-catraca/src/edge.js         # edge em http://localhost:3002
 ```
@@ -32,6 +32,10 @@ scripts\iniciar-painel.cmd
 | Regra de decisão de acesso | `api/src/decision.js` |
 | Rotas HTTP + auth | `api/src/server.js` |
 | Cadastro/validação de catracas | `api/src/devices.js` |
+| Persistência SQLite | `api/src/persist.js` |
+| Descoberta/teste de rede | `api/src/discovery.js` |
+| Eventos e sorteios | `api/src/social.js` |
+| Exportação CSV/PDF | `api/src/report.js` |
 | Fotos (disco) | `api/src/photos.js` |
 | Notificações e inativação | `api/src/notify.js` |
 | Backup/restore | `api/src/backup.js` |

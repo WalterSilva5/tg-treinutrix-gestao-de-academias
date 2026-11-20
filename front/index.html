@@ -435,28 +435,82 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
           </div>
 
           <div class="card">
-            <div class="card-head"><div><h2>Catracas e controladores</h2><p class="sub">Topdata, leitor facial e controladores HTTP</p></div>
-              <div class="card-head-actions"><button class="btn ghost sm" onclick="heartbeat()">Testar</button></div></div>
-            <div class="list" id="devices" style="margin-bottom:14px"></div>
-            <details>
-              <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:10px">Adicionar equipamento</summary>
-              <div class="form-grid">
-                <input id="devNome" placeholder="Nome (ex.: Entrada recepção)">
-                <select id="devDriver" onchange="atualizarModelos()"></select>
-                <select id="devModelo"></select>
-                <input id="devIp" placeholder="IP (ex.: 192.168.0.100)">
-                <input id="devPorta" placeholder="Porta (3570 / 80)">
-                <div class="form-actions"><button class="btn sm" onclick="adicionarDevice()">Cadastrar</button></div>
-              </div>
-              <p class="help" id="catalogoHelp">Carregando catálogo…</p>
-            </details>
-          </div>
-
-          <div class="card">
             <div class="card-head"><div><h2>Fila de sincronização</h2><p class="sub">Cadastros pendentes no leitor</p></div></div>
             <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Operação</th><th>Status</th></tr></thead><tbody id="sync"></tbody></table></div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- EVENTOS -->
+    <section id="v-eventos" class="hidden">
+      <div class="card">
+        <div class="card-head"><div><h2>Eventos</h2><p class="sub">Inscrições para alunos, visitantes e externos</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarEventos()">Atualizar</button></div></div>
+        <div class="list" id="listaEventos"></div>
+        <details id="eventoForm">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin:12px 0 10px">Novo evento</summary>
+          <div class="form-grid">
+            <input id="evNome" placeholder="Nome do evento">
+            <input id="evLocal" placeholder="Local">
+            <input id="evInicio" type="datetime-local" title="Início">
+            <input id="evFim" type="datetime-local" title="Fim (opcional)">
+            <input id="evCapacidade" type="number" min="0" placeholder="Capacidade (vazio = sem limite)">
+            <label class="help" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="evVisitantes" checked> Aceita visitantes/externos</label>
+            <textarea id="evDescricao" placeholder="Descrição/regras" rows="2"></textarea>
+            <div class="form-actions"><button class="btn sm" onclick="criarEvento()">Criar evento</button></div>
+          </div>
+        </details>
+      </div>
+
+      <div class="card hidden" id="eventoDetalhe">
+        <div class="card-head"><div><h2 id="evDetNome">Evento</h2><p class="sub" id="evDetMeta"></p></div>
+          <div class="card-head-actions">
+            <button class="btn ghost sm" onclick="baixarExportEvento('csv')">CSV</button>
+            <button class="btn ghost sm" onclick="baixarExportEvento('pdf')">PDF</button>
+            <button class="btn ghost sm" onclick="fecharEvento()">Fechar</button>
+          </div></div>
+        <div class="form-grid">
+          <input id="parBusca" placeholder="Matrícula, id ou cartão do aluno">
+          <input id="parNome" placeholder="Nome (visitante/externo)">
+          <input id="parContato" placeholder="Contato (telefone/e-mail)">
+          <input id="parDocumento" placeholder="Documento (opcional)">
+          <div class="form-actions"><button class="btn sm" onclick="adicionarParticipante()">Inscrever</button></div>
+        </div>
+        <p class="help">Aluno: informe a matrícula/id. Visitante ou externo: deixe o aluno vazio e preencha o nome — não precisa ser aluno da academia.</p>
+        <div class="table-wrap"><table><thead><tr><th>Participante</th><th>Tipo</th><th>Status</th><th></th></tr></thead><tbody id="participantes"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- SORTEIOS -->
+    <section id="v-sorteios" class="hidden">
+      <div class="card">
+        <div class="card-head"><div><h2>Sorteios e premiações</h2><p class="sub">Programáveis, com público e pesos configuráveis</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarSorteios()">Atualizar</button></div></div>
+        <div class="list" id="listaSorteios"></div>
+        <details id="sorteioForm">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin:12px 0 10px">Novo sorteio</summary>
+          <div class="form-grid">
+            <input id="sorNome" placeholder="Nome (ex.: Matrícula da sorte)">
+            <input id="sorPremio" placeholder="Prêmio (ex.: 1 mês grátis)">
+            <select id="sorPublico" onchange="atualizarPublicoSorteio()"></select>
+            <select id="sorEvento" style="display:none"></select>
+            <input id="sorInicio" type="date" title="Início (novas matrículas)">
+            <input id="sorFim" type="date" title="Fim (novas matrículas)">
+            <input id="sorSorteioEm" type="datetime-local" title="Sorteio automático (opcional)">
+            <input id="sorEntradas" type="number" value="1" min="1" max="20" title="Entradas por participante">
+            <input id="sorBonusDia" type="number" value="0" min="0" max="20" title="Entradas extras para mensalidade em dia">
+            <input id="sorBonusEvento" type="number" value="0" min="0" max="20" title="Entradas extras para participante do evento">
+            <label class="help" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="sorAtivo" checked> Habilitado</label>
+            <textarea id="sorDescricao" placeholder="Regras/descrição do sorteio" rows="2"></textarea>
+            <div class="form-actions"><button class="btn sm" onclick="criarSorteio()">Criar sorteio</button></div>
+          </div>
+        </details>
+      </div>
+
+      <div class="card hidden" id="sorteioResultado">
+        <div class="card-head"><div><h2 id="sorResNome">Resultado</h2><p class="sub" id="sorResMeta"></p></div></div>
+        <div id="sorResCorpo"></div>
       </div>
     </section>
 
@@ -466,6 +520,32 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
         <div class="card-head"><div><h2>Servidor local</h2><p class="sub">Endereço para acesso no celular</p></div>
           <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarSistema()">Atualizar</button></div></div>
         <div id="sysinfo"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Catracas e controladores</h2><p class="sub">Cadastro, teste de conexão e detecção na rede local</p></div>
+          <div class="card-head-actions">
+            <input id="devSubnet" placeholder="Faixa (ex.: 192.168.0.0/24)" style="max-width:220px">
+            <button class="btn ghost sm" onclick="detectarCatracas()">Detectar na rede</button>
+          </div></div>
+        <div class="list" id="devices" style="margin-bottom:14px"></div>
+        <div id="devDiscover" class="help" style="margin:0 0 12px"></div>
+        <details id="devForm">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:10px">Adicionar equipamento</summary>
+          <div class="form-grid">
+            <input id="devNome" placeholder="Nome (ex.: Entrada recepção)">
+            <select id="devDriver" onchange="atualizarModelos()"></select>
+            <select id="devModelo"></select>
+            <input id="devIp" placeholder="IP (ex.: 192.168.0.100)">
+            <input id="devPorta" placeholder="Porta (3570 / 3000 / 80)">
+            <input id="devEndpoint" placeholder="Endpoint HTTP (só generic_http)" style="display:none">
+            <div class="form-actions">
+              <button class="btn sm" id="devSalvar" onclick="salvarDevice()">Cadastrar</button>
+              <button class="btn ghost sm" id="devCancelar" onclick="cancelarEdicaoDevice()" style="display:none">Cancelar</button>
+            </div>
+          </div>
+          <p class="help" id="catalogoHelp">Carregando catálogo…</p>
+        </details>
       </div>
 
       <div class="card">
@@ -490,6 +570,19 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
         </div>
         <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Tipo</th><th>Validade</th><th>Situação</th><th></th></tr></thead><tbody id="pessoas"></tbody></table></div>
         <p class="help" id="pessoasResumo"></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Importar cadastros</h2><p class="sub">CSV ou JSON de outro sistema, sem biometria</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="baixarModeloImport()">Baixar modelo CSV</button></div></div>
+        <p class="help">Colunas: <code>nome;matricula;tipo;enrollid;validadeFim;treinutrix;ativo</code>.
+          A importação não traz foto nem rosto: envie a foto depois em <b>Pessoas → Foto</b> para o leitor facial.</p>
+        <div class="form-actions" style="margin-bottom:10px">
+          <input type="file" id="impFile" accept=".csv,.json,text/csv,application/json" onchange="lerArquivoImport()">
+          <button class="btn ghost sm" onclick="previaImport()">Prévia</button>
+          <button class="btn sm" id="impConfirmar" onclick="confirmarImport()" disabled>Importar</button>
+        </div>
+        <div id="impResultado" class="help"></div>
       </div>
 
       <div class="card">
@@ -521,6 +614,21 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
   </main>
 </div>
 
+<!-- MODAL: ROLETA DO SORTEIO -->
+<div id="roletaModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:520px" role="dialog" aria-modal="true" aria-labelledby="roletaTitulo">
+    <div class="modal-head">
+      <h2 id="roletaTitulo">Sorteio</h2>
+      <button class="btn ghost sm" onclick="fecharRoleta()">Fechar</button>
+    </div>
+    <canvas id="roletaCanvas" width="440" height="440" style="width:100%;max-width:440px;display:block;margin:0 auto"></canvas>
+    <p class="help" id="roletaInfo" style="text-align:center"></p>
+    <div class="form-actions" style="justify-content:center">
+      <button class="btn" id="roletaGirar" onclick="girarRoleta()">Girar a roleta</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: COMPARTILHAR ACESSO -->
 <div id="shareModal" class="modal-backdrop hidden">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
@@ -548,6 +656,8 @@ let sess = JSON.parse(localStorage.getItem('pwa_session') || 'null');
 const PAGINAS = {
   inicio: ['Início', 'Alunos, acessos, planos e recepção'],
   oper: ['Operação', 'Acessos, cadastros e equipamentos'],
+  eventos: ['Eventos', 'Inscrições de alunos e visitantes'],
+  sorteios: ['Sorteios', 'Premiações programáveis e roleta'],
   sistema: ['Sistema', 'Servidor, backup e pessoas'],
   aluno: ['Meu acesso', 'Seu plano e frequência'],
 };
@@ -663,7 +773,7 @@ function entraUI() {
   if (!sess) return;
   // Aluno tem acesso limitado: remove do DOM tudo que é operacional.
   if (sess.perfil === 'aluno') {
-    for (const id of ['v-inicio', 'v-oper', 'v-sistema']) {
+    for (const id of ['v-inicio', 'v-oper', 'v-eventos', 'v-sorteios', 'v-sistema']) {
       const el = $(id); if (el) el.remove();
     }
     const top = $('topActions'); if (top) top.remove();
@@ -673,9 +783,10 @@ function entraUI() {
   $('avatar').textContent = iniciais(sess.nome || sess.perfil);
   const tabs = $('tabs'); tabs.innerHTML = '';
   const abas = sess.perfil === 'aluno' ? [['aluno', 'Meu acesso']]
-    : sess.perfil === 'gerencia' ? [['inicio', 'Início'], ['oper', 'Operação'], ['sistema', 'Sistema']]
-    : [['inicio', 'Início'], ['oper', 'Operação']];
-  const icones = { inicio: '◧', oper: '⇄', sistema: '⚙', aluno: '◎' };
+    : sess.perfil === 'gerencia'
+      ? [['inicio', 'Início'], ['oper', 'Operação'], ['eventos', 'Eventos'], ['sorteios', 'Sorteios'], ['sistema', 'Sistema']]
+      : [['inicio', 'Início'], ['oper', 'Operação'], ['eventos', 'Eventos']];
+  const icones = { inicio: '◧', oper: '⇄', eventos: '★', sorteios: '🎁', sistema: '⚙', aluno: '◎' };
   abas.forEach(([id, label], i) => {
     const b = document.createElement('button');
     b.innerHTML = `<span class="ico">${icones[id] || '•'}</span><span>${label}</span>`;
@@ -695,7 +806,7 @@ function entraUI() {
   }
 }
 function mostrar(id) {
-  for (const v of ['aluno', 'oper', 'sistema', 'inicio']) {
+  for (const v of ['aluno', 'oper', 'eventos', 'sorteios', 'sistema', 'inicio']) {
     const el = $('v-' + v); if (el) el.classList.toggle('hidden', id !== v);
   }
   const pg = PAGINAS[id] || PAGINAS.inicio;
@@ -704,6 +815,8 @@ function mostrar(id) {
   if (id === 'sistema' && $('v-sistema')) carregarSistema();
   if (id === 'inicio' && $('v-inicio')) carregarInicio();
   if (id === 'oper' && $('v-oper') && sess && sess.perfil !== 'aluno') carregarOper();
+  if (id === 'eventos' && $('v-eventos')) carregarEventos();
+  if (id === 'sorteios' && $('v-sorteios')) carregarSorteios();
   if (id === 'aluno' && $('v-aluno')) carregarAluno();
 }
 function mostrarNav(id) {
@@ -847,16 +960,10 @@ async function carregarAluno() {
 
 // ---------- operação ----------
 let CATALOGO = [];
+let editandoDevice = null;
 async function carregarOper() {
   $('edgeUrl').value = `http://${location.hostname}:3002`;
-  await carregarCatalogo();
-  await loadDevices(); await load(); await loadSync();
-}
-async function heartbeat() {
-  const d = (window.__devices || [])[0];
-  if (!d) return toast('Sem equipamento', 'Cadastre uma catraca antes', 'err');
-  await jpost(`/api/devices/${encodeURIComponent(d.id)}/heartbeat`, {});
-  await loadDevices();
+  await load(); await loadSync();
 }
 async function carregarCatalogo() {
   try {
@@ -873,20 +980,93 @@ function atualizarModelos() {
   $('devModelo').innerHTML = d.modelos.map(m => `<option>${esc(m)}</option>`).join('');
   $('devPorta').value = d.id === 'generic_http' ? '80' : (d.id === 'simulator' ? '' : '3570');
   $('devIp').placeholder = d.id === 'simulator' ? 'não necessário' : 'ex.: 192.168.0.100';
+  $('devEndpoint').style.display = d.id === 'generic_http' ? '' : 'none';
 }
-async function adicionarDevice() {
+function limparFormDevice() {
+  editandoDevice = null;
+  $('devNome').value = ''; $('devIp').value = ''; $('devEndpoint').value = '';
+  $('devSalvar').textContent = 'Cadastrar';
+  $('devCancelar').style.display = 'none';
+  atualizarModelos();
+}
+function cancelarEdicaoDevice() { limparFormDevice(); }
+function editarDevice(id) {
+  const d = (window.__devices || []).find(x => x.id === id);
+  if (!d) return;
+  editandoDevice = id;
+  $('devNome').value = d.nome || '';
+  $('devDriver').value = d.driver || 'topdata_easyinner';
+  atualizarModelos();
+  if (d.modelo) $('devModelo').value = d.modelo;
+  $('devIp').value = d.ip || '';
+  $('devPorta').value = d.porta || '';
+  $('devEndpoint').value = d.endpoint || '';
+  $('devSalvar').textContent = 'Salvar alterações';
+  $('devCancelar').style.display = '';
+  $('devForm').open = true;
+  $('devForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+async function salvarDevice() {
   const body = {
     nome: $('devNome').value.trim(), driver: $('devDriver').value,
     modelo: $('devModelo').value, ip: $('devIp').value.trim(),
     porta: Number($('devPorta').value) || undefined,
   };
+  if ($('devDriver').value === 'generic_http' && $('devEndpoint').value.trim()) {
+    body.endpoint = $('devEndpoint').value.trim();
+  }
   if (!body.nome) return toast('Nome obrigatório', 'Informe o nome do equipamento', 'err');
   try {
-    const d = await jpost('/api/devices', body);
-    toast('Equipamento cadastrado', `${d.nome} · ${d.modelo}`);
-    $('devNome').value = ''; $('devIp').value = '';
+    const d = editandoDevice
+      ? await jpatch(`/api/devices/${encodeURIComponent(editandoDevice)}`, body)
+      : await jpost('/api/devices', body);
+    toast(editandoDevice ? 'Equipamento atualizado' : 'Equipamento cadastrado', `${d.nome} · ${d.modelo || d.driver}`);
+    limparFormDevice();
     loadDevices();
-  } catch (e) { toast('Falha ao cadastrar', e.message, 'err'); }
+  } catch (e) { toast('Falha ao salvar equipamento', e.message, 'err'); }
+}
+async function testarDevice(id) {
+  try {
+    const r = await jpost(`/api/devices/${encodeURIComponent(id)}/test`, {});
+    if (r.ok) toast('Equipamento respondeu', `${r.ip}:${r.porta} · ${r.latencyMs} ms`, 'ok');
+    else toast('Sem resposta', `${r.ip}:${r.porta} · ${r.error || 'offline'}`, 'err');
+    loadDevices();
+  } catch (e) { toast('Falha no teste', e.message, 'err'); }
+}
+async function excluirDevice(id) {
+  const d = (window.__devices || []).find(x => x.id === id);
+  if (!confirm(`Excluir ${d ? d.nome : id}? As regras e a fila de sync deste equipamento serão removidas.`)) return;
+  try {
+    await jdel(`/api/devices/${encodeURIComponent(id)}`);
+    toast('Equipamento excluído', d ? d.nome : id);
+    if (editandoDevice === id) limparFormDevice();
+    loadDevices();
+  } catch (e) { toast('Falha ao excluir', e.message, 'err'); }
+}
+async function detectarCatracas() {
+  $('devDiscover').textContent = 'Varrendo a rede local (pode levar até 10 s)…';
+  try {
+    const faixa = $('devSubnet').value.trim();
+    const r = await jpost('/api/devices/discover', faixa ? { subnet: faixa } : {});
+    if (!r.encontrados || r.encontrados.length === 0) {
+      $('devDiscover').textContent = `Nenhum equipamento respondeu em ${r.subnet} (portas ${r.portas.join('/')}). Confira cabo/rede ou cadastre manualmente.`;
+      return;
+    }
+    $('devDiscover').innerHTML = `Encontrados em ${esc(r.subnet)}: `
+      + r.encontrados.map(e => `<button class="btn ghost sm" style="margin:2px" onclick="usarDetectado('${esc(e.ip)}', ${e.portas[0]})">${esc(e.ip)}:${e.portas.join('/')}</button>`).join('');
+  } catch (e) {
+    $('devDiscover').textContent = 'Falha na detecção: ' + e.message;
+  }
+}
+function usarDetectado(ip, porta) {
+  editandoDevice = null;
+  $('devNome').value = `Catraca ${ip}`;
+  $('devIp').value = ip;
+  $('devPorta').value = porta;
+  $('devSalvar').textContent = 'Cadastrar';
+  $('devCancelar').style.display = 'none';
+  $('devForm').open = true;
+  $('devForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 async function loadDevices() {
   const list = await jget('/api/devices');
@@ -894,7 +1074,12 @@ async function loadDevices() {
   $('devices').innerHTML = list.map(d => `
     <div class="list-item"><div><div class="t">${esc(d.nome)}</div>
     <div class="d">${esc(d.fabricante || '—')} · ${esc(d.modelo || d.tipo || '')} · ${esc(d.driver || 'topdata_easyinner')} · ${esc(d.ip)}:${esc(d.porta)}</div></div>
-    ${d.online ? '<span class="badge ok dot">online</span>' : '<span class="badge bad dot">offline</span>'}</div>`).join('') || '<div class="empty">Nenhum equipamento cadastrado.</div>';
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+      ${d.online ? '<span class="badge ok dot">online</span>' : '<span class="badge bad dot">offline</span>'}
+      <button class="btn ghost sm" onclick="testarDevice('${esc(d.id)}')">Testar</button>
+      <button class="btn ghost sm" onclick="editarDevice('${esc(d.id)}')">Editar</button>
+      <button class="btn danger sm" onclick="excluirDevice('${esc(d.id)}')">Excluir</button>
+    </div></div>`).join('') || '<div class="empty">Nenhum equipamento cadastrado.</div>';
 }
 async function loadSync() {
   try {
@@ -1009,6 +1194,7 @@ async function carregarSistema() {
       <div class="info-item"><div class="k">Máquina</div><div class="v">${esc(s.hostname)}</div></div>
       <div class="info-item"><div class="k">Sistema</div><div class="v">${esc(s.platform)} / ${esc(s.arch)}</div></div>
       <div class="info-item"><div class="k">Node</div><div class="v">${esc(s.node)}</div></div>
+      <div class="info-item"><div class="k">Banco</div><div class="v">${esc(s.storage ? s.storage.engine : 'sqlite')}${s.storage ? ' · ' + Math.round((s.storage.bytes || 0) / 1024) + ' KB' : ''}</div></div>
       <div class="info-item"><div class="k">Uptime</div><div class="v">${esc(s.uptimeMin)} min</div></div>
       <div class="info-item"><div class="k">Memória</div><div class="v">${esc(s.memMB)} MB</div></div>
       <div class="info-item"><div class="k">Pessoas</div><div class="v">${esc(s.counts.persons)}</div></div>
@@ -1019,6 +1205,8 @@ async function carregarSistema() {
     <div class="help">IPs locais: ${(s.ips || []).map(i => esc(i.iface) + ' ' + esc(i.address)).join(' · ') || 'nenhum'}</div>`;
   $('lastBackup').textContent = s.lastBackupAt ? 'Último backup: ' + new Date(s.lastBackupAt).toLocaleString('pt-BR') : 'Nenhum backup realizado ainda.';
   $('inadBadge').innerHTML = s.counts.inadimplentes ? `<span class="badge bad dot">${s.counts.inadimplentes} em atraso</span>` : '<span class="badge ok dot">sem atrasos</span>';
+  await carregarCatalogo();
+  await loadDevices();
   await loadPessoas(s.inadimplentes || []);
   await loadUsuarios();
   await loadBackups(); await loadNotifications();
@@ -1026,6 +1214,110 @@ async function carregarSistema() {
 let PESSOAS_CACHE = [];
 let PESSOAS_INAD = new Set();
 let filtroPessoa = 'TODOS';
+
+// ---------- importação em lote (CSV/JSON, sem biometria) ----------
+let importPessoas = [];
+const IMP_ALIAS = {
+  nome: 'nome', name: 'nome', matricula: 'matricula', tipo: 'tipo',
+  enrollid: 'enrollid', cartao: 'enrollid', validadefim: 'validadeFim',
+  validade: 'validadeFim', vencimento: 'validadeFim', treinutrix: 'treinutrix',
+  ativo: 'ativo', status: 'ativo', senha: 'senha',
+};
+const semAcento = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+function dividirLinhaCsv(linha, delim) {
+  const out = [];
+  let atual = '';
+  let aspas = false;
+  for (let i = 0; i < linha.length; i += 1) {
+    const c = linha[i];
+    if (c === '"') {
+      if (aspas && linha[i + 1] === '"') { atual += '"'; i += 1; } else aspas = !aspas;
+    } else if (c === delim && !aspas) { out.push(atual); atual = ''; }
+    else atual += c;
+  }
+  out.push(atual);
+  return out;
+}
+
+function csvParaPessoas(texto) {
+  const linhas = String(texto || '').replace(/\r/g, '').split('\n').filter((l) => l.trim());
+  if (linhas.length < 2) return [];
+  const delim = (linhas[0].match(/;/g) || []).length >= (linhas[0].match(/,/g) || []).length ? ';' : ',';
+  const colunas = dividirLinhaCsv(linhas[0], delim).map((c) => IMP_ALIAS[semAcento(c)] || null);
+  return linhas.slice(1).map((linha) => {
+    const valores = dividirLinhaCsv(linha, delim);
+    const pessoa = {};
+    colunas.forEach((campo, i) => { if (campo) pessoa[campo] = String(valores[i] ?? '').trim(); });
+    if (!pessoa.enrollid) delete pessoa.enrollid;
+    if (pessoa.ativo !== undefined) {
+      pessoa.ativo = !['0', 'false', 'nao', 'inativo', 'n'].includes(semAcento(pessoa.ativo));
+    }
+    return pessoa;
+  }).filter((p) => p.nome || p.matricula);
+}
+
+async function lerArquivoImport() {
+  const arquivo = $('impFile').files[0];
+  if (!arquivo) return;
+  try {
+    const texto = await arquivo.text();
+    if (/\.json$/i.test(arquivo.name)) {
+      const dados = JSON.parse(texto);
+      importPessoas = Array.isArray(dados) ? dados : (Array.isArray(dados.pessoas) ? dados.pessoas : []);
+    } else {
+      importPessoas = csvParaPessoas(texto);
+    }
+    $('impConfirmar').disabled = true;
+    $('impResultado').textContent = `${importPessoas.length} linha(s) lida(s). Clique em Prévia para validar sem gravar.`;
+  } catch (e) {
+    importPessoas = [];
+    $('impResultado').textContent = 'Arquivo inválido: ' + e.message;
+  }
+}
+
+function renderResultadoImport(r) {
+  const rotulo = { NOVO: 'novo', CRIADO: 'criado', JA_EXISTE: 'já existe', ERRO: 'erro' };
+  const cls = { NOVO: 'neutral', CRIADO: 'ok', JA_EXISTE: 'warn', ERRO: 'bad' };
+  const itens = (r.itens || []).slice(0, 20).map((i) => `
+    <div class="list-item"><div><div class="t">${esc(i.nome || '(sem nome)')}</div>
+    <div class="d">linha ${i.linha}${i.matricula ? ' · matrícula ' + esc(i.matricula) : ''}${i.erro ? ' · ' + esc(i.erro) : ''}</div></div>
+    <span class="badge ${cls[i.status] || 'neutral'}">${rotulo[i.status] || esc(i.status)}</span></div>`).join('');
+  $('impResultado').innerHTML = `<b>${r.total}</b> linha(s): ${r.criados} criada(s), ${r.ignorados} já existente(s), ${r.erros} erro(s).`
+    + (r.truncado ? ' Mostrando os primeiros 20.' : '') + `<div class="list" style="margin-top:8px">${itens}</div>`;
+  $('impConfirmar').disabled = !(r.itens || []).some((i) => i.status === 'NOVO');
+}
+
+async function previaImport() {
+  if (!importPessoas.length) return toast('Nenhuma linha', 'Escolha um CSV ou JSON primeiro', 'err');
+  try {
+    const r = await jpost('/api/persons/import', { confirmar: false, pessoas: importPessoas });
+    renderResultadoImport(r);
+  } catch (e) { toast('Falha na prévia', e.message, 'err'); }
+}
+
+async function confirmarImport() {
+  if (!importPessoas.length) return;
+  try {
+    const r = await jpost('/api/persons/import', { confirmar: true, pessoas: importPessoas });
+    renderResultadoImport(r);
+    toast('Importação concluída', `${r.criados} criada(s) · ${r.ignorados} já existia(m) · ${r.erros} erro(s)`, r.erros ? 'warn' : 'ok');
+    $('impConfirmar').disabled = true;
+    importPessoas = [];
+    $('impFile').value = '';
+    carregarSistema();
+  } catch (e) { toast('Falha na importação', e.message, 'err'); }
+}
+
+function baixarModeloImport() {
+  const csv = 'nome;matricula;tipo;enrollid;validadeFim;treinutrix;ativo\n'
+    + 'Ana Silva;A1001;ALUNO;1001;2027-12-31;;sim\n'
+    + 'João Souza;V2001;VISITANTE;;2026-11-30;;sim\n';
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = 'modelo-importacao.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
 
 async function loadPessoas(inad) {
   PESSOAS_CACHE = await jget('/api/persons');
@@ -1257,6 +1549,352 @@ function baixarQr() {
 }
 $('shareModal').addEventListener('click', (e) => { if (e.target.id === 'shareModal') fecharShare(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharShare(); });
+
+// ---------- eventos (agenda) ----------
+let eventoAtual = null;
+
+function dataHoraCurta(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+async function carregarEventos() {
+  try {
+    const [eventos, pessoas] = await Promise.all([jget('/api/eventos'), jget('/api/persons')]);
+    PESSOAS_CACHE = pessoas;
+    window.__pessoasObj = Object.fromEntries(pessoas.map(p => [p.id, p]));
+    window.__pessoas = Object.fromEntries(pessoas.map(p => [p.id, p.nome]));
+    $('listaEventos').innerHTML = eventos.map(e => `
+      <div class="list-item"><div><div class="t">${esc(e.nome)}</div>
+      <div class="d">${esc(dataHoraCurta(e.inicio))}${e.local ? ' · ' + esc(e.local) : ''} · ${e.participantes} inscrito(s) · ${e.presentes} presente(s)</div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn ghost sm" onclick="abrirEvento('${esc(e.id)}')">Participantes</button>
+        ${sess.perfil === 'gerencia' ? `<button class="btn danger sm" onclick="excluirEvento('${esc(e.id)}')">Excluir</button>` : ''}
+      </div></div>`).join('') || '<div class="empty">Nenhum evento cadastrado.</div>';
+    $('sorEvento').innerHTML = eventos.map(e => `<option value="${esc(e.id)}">${esc(e.nome)}</option>`).join('');
+  } catch (e) { toast('Falha ao carregar eventos', e.message, 'err'); }
+}
+
+async function criarEvento() {
+  const nome = $('evNome').value.trim();
+  if (!nome) return toast('Nome obrigatório', 'Informe o nome do evento', 'err');
+  if (!$('evInicio').value) return toast('Data obrigatória', 'Informe o início do evento', 'err');
+  const body = {
+    nome,
+    local: $('evLocal').value.trim(),
+    inicio: new Date($('evInicio').value).toISOString(),
+    fim: $('evFim').value ? new Date($('evFim').value).toISOString() : null,
+    capacidade: $('evCapacidade').value ? Number($('evCapacidade').value) : null,
+    permiteVisitantes: $('evVisitantes').checked,
+    descricao: $('evDescricao').value.trim(),
+    inscricoesAbertas: true,
+    ativo: true,
+  };
+  try {
+    const e = await jpost('/api/eventos', body);
+    toast('Evento criado', e.nome);
+    $('evNome').value = ''; $('evLocal').value = ''; $('evInicio').value = ''; $('evFim').value = '';
+    $('evCapacidade').value = ''; $('evDescricao').value = '';
+    await carregarEventos();
+    abrirEvento(e.id);
+  } catch (err) { toast('Falha ao criar evento', err.message, 'err'); }
+}
+
+async function excluirEvento(id) {
+  if (!confirm('Excluir o evento e todas as inscrições? O histórico de acesso não é afetado.')) return;
+  try {
+    await jdel(`/api/eventos/${encodeURIComponent(id)}`);
+    if (eventoAtual && eventoAtual.id === id) fecharEvento();
+    toast('Evento excluído', '');
+    carregarEventos();
+  } catch (e) { toast('Falha ao excluir', e.message, 'err'); }
+}
+
+async function abrirEvento(id) {
+  try {
+    const e = await jget(`/api/eventos/${encodeURIComponent(id)}`);
+    eventoAtual = e;
+    $('evDetNome').textContent = e.nome;
+    $('evDetMeta').textContent = `${dataHoraCurta(e.inicio)}${e.local ? ' · ' + e.local : ''} · ${e.participantes.length} inscrito(s)${e.capacidade ? ' · limite ' + e.capacidade : ''}`;
+    renderParticipantes(e.participantes);
+    $('eventoDetalhe').classList.remove('hidden');
+    $('eventoDetalhe').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) { toast('Falha ao abrir evento', err.message, 'err'); }
+}
+
+function renderParticipantes(lista) {
+  $('participantes').innerHTML = lista.map(p => `
+    <tr>
+      <td><b>${esc(p.nome)}</b><div class="muted">${esc(p.matricula || '')}${p.contato ? ' · ' + esc(p.contato) : ''}</div></td>
+      <td><span class="badge ${p.tipo === 'ALUNO' ? 'primary' : 'info'}">${esc(p.tipo)}</span></td>
+      <td>${p.status === 'PRESENTE' ? '<span class="badge ok dot">presente</span>' : p.status === 'CANCELADO' ? '<span class="badge neutral">cancelado</span>' : '<span class="badge warn">inscrito</span>'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn ghost sm" onclick="marcarPresenca('${esc(p.id)}', ${p.status !== 'PRESENTE'})">${p.status === 'PRESENTE' ? 'Desfazer' : 'Check-in'}</button>
+        <button class="btn ghost sm" onclick="cancelarParticipante('${esc(p.id)}')">Cancelar</button>
+        <button class="btn danger sm" onclick="removerParticipante('${esc(p.id)}')">Remover</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="4"><div class="empty">Ninguém inscrito ainda.</div></td></tr>';
+}
+
+async function adicionarParticipante() {
+  if (!eventoAtual) return;
+  const busca = $('parBusca').value.trim().toLowerCase();
+  const nome = $('parNome').value.trim();
+  let body;
+  if (busca) {
+    const pessoa = PESSOAS_CACHE.find(p => String(p.id).toLowerCase() === busca
+      || String(p.matricula || '').toLowerCase() === busca
+      || String(p.enrollid) === busca);
+    if (!pessoa) return toast('Aluno não encontrado', 'Confira a matrícula/id ou deixe o campo vazio para externo', 'err');
+    body = { personId: pessoa.id };
+  } else {
+    if (!nome) return toast('Nome obrigatório', 'Informe o nome do visitante/externo', 'err');
+    body = { nome, contato: $('parContato').value.trim(), documento: $('parDocumento').value.trim() };
+  }
+  try {
+    await jpost(`/api/eventos/${encodeURIComponent(eventoAtual.id)}/participantes`, body);
+    $('parBusca').value = ''; $('parNome').value = ''; $('parContato').value = ''; $('parDocumento').value = '';
+    toast('Participante inscrito', '');
+    abrirEvento(eventoAtual.id);
+    carregarEventos();
+  } catch (e) { toast('Falha ao inscrever', e.message, 'err'); }
+}
+
+async function marcarPresenca(pid, presente) {
+  try {
+    await jpatch(`/api/eventos/${encodeURIComponent(eventoAtual.id)}/participantes/${encodeURIComponent(pid)}`, { checkin: presente });
+    abrirEvento(eventoAtual.id);
+  } catch (e) { toast('Falha no check-in', e.message, 'err'); }
+}
+async function cancelarParticipante(pid) {
+  try {
+    await jpatch(`/api/eventos/${encodeURIComponent(eventoAtual.id)}/participantes/${encodeURIComponent(pid)}`, { status: 'CANCELADO' });
+    abrirEvento(eventoAtual.id);
+  } catch (e) { toast('Falha ao cancelar', e.message, 'err'); }
+}
+async function removerParticipante(pid) {
+  if (!confirm('Remover esta inscrição?')) return;
+  try {
+    await jdel(`/api/eventos/${encodeURIComponent(eventoAtual.id)}/participantes/${encodeURIComponent(pid)}`);
+    abrirEvento(eventoAtual.id);
+    carregarEventos();
+  } catch (e) { toast('Falha ao remover', e.message, 'err'); }
+}
+function fecharEvento() { eventoAtual = null; $('eventoDetalhe').classList.add('hidden'); }
+
+async function baixarExportEvento(formato) {
+  if (!eventoAtual) return;
+  try {
+    const r = await req(`/api/eventos/${encodeURIComponent(eventoAtual.id)}/export.${formato}`);
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+    const blob = await r.blob();
+    const nome = `evento-${eventoAtual.nome.replace(/[^\w.-]+/g, '-').slice(0, 40)}.${formato}`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = nome; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast('Falha ao exportar', e.message, 'err'); }
+}
+
+// ---------- sorteios ----------
+const PUBLICOS_UI = [
+  ['ALUNOS_EM_DIA', 'Alunos com mensalidade em dia'],
+  ['ALUNOS', 'Todos os alunos ativos'],
+  ['MATRICULAS', 'Novas matrículas no período'],
+  ['VISITANTES', 'Visitantes ativos'],
+  ['EVENTO', 'Participantes de um evento'],
+  ['TODOS', 'Todas as pessoas ativas'],
+];
+let roleta = { sorteio: null, participantes: [], angulo: 0, girando: false };
+
+async function carregarSorteios() {
+  try {
+    if (!$('sorPublico').options.length) {
+      $('sorPublico').innerHTML = PUBLICOS_UI.map(([id, label]) => `<option value="${id}">${esc(label)}</option>`).join('');
+    }
+    await carregarEventos();
+    const lista = await jget('/api/sorteios');
+    $('listaSorteios').innerHTML = lista.map(s => {
+      const status = s.status === 'SORTEADA' ? '<span class="badge accent dot">sorteado</span>'
+        : !s.ativo ? '<span class="badge neutral dot">desabilitado</span>'
+          : '<span class="badge ok dot">ativo</span>';
+      const vencedor = s.vencedor ? `<div class="d">Ganhador: <b>${esc(s.vencedor.nome)}</b>${s.vencedor.matricula ? ' · ' + esc(s.vencedor.matricula) : ''}${s.entrega && s.entrega.entregue ? ' · prêmio entregue' : ''}</div>` : '';
+      return `<div class="list-item"><div><div class="t">${esc(s.nome)} ${status}</div>
+        <div class="d">${esc((PUBLICOS_UI.find(p => p[0] === s.publico) || [s.publico, s.publico])[1])} · ${s.elegiveisQtd} elegível(is) · ${s.entradas} entrada(s)${s.sorteioEm ? ' · programado ' + esc(dataHoraCurta(s.sorteioEm)) : ''}</div>
+        ${vencedor}${s.ultimoErro ? `<div class="d">Aviso: ${esc(s.ultimoErro)}</div>` : ''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          <button class="btn ghost sm" onclick="abrirRoleta('${esc(s.id)}')">${s.status === 'SORTEADA' ? 'Ver roleta' : 'Roleta'}</button>
+          ${sess.perfil === 'gerencia' ? `
+            <button class="btn ghost sm" onclick="alternarSorteio('${esc(s.id)}', ${!s.ativo})">${s.ativo ? 'Desabilitar' : 'Habilitar'}</button>
+            ${s.vencedor ? `<button class="btn ghost sm" onclick="entregarSorteio('${esc(s.id)}')">Entregar</button>` : ''}
+            <button class="btn ghost sm" onclick="resetSorteio('${esc(s.id)}')">Reiniciar</button>
+            <button class="btn danger sm" onclick="excluirSorteio('${esc(s.id)}')">Excluir</button>` : ''}
+        </div></div>`;
+    }).join('') || '<div class="empty">Nenhum sorteio cadastrado.</div>';
+  } catch (e) { toast('Falha ao carregar sorteios', e.message, 'err'); }
+}
+
+function atualizarPublicoSorteio() {
+  const publico = $('sorPublico').value;
+  $('sorEvento').style.display = publico === 'EVENTO' ? '' : 'none';
+}
+
+async function criarSorteio() {
+  const nome = $('sorNome').value.trim();
+  if (!nome) return toast('Nome obrigatório', 'Informe o nome do sorteio', 'err');
+  const body = {
+    nome,
+    premio: $('sorPremio').value.trim(),
+    publico: $('sorPublico').value,
+    eventId: $('sorPublico').value === 'EVENTO' ? $('sorEvento').value : null,
+    inicio: $('sorInicio').value || null,
+    fim: $('sorFim').value || null,
+    sorteioEm: $('sorSorteioEm').value ? new Date($('sorSorteioEm').value).toISOString() : null,
+    entradasBase: Number($('sorEntradas').value) || 1,
+    bonusEmDia: Number($('sorBonusDia').value) || 0,
+    bonusEvento: Number($('sorBonusEvento').value) || 0,
+    ativo: $('sorAtivo').checked,
+    descricao: $('sorDescricao').value.trim(),
+  };
+  try {
+    const s = await jpost('/api/sorteios', body);
+    toast('Sorteio criado', s.nome);
+    ['sorNome', 'sorPremio', 'sorInicio', 'sorFim', 'sorSorteioEm', 'sorDescricao'].forEach(id => { $(id).value = ''; });
+    carregarSorteios();
+  } catch (e) { toast('Falha ao criar sorteio', e.message, 'err'); }
+}
+
+async function alternarSorteio(id, ativo) {
+  try {
+    await jpatch(`/api/sorteios/${encodeURIComponent(id)}`, { ativo });
+    toast(ativo ? 'Sorteio habilitado' : 'Sorteio desabilitado', '');
+    carregarSorteios();
+  } catch (e) { toast('Falha ao alterar', e.message, 'err'); }
+}
+async function resetSorteio(id) {
+  if (!confirm('Reiniciar este sorteio? O ganhador atual será apagado.')) return;
+  try {
+    await jpost(`/api/sorteios/${encodeURIComponent(id)}/reset`, {});
+    toast('Sorteio reiniciado', '');
+    carregarSorteios();
+  } catch (e) { toast('Falha ao reiniciar', e.message, 'err'); }
+}
+async function entregarSorteio(id) {
+  const por = prompt('Quem entregou o prêmio?', sess.nome || 'operador');
+  if (por === null) return;
+  try {
+    await jpost(`/api/sorteios/${encodeURIComponent(id)}/entregar`, { por });
+    toast('Prêmio marcado como entregue', '');
+    carregarSorteios();
+  } catch (e) { toast('Falha ao registrar entrega', e.message, 'err'); }
+}
+async function excluirSorteio(id) {
+  if (!confirm('Excluir este sorteio?')) return;
+  try {
+    await jdel(`/api/sorteios/${encodeURIComponent(id)}`);
+    toast('Sorteio excluído', '');
+    carregarSorteios();
+  } catch (e) { toast('Falha ao excluir', e.message, 'err'); }
+}
+
+// Roleta: o servidor decide o ganhador; a animação só revela o resultado.
+async function abrirRoleta(id) {
+  try {
+    const sorteio = (await jget('/api/sorteios')).find(s => s.id === id);
+    if (!sorteio) return;
+    const e = await jget(`/api/sorteios/${encodeURIComponent(id)}/elegiveis`);
+    if (!e.participantes.length) return toast('Sem participantes', 'Nenhum elegível com as regras atuais', 'err');
+    roleta = { sorteio, participantes: e.participantes, angulo: 0, girando: false };
+    $('roletaTitulo').textContent = sorteio.nome;
+    $('roletaInfo').textContent = `${e.participantes.length} participante(s) · ${e.totalEntradas} entrada(s)`;
+    $('roletaGirar').disabled = sorteio.status === 'SORTEADA' || sess.perfil !== 'gerencia';
+    $('roletaGirar').textContent = sess.perfil === 'gerencia' ? 'Girar a roleta' : 'Somente a gerência sorteia';
+    $('roletaModal').classList.remove('hidden');
+    desenharRoleta();
+  } catch (err) { toast('Falha ao abrir roleta', err.message, 'err'); }
+}
+function fecharRoleta() { $('roletaModal').classList.add('hidden'); }
+function desenharRoleta(angulo = roleta.angulo) {
+  const canvas = $('roletaCanvas');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, cx = w / 2, cy = w / 2, raio = w / 2 - 12;
+  const ps = roleta.participantes;
+  const cores = ['#f97316', '#14b8a6', '#6366f1', '#ec4899', '#eab308', '#22c55e', '#0ea5e9', '#a855f7'];
+  ctx.clearRect(0, 0, w, w);
+  if (!ps.length) return;
+  const seg = (Math.PI * 2) / ps.length;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angulo);
+  ps.forEach((p, i) => {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, raio, i * seg, (i + 1) * seg);
+    ctx.closePath();
+    ctx.fillStyle = cores[i % cores.length];
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.save();
+    ctx.rotate(i * seg + seg / 2);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px Inter, sans-serif';
+    const nome = p.nome.length > 18 ? p.nome.slice(0, 17) + '…' : p.nome;
+    ctx.fillText(nome, raio - 10, 4);
+    ctx.restore();
+  });
+  ctx.restore();
+  // Ponteiro no topo.
+  ctx.beginPath();
+  ctx.moveTo(cx - 9, 10); ctx.lineTo(cx + 9, 10); ctx.lineTo(cx, 30); ctx.closePath();
+  ctx.fillStyle = '#1c1917'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.strokeStyle = '#1c1917'; ctx.stroke();
+}
+async function girarRoleta() {
+  if (roleta.girando || !roleta.sorteio) return;
+  roleta.girando = true;
+  $('roletaGirar').disabled = true;
+  try {
+    const out = await jpost(`/api/sorteios/${encodeURIComponent(roleta.sorteio.id)}/sortear`, {});
+    const v = out.vencedor;
+    let idx = roleta.participantes.findIndex(p => (v.personId && p.personId === v.personId) || (v.participantId && p.participantId === v.participantId) || p.nome === v.nome);
+    if (idx < 0) { roleta.participantes.push(v); idx = roleta.participantes.length - 1; }
+    const seg = (Math.PI * 2) / roleta.participantes.length;
+    const inicio = roleta.angulo;
+    let alvo = -Math.PI / 2 - (idx * seg + seg / 2);
+    while (alvo < inicio + Math.PI * 2 * 6) alvo += Math.PI * 2;
+    const duracao = 4200;
+    const t0 = performance.now();
+    const passo = (t) => {
+      const k = Math.min(1, (t - t0) / duracao);
+      const ease = 1 - Math.pow(1 - k, 3);
+      roleta.angulo = inicio + (alvo - inicio) * ease;
+      desenharRoleta();
+      if (k < 1) requestAnimationFrame(passo);
+      else {
+        roleta.girando = false;
+        $('roletaInfo').innerHTML = `<b>Ganhador: ${esc(v.nome)}</b>${v.matricula ? ' · ' + esc(v.matricula) : ''} · ${out.totalParticipantes} participante(s), ${out.totalEntradas} entrada(s)`;
+        $('roletaGirar').disabled = true;
+        $('sorResNome').textContent = `Resultado: ${roleta.sorteio.nome}`;
+        $('sorResMeta').textContent = `Ganhador sorteado em ${dataHoraCurta(v.sorteadoEm)}`;
+        $('sorResCorpo').innerHTML = `<div class="list-item"><div><div class="t">${esc(v.nome)}</div>
+          <div class="d">${esc(v.matricula || 'sem matrícula')} · ${esc(v.origem)} · ${v.entradas} entrada(s)</div></div>
+          <span class="badge ok dot">ganhador</span></div>
+          <p class="help">Prêmio: ${esc(roleta.sorteio.premio || 'não informado')}</p>`;
+        $('sorteioResultado').classList.remove('hidden');
+        carregarSorteios();
+      }
+    };
+    requestAnimationFrame(passo);
+  } catch (e) {
+    roleta.girando = false;
+    $('roletaGirar').disabled = false;
+    toast('Falha no sorteio', e.message, 'err');
+  }
+}
 
 // ---------- boot ----------
 aplicarTema(localStorage.getItem('pwa_theme') || 'light');

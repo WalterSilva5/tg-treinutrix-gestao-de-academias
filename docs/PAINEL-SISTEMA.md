@@ -13,16 +13,40 @@ Base de padrões: `wsi-invest-ai` (`back/src/modules/admin` overview,
 
 ## Persistência (`api/src/persist.js`)
 
-- `data/state.json` — cadastros, senhas, operadores, regras, fila e
-  notificações. Escrita atômica (`tmp` + `rename`) a cada
-  `PERSIST_INTERVAL_MS` (3 s) e no desligamento.
-- `data/events.jsonl` — histórico de acessos append-only, com compactação a
-  cada 5 mil eventos e limite `EVENT_MAX` (50 mil).
-- `DATA_DIR`/`DATA_FILE`/`EVENTS_FILE` apontam para disco externo/rede.
-- Arquivo corrompido é renomeado (`state.json.corrupt-<ts>`) em vez de apagado;
-  a API sobe com o seed e avisa no log.
-- O backup (`backup.js`) usa o mesmo serializador, então o snapshot é
-  equivalente ao estado persistido.
+- `data/painel.db` — **SQLite** (`node:sqlite`, sem Docker). Guarda cadastros,
+  senhas, operadores, regras, fila, notificações e eventos. Snapshot do estado
+  pequeno + tabela de eventos com índices por data e pessoa.
+- Escrita do snapshot a cada `PERSIST_INTERVAL_MS` (3 s); eventos são inseridos
+  no mesmo instante em que acontecem.
+- Poda automática em `EVENT_MAX` (50 mil) e compactação a cada `EVENT_COMPACT_EVERY`.
+- `DATA_DIR`/`DB_FILE` apontam para disco externo/rede.
+- Banco corrompido é renomeado (`painel.db.corrupt-<ts>`, com `-wal`/`-shm`) em
+  vez de apagado; a API sobe com o seed e avisa no log.
+- **Migração:** no primeiro boot sem banco, um `data/state.json` +
+  `data/events.jsonl` antigo é importado e renomeado para `.migrado-<ts>`.
+- O backup copia o snapshot JSON, o arquivo `.db` e a pasta de fotos; o restore
+  reidrata o store e substitui a tabela de eventos.
+
+## Cadastro e detecção de catracas
+
+- **Sistema → Catracas e controladores**: cadastrar, editar, excluir, testar a
+  conexão TCP (`POST /api/devices/:id/test`) e **detectar na rede**
+  (`POST /api/devices/discover`, varre um /24 privado nas portas 3570/3000).
+- O edge lê o cadastro (`GET /api/devices`) e, no Windows com driver
+  `easyinner`, sobe o bridge C# já com IP/porta do equipamento
+  (`EASYINNER_AUTOSTART=0` desliga).
+- Detecção só é permitida para gerência e faixas privadas (/24), com intervalo
+  mínimo entre varreduras (`DISCOVER_MIN_MS`).
+
+## Importação de cadastros (sem biometria)
+
+- **Sistema → Importar cadastros** aceita CSV (`nome;matricula;tipo;enrollid;
+  validadeFim;treinutrix;ativo`) ou JSON (lista ou `{ pessoas: [...] }`).
+- `POST /api/persons/import` com `confirmar:false` faz prévia; `true` grava.
+  Deduplica por matrícula/enrollid, ignora repetidos, reporta erros por linha e
+  limita 5000 linhas.
+- Não importa foto nem template facial: o cadastro nasce sem biometria e a foto
+  é enviada depois em **Pessoas → Foto** (o sync manda `setuserinfo` ao leitor).
 
 ## Endpoints
 
@@ -33,6 +57,11 @@ Base de padrões: `wsi-invest-ai` (`back/src/modules/admin` overview,
 | `GET /api/rules?personId=` · `GET|PUT /api/persons/:id/rules` | regras de horário por equipamento |
 | `DELETE /api/persons/:id` | exclusão (LGPD) — só gerência; remove foto/regras e envia `deleteuser` |
 | `GET /api/sync` · `POST /api/sync/:id/ack` | fila do leitor (edge confirma `SENT`/`ERROR`) |
+| `GET/POST /api/eventos` · `.../participantes` · `.../export.csv|pdf` | agenda, inscrições e exportação |
+| `GET/POST /api/sorteios` · `.../elegiveis` · `.../sortear` | sorteios programáveis e roleta |
+| `GET /api/device-catalog` · `POST/PATCH/DELETE /api/devices` | catálogo e cadastro de catracas |
+| `POST /api/devices/:id/test` · `POST /api/devices/discover` | teste TCP e detecção na rede |
+| `POST /api/persons/import` | importação em lote (prévia/confirmação) |
 | `POST /api/release` | liberação manual: evento + `POST /open` no edge |
 | `GET /api/notifications` | `alerts/list` |
 | `POST /api/notifications/evaluate` | `alerts/evaluate` (aqui sem tenant) |

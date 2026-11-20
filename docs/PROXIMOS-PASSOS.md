@@ -18,28 +18,32 @@ não passar, não avance. Contexto completo em `docs/HANDOFF-WINDOWS.md`.
 **Validação:** reiniciar o PC e conseguir abrir o painel pelo celular sem
 intervenção manual.
 
-## Fase 2 — Persistência (bloqueante para uso real)
+## Fase 2 — Persistência (concluída em SQLite)
 
-Hoje os dados vivem em memória e somem ao reiniciar.
+- [x] Banco SQLite nativo (`node:sqlite`), arquivo `data/painel.db`, sem Docker.
+- [x] Camada de persistência em `api/src/persist.js` sem mudar as rotas.
+- [x] `persons`, `devices`, `users`, `rules`, `events`, `syncQueue`,
+      `notifications` e `meta` persistidos.
+- [x] Backup inclui o arquivo `.db` (além do snapshot JSON e das fotos).
+- [x] Migração automática de `state.json` + `events.jsonl` no primeiro boot.
+- [x] Teste de reinício e de migração em `api/test/persist*.test.js`.
 
-- [ ] Escolher SQLite local (`node:sqlite` no Node 22+).
-- [ ] Criar camada de repositório substituindo `api/src/store.js` sem mudar as rotas.
-- [ ] Migrar `persons`, `devices`, `users`, `rules`, `events`, `syncQueue`,
-      `notifications` e `meta`.
-- [ ] Incluir o arquivo do banco no backup (`api/src/backup.js`).
-- [ ] Teste de reinício: criar pessoa, reiniciar, conferir que continua lá.
-
-**Validação:** `node --test api/test/` verde + reinício preservando cadastros e eventos.
+**Validação:** `node --test` verde + reinício preservando cadastros e eventos.
+Portar para Prisma/MySQL continua opcional (Fase 6).
 
 ## Fase 3 — Catraca real (EasyInner)
 
+> Roteiro completo de bancada, com comandos e critérios de aceite:
+> `docs/VALIDACOES-PENDENTES.md`.
+
 - [ ] Baixar DLLs e exemplos no Portal do Integrador.
 - [ ] Registrar a DLL (`regsvr32` ou instalador) e validar com o exemplo oficial.
-- [ ] Implementar `EasyInnerReal` em C# (`edge-catraca/dotnet-adapter/`).
-- [ ] Ligar no edge mantendo o contrato `liberar(direcao)` / `mensagem(texto)`.
-- [ ] Configurar IP e porta da catraca no cadastro de equipamento.
+- [x] Implementar `EasyInnerReal` em C# (bridge `edge-catraca/dotnet-adapter/`).
+- [x] Ligar no edge mantendo o contrato `liberar(direcao)` / `mensagem(texto)`.
+- [x] Configurar IP e porta da catraca no cadastro (Sistema → Catracas) e
+      detectar na rede.
 - [ ] Testar: identificação liberada, negada por plano vencido e negada por horário.
-- [ ] Ajustar heartbeat para o `id` do equipamento cadastrado.
+- [x] Ajustar heartbeat para o `id` do equipamento cadastrado.
 
 **Validação de bancada:** um giro liberado e um negado, os dois aparecendo em
 **Operação → Eventos** com motivo correto.
@@ -69,6 +73,8 @@ Hoje os dados vivem em memória e somem ao reiniciar.
 ## Fase 6 — Evolução
 
 - [ ] Relatórios por período (frequência, inadimplência, picos).
+- [x] Eventos com participantes externos e exportação CSV/PDF.
+- [x] Sorteios/premiações programáveis com roleta.
 - [ ] PWA do aluno com plano, frequência e link Treinutrix.
 - [ ] Múltiplas catracas na mesma unidade (entrada/saída).
 - [ ] Portar a API para NestJS/Prisma no `treina.ai-api`.

@@ -7,6 +7,10 @@
 //   - leitor facial     -> este processo é o servidor WebSocket do leitor
 // Sem hardware, usa os simuladores e expõe /sim/*.
 import http from 'node:http';
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { SimulatedPlaca, SimulatedFacial } from './simulators.js';
 import { EasyInnerReal } from './easyinner.js';
 import { FacialReal } from './facial-real.js';
@@ -21,6 +25,7 @@ const FACIAL_DEVICE_ID = process.env.FACIAL_DEVICE_ID || DEVICE_ID;
 const USE_REAL = process.env.USE_REAL_HARDWARE === '1';
 // simulator | generic_http | easyinner (ou topdata_easyinner) | topdata_facial_ws
 const DEVICE_DRIVER = process.env.DEVICE_DRIVER || (USE_REAL ? 'easyinner' : 'simulator');
+const DEVICE_DRIVER_EXPLICIT = Boolean(process.env.DEVICE_DRIVER);
 const DEVICE_ENDPOINT = process.env.DEVICE_ENDPOINT || '';
 const DRIVER_EASYINNER = DEVICE_DRIVER === 'easyinner' || DEVICE_DRIVER === 'topdata_easyinner';
 const DRIVER_HTTP = DEVICE_DRIVER === 'generic_http';
@@ -30,6 +35,9 @@ const SYNC_ENABLED = process.env.SYNC_ENABLED !== '0';
 const EDGE_TOKEN = process.env.EDGE_TOKEN || '';
 const SYNC_INTERVAL_MS = Number(process.env.SYNC_INTERVAL_MS || 30000);
 const API_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS || 5000);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const EASYINNER_BRIDGE_PORT = Number(process.env.EASYINNER_PORT || 5011);
+const AUTOSTART_BRIDGE = process.env.EASYINNER_AUTOSTART !== '0';
 // Conta de serviço do edge (operador). Padrão = admin seed; troque via env.
 const EDGE_LOGIN = process.env.EDGE_LOGIN || process.env.SEED_ADMIN_LOGIN || 'admin';
 const EDGE_PASSWORD = process.env.EDGE_PASSWORD || process.env.SEED_ADMIN_PASSWORD || 'admin123';
@@ -90,6 +98,56 @@ async function heartbeat() {
   } catch {
     logErro('API fora do ar, tentando de novo em 15s');
   }
+}
+
+// Configuração do equipamento vem da API (cadastro em Sistema → Catracas).
+let deviceConfig = null;
+async function carregarDeviceConfig() {
+  try {
+    const lista = await getJson('/api/devices');
+    deviceConfig = (Array.isArray(lista) ? lista : []).find((d) => d.id === DEVICE_ID) || null;
+    if (deviceConfig) {
+      console.log(`[edge] equipamento ${DEVICE_ID}: ${deviceConfig.driver} ${deviceConfig.ip}:${deviceConfig.porta}`);
+      if (deviceConfig.driver && !DEVICE_DRIVER_EXPLICIT) {
+        console.log(`[edge] dica: cadastro usa driver ${deviceConfig.driver}; edge está em ${DEVICE_DRIVER}`);
+      }
+    } else {
+      console.log(`[edge] equipamento ${DEVICE_ID} não cadastrado na API`);
+    }
+  } catch (e) {
+    logErro(`config do equipamento indisponível (${e.message})`);
+  }
+}
+
+// Em Windows com driver EasyInner, sobe a ponte usando IP/porta do cadastro.
+let bridge = null;
+function iniciarBridge() {
+  if (!DRIVER_EASYINNER || !AUTOSTART_BRIDGE || process.platform !== 'win32' || bridge) return;
+  const exe = path.join(HERE, '..', 'dotnet-adapter', 'EasyInnerBridge.exe');
+  if (!existsSync(exe)) {
+    console.log('[edge] bridge não encontrado; rode build.ps1 ou inicie manualmente');
+    return;
+  }
+  const portaInner = Number(deviceConfig?.porta || process.env.EASYINNER_INNER_PORT || 3000);
+  const ip = deviceConfig?.ip || process.env.EASYINNER_IP || '';
+  const args = [
+    '--port', String(EASYINNER_BRIDGE_PORT),
+    '--inner', String(process.env.EASYINNER_INNER || 1),
+    '--porta-inner', String(portaInner),
+  ];
+  if (ip) args.push('--ip', ip);
+  if (process.env.EASYINNER_ORIGEM_SAIDA) args.push('--origem-saida', process.env.EASYINNER_ORIGEM_SAIDA);
+  if (process.env.EASYINNER_PADRAO_CARTAO) args.push('--padrao-cartao', process.env.EASYINNER_PADRAO_CARTAO);
+
+  bridge = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  bridge.stdout.setEncoding('utf8');
+  bridge.stdout.on('data', (txt) => {
+    for (const linha of String(txt).split('\n')) if (linha.trim()) console.log('[bridge]', linha.trim());
+  });
+  bridge.stderr.setEncoding('utf8');
+  bridge.stderr.on('data', (txt) => console.log('[bridge] erro:', String(txt).trim()));
+  bridge.on('exit', (code) => { console.log('[bridge] encerrou', code); bridge = null; });
+  console.log(`[edge] bridge iniciado (${ip || 'sem ip'}:${portaInner})`);
 }
 
 // ---------------------------------------------------------------------------
@@ -294,9 +352,11 @@ const server = http.createServer(async (req, res) => {
 // boot
 // ---------------------------------------------------------------------------
 await edgeLogin();
+await carregarDeviceConfig();
 heartbeat();
 setInterval(heartbeat, 15000).unref();
 
+iniciarBridge();
 if (DRIVER_EASYINNER) placa.start();
 if (FACIAL_REAL) {
   try {
@@ -317,6 +377,7 @@ server.listen(EDGE_PORT, () => console.log(`Edge em http://localhost:${EDGE_PORT
 async function encerrar() {
   console.log('[edge] encerrando...');
   server.close();
+  if (bridge) { try { bridge.kill(); } catch {} }
   try { await facial.stop?.(); } catch {}
   try { await placa.stop?.(); } catch {}
   process.exit(0);
