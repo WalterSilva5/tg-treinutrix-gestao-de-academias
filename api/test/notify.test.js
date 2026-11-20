@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateNotifications, ackNotification } from '../src/notify.js';
+import { evaluateNotifications, ackNotification, listInadimplentes } from '../src/notify.js';
 
 function freshStore() {
   return {
@@ -55,4 +55,19 @@ test('ack exige existir e marca responsável', () => {
   assert.equal(n.resolvida, true);
   assert.equal(n.resolvidaPor, 'Ana');
   assert.equal(ackNotification(s, id, 'Beto'), null); // já resolvida
+});
+
+test('inativo não entra na inadimplência', () => {
+  const s = {
+    persons: new Map([
+      ['a', { id: 'a', ativo: true, validadeFim: '2020-01-01T00:00:00Z' }],
+      ['b', { id: 'b', ativo: false, validadeFim: '2020-01-01T00:00:00Z' }],
+      ['c', { id: 'c', ativo: true, validadeFim: '2099-01-01T00:00:00Z' }],
+      ['d', { id: 'd', ativo: true, validadeFim: null }],
+    ]),
+    devices: new Map(), rules: [], events: [], syncQueue: [],
+    notifications: [], meta: { lastBackupAt: new Date().toISOString() },
+  };
+  const inad = listInadimplentes(s, new Date('2026-11-20T12:00:00'));
+  assert.deepEqual(inad.map((p) => p.id), ['a']);
 });

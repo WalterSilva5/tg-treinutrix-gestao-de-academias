@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { decideAccess } from './decision.js';
 import { store, seed, nextId } from './store.js';
 import { getSystemInfo } from './system.js';
-import { evaluateNotifications, ackNotification } from './notify.js';
+import { evaluateNotifications, ackNotification, listInadimplentes } from './notify.js';
 import { doBackup, listBackups, doRestore } from './backup.js';
 
 const FRONT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'front');
@@ -77,6 +77,22 @@ const server = http.createServer(async (req, res) => {
     return send(res, 201, person);
   }
 
+  // Ativar/inativar aluno (inativo some das métricas de inadimplência e nega acesso).
+  if (req.method === 'PATCH' && url.pathname.match(/^\/api\/persons\/.+$/)) {
+    const id = decodeURIComponent(url.pathname.split('/')[3]);
+    const p = store.persons.get(id);
+    if (!p) return send(res, 404, { error: 'person_not_found' });
+    const b = await readBody(req);
+    if (typeof b.ativo === 'boolean') p.ativo = b.ativo;
+    if (b.nome !== undefined) p.nome = b.nome;
+    if (b.validadeIni !== undefined) p.validadeIni = b.validadeIni;
+    if (b.validadeFim !== undefined) p.validadeFim = b.validadeFim;
+    for (const d of store.devices.values()) {
+      store.syncQueue.push({ id: nextId('sync'), personId: id, deviceId: d.id, operacao: 'UPSERT', status: 'PENDING', tentativas: 0 });
+    }
+    return send(res, 200, p);
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/devices') {
     return send(res, 200, [...store.devices.values()]);
   }
@@ -130,13 +146,16 @@ const server = http.createServer(async (req, res) => {
 
   // Painel Sistema: info da máquina + contadores (overview estilo admin/overview).
   if (req.method === 'GET' && url.pathname === '/api/system') {
+    const inad = listInadimplentes(store);
     return send(res, 200, {
       ...getSystemInfo(),
       counts: {
         persons: store.persons.size, devices: store.devices.size,
         events: store.events.length, syncPending: store.syncQueue.filter((s) => s.status === 'PENDING').length,
         notifications: store.notifications.filter((n) => !n.resolvida).length,
+        inadimplentes: inad.length,
       },
+      inadimplentes: inad.map((p) => ({ id: p.id, nome: p.nome, matricula: p.matricula, validadeFim: p.validadeFim })),
       lastBackupAt: store.meta.lastBackupAt,
     });
   }

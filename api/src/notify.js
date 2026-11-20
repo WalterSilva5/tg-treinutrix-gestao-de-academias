@@ -69,10 +69,11 @@ export function evaluateNotifications(store, now = new Date()) {
   const evs = store.events.filter((e) => e.timestamp.slice(0, 10) === dia);
   const ok = evs.filter((e) => e.decisao === 'ALLOW').length;
   const neg = evs.filter((e) => e.decisao === 'DENY').length;
+  const inad = listInadimplentes(store, now);
   const n = criar(store, {
     key: `digest:${dia}`, tipo: 'METRICAS',
     titulo: `Resumo do dia ${dia}`,
-    detalhe: `${evs.length} eventos (${ok} liberados, ${neg} negados). ${store.persons.size} pessoas, ${store.devices.size} dispositivo(s).`,
+    detalhe: `${evs.length} eventos (${ok} liberados, ${neg} negados). ${store.persons.size} pessoas, ${inad.length} inadimplente(s) — inativos excluídos.`,
     now,
   });
   if (n) criadas.push(n);
@@ -88,4 +89,12 @@ export function ackNotification(store, id, por) {
   n.resolvidaPor = por || 'operador';
   n.resolvidaEm = new Date().toISOString();
   return n;
+}
+
+// Inadimplência = plano vencido (validadeFim passada). Inativo não conta:
+// aluno pausado/transferido some das métricas de atraso sem ser deletado.
+export function listInadimplentes(store, now = new Date()) {
+  return [...store.persons.values()].filter(
+    (p) => p.ativo !== false && p.validadeFim && new Date(p.validadeFim) < now
+  );
 }
