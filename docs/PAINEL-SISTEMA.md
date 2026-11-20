@@ -50,8 +50,16 @@ e devolve as fotos do snapshot quando a pasta existir.
 - A fila de sincronização leva `setuserinfo` com `backupnum 50` e a URL da foto,
   que o edge baixa para enviar ao leitor facial.
 
-## PWA — aba Sistema (perfil gerência)
+## Compartilhar acesso (link + QR)
 
+- Botão **Compartilhar acesso** no topo (equipe) e no cartão do servidor em Sistema.
+- Modal mostra o endereço da rede local (`http://IP:porta`), seletor de IP quando a
+  máquina tem mais de um, **Copiar link** e **Baixar QR** (PNG).
+- QR gerado no navegador por `front/qr.js` (byte mode, correção M, versões 1–10),
+  sem chamada a serviço externo — funciona em rede isolada.
+- Validado por testes (`api/test/qr.test.js`) e decodificado com `zbarimg`.
+
+## PWA — aba Sistema (perfil gerência)
 - **Servidor local:** mostra o endereço para o celular (`http://IP:3001`) + todos
   os IPs da máquina, uptime, contadores.
 - **Backup:** botão backup agora, lista com restaurar (confirmação).

@@ -182,6 +182,18 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
 .grid2>*{min-width:0}
 @media(max-width:1050px){.grid2{grid-template-columns:1fr}}
 
+/* ---------- MODAL / COMPARTILHAR ---------- */
+.modal-backdrop{position:fixed;inset:0;background:rgba(28,25,23,.5);display:grid;place-items:center;padding:18px;z-index:50;backdrop-filter:blur(2px)}
+.modal{background:var(--surface);border-radius:20px;border:1px solid var(--line);box-shadow:var(--shadow-lg,0 20px 50px rgba(28,25,23,.18));width:100%;max-width:420px;padding:22px;max-height:92vh;overflow:auto}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+.modal-head h2{margin:0;font-size:17px;letter-spacing:-.01em}
+.share-url{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;font-weight:600;color:var(--primary-text);background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:10px;padding:10px 12px;margin:12px 0;word-break:break-all;text-align:center}
+.qr-box{display:grid;place-items:center;padding:12px;background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:14px}
+.qr-box canvas{width:100%;max-width:260px;height:auto;image-rendering:pixelated}
+@media(max-width:600px){
+  .modal{padding:18px;border-radius:16px}
+}
+
 @media(max-width:600px){
   .hide-sm{display:none!important}
   .sidebar-foot > div:last-child{width:100%;justify-content:flex-end}
@@ -407,6 +419,25 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
   </main>
 </div>
 
+<!-- MODAL: COMPARTILHAR ACESSO -->
+<div id="shareModal" class="modal-backdrop hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+    <div class="modal-head">
+      <h2 id="shareTitle">Compartilhar acesso</h2>
+      <button class="btn-icon" onclick="fecharShare()" aria-label="Fechar">×</button>
+    </div>
+    <p class="help" style="margin-top:0">Aluno ou operador abre este endereço no celular, na mesma rede Wi-Fi, e entra com login e senha.</p>
+    <select id="shareIps" onchange="desenharShare()"></select>
+    <div class="share-url" id="shareUrl">—</div>
+    <div class="qr-box"><canvas id="shareQr" width="260" height="260"></canvas></div>
+    <div class="form-actions">
+      <button class="btn" onclick="copiarLink()">Copiar link</button>
+      <button class="btn ghost" onclick="baixarQr()">Baixar QR</button>
+    </div>
+  </div>
+</div>
+
+<script src="/qr.js"></script>
 <script>
 const API = ''; // mesma origem: a API serve este painel
 const $ = (id) => document.getElementById(id);
@@ -519,6 +550,15 @@ function entraUI() {
     tabs.appendChild(b);
   });
   mostrar(abas[0][0]);
+  const top = $('topActions');
+  if (top && sess.perfil !== 'aluno') {
+    top.innerHTML = '';
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.textContent = 'Compartilhar acesso';
+    b.onclick = abrirShare;
+    top.appendChild(b);
+  }
 }
 function mostrar(id) {
   for (const v of ['aluno', 'oper', 'sistema', 'inicio']) {
@@ -755,7 +795,7 @@ async function carregarSistema() {
   $('sysinfo').innerHTML = `
     <div class="ip-hero">
       <div><div class="url">${esc(url)}</div><div class="hint">Abra este endereço no celular conectado ao mesmo Wi-Fi.</div></div>
-      <button class="btn ghost sm" onclick="navigator.clipboard&&navigator.clipboard.writeText('${esc(url)}')">Copiar</button>
+      <div class="card-head-actions"><button class="btn ghost sm" onclick="navigator.clipboard&&navigator.clipboard.writeText('${esc(url)}')">Copiar</button><button class="btn sm" onclick="abrirShare()">Compartilhar</button></div>
     </div>
     <div class="info-grid">
       <div class="info-item"><div class="k">Máquina</div><div class="v">${esc(s.hostname)}</div></div>
@@ -859,6 +899,63 @@ async function avaliarNotif() {
   await jpost('/api/notifications/evaluate', {});
   loadNotifications();
 }
+
+// ---------- compartilhar acesso (link + QR) ----------
+let shareUrls = [];
+async function abrirShare() {
+  const s = await jget('/api/system').catch(() => null);
+  const port = location.port || '3001';
+  const ips = (s && s.ips ? s.ips : []).map(i => i.address);
+  const urls = [...new Set(ips.map(ip => `http://${ip}:${port}`))];
+  if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') urls.unshift(location.origin);
+  if (!urls.length) urls.push(location.origin);
+  shareUrls = urls;
+  $('shareIps').innerHTML = urls.map((u, i) => `<option value="${i}">${esc(u)}</option>`).join('');
+  $('shareIps').value = '0';
+  desenharShare();
+  $('shareModal').classList.remove('hidden');
+}
+function desenharShare() {
+  const url = shareUrls[Number($('shareIps').value)] || location.origin;
+  $('shareUrl').textContent = url;
+  $('shareUrl').dataset.url = url;
+  try {
+    const qr = QR.qrMatrix(url);
+    const quiet = 4;
+    const scale = Math.max(3, Math.floor(280 / (qr.size + quiet * 2)));
+    const dim = (qr.size + quiet * 2) * scale;
+    const canvas = $('shareQr');
+    canvas.width = dim; canvas.height = dim;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, dim, dim);
+    ctx.fillStyle = '#1c1917';
+    for (let r = 0; r < qr.size; r++) for (let c = 0; c < qr.size; c++) {
+      if (qr.modules[r][c]) ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
+    }
+  } catch (e) { alert('Não foi possível gerar o QR: ' + e.message); }
+}
+function fecharShare() { $('shareModal').classList.add('hidden'); }
+async function copiarLink() {
+  const url = $('shareUrl').dataset.url || $('shareUrl').textContent;
+  try {
+    if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(url);
+    else {
+      const ta = document.createElement('textarea');
+      ta.value = url; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    alert('Link copiado: ' + url);
+  } catch (e) { alert('Não foi possível copiar. Selecione o link manualmente.'); }
+}
+function baixarQr() {
+  const url = $('shareUrl').dataset.url || '';
+  const a = document.createElement('a');
+  a.href = $('shareQr').toDataURL('image/png');
+  a.download = 'qrcode-acesso.png';
+  a.click();
+}
+$('shareModal').addEventListener('click', (e) => { if (e.target.id === 'shareModal') fecharShare(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharShare(); });
 
 // ---------- boot ----------
 entraUI();

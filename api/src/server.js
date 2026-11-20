@@ -17,7 +17,7 @@ const FRONT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const STATIC_TYPES = {
   '/': 'text/html', '/index.html': 'text/html',
   '/manifest.webmanifest': 'application/manifest+json',
-  '/sw.js': 'application/javascript', '/icon.svg': 'image/svg+xml',
+  '/sw.js': 'application/javascript', '/icon.svg': 'image/svg+xml', '/qr.js': 'application/javascript',
 };
 
 function serveStatic(pathname, res) {
