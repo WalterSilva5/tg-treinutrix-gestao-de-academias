@@ -1,5 +1,12 @@
 # Painel Sistema — backup, máquina local e notificações
 
+Login e senha (ver `api/src/auth.js`): hash scrypt, token HMAC 12h. Primeiro
+operador via `SEED_ADMIN_LOGIN/SEED_ADMIN_PASSWORD` (padrão admin/admin123 —
+trocar na instalação). Aluno entra com matrícula + senha (inicial = matrícula).
+Gerência gerencia operadores em `GET/POST /api/users`; troca de senha em
+`POST /api/auth/change-password`. Edge usa conta de serviço
+(`EDGE_LOGIN/EDGE_PASSWORD`).
+
 Base de padrões: `wsi-invest-ai` (`back/src/modules/admin` overview,
 `alerts` regras + dedup + `alertEvent`, `scheduler` cron, `scripts/backup.sh`).
 

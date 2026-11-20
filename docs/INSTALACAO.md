@@ -36,6 +36,11 @@ Sem git: baixar o ZIP do repositório e extrair.
 
 ## 3. Subir API + edge (validação manual)
 
+Primeiro acesso: login `admin` / senha `admin123` (troque em seguida na aba
+Sistema → Operadores, ou via botão Trocar senha). Para produção, defina antes
+de subir: `SEED_ADMIN_LOGIN`, `SEED_ADMIN_PASSWORD`, `AUTH_SECRET` e
+`EDGE_LOGIN`/`EDGE_PASSWORD` iguais ao operador do edge.
+
 Windows (`cmd`):
 
 ```cmd
@@ -171,3 +176,6 @@ Repetir seções 1–6 em cada unidade (uma instalação por rede local). Regras
 | `BACKUP_DIR` | ./backups | API |
 | `BACKUP_KEEP` | 7 | API |
 | `NOTIFY_INTERVAL_MS` | 300000 | API |
+| `AUTH_SECRET` | aleatório (reinício invalida tokens) | API — defina um fixo em produção |
+| `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD` | admin / admin123 | API — primeiro operador |
+| `EDGE_LOGIN` / `EDGE_PASSWORD` | admin / admin123 | edge — conta de serviço (operador) |

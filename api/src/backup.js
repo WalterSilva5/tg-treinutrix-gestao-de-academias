@@ -15,6 +15,7 @@ function snapshot(store) {
     at: new Date().toISOString(),
     persons: [...store.persons.values()],
     devices: [...store.devices.values()],
+    users: [...store.users.values()],
     rules: store.rules,
     events: store.events,
     syncQueue: store.syncQueue,
@@ -53,6 +54,7 @@ export function doRestore(store, file) {
   if (data.v !== 1 || !Array.isArray(data.persons)) throw new Error('backup incompatível');
   store.persons = new Map(data.persons.map((p) => [p.id, p]));
   store.devices = new Map(data.devices.map((d) => [d.id, d]));
+  store.users = new Map((data.users || []).map((u) => [u.id, u]));
   store.rules = data.rules || [];
   store.events = data.events || [];
   store.syncQueue = data.syncQueue || [];

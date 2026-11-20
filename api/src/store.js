@@ -2,11 +2,14 @@
 // Tipos: ALUNO (mensalidade), PERSONAL (credencial com validade, sem mensalidade),
 // VISITANTE (avulso/dia, validade curta).
 
+import { hashPassword } from './auth.js';
+
 export const TIPOS_PESSOA = ['ALUNO', 'PERSONAL', 'VISITANTE'];
 
 export const store = {
   persons: new Map(),
   devices: new Map(),
+  users: new Map(), // operadores: { id, nome, login, senhaHash, perfil: recepcao|gerencia }
   rules: [], // { personId, deviceId, diasSemana, horaIni, horaFim }
   events: [], // { id, deviceId, personId, timestamp, direcao, metodo, score, decisao, motivo }
   syncQueue: [], // { id, personId, deviceId, operacao, status, tentativas }
@@ -23,10 +26,15 @@ export function seed() {
   if (store.devices.size > 0) return;
   const d1 = { id: 'dev_fit4_01', nome: 'Catraca Fit 4 - Entrada', ip: '192.168.0.100', porta: 3570, tipo: 'FIT4', online: false, lastSeen: null };
   store.devices.set(d1.id, d1);
-  const p1 = { id: 'per_demo_01', nome: 'Visitante Demo', matricula: 'V001', tipo: 'VISITANTE', ativo: true, validadeIni: null, validadeFim: null };
+  const p1 = { id: 'per_demo_01', nome: 'Visitante Demo', matricula: 'V001', tipo: 'VISITANTE', treinutrix: null, ativo: true, validadeIni: null, validadeFim: null, senhaHash: hashPassword('V001') };
   store.persons.set(p1.id, p1);
   store.rules.push({ personId: p1.id, deviceId: d1.id, diasSemana: 62, horaIni: '06:00', horaFim: '23:00' });
-  const pt = { id: 'per_personal_01', nome: 'Personal Demo', matricula: 'P001', tipo: 'PERSONAL', ativo: true, validadeIni: null, validadeFim: null };
+  const pt = { id: 'per_personal_01', nome: 'Personal Demo', matricula: 'P001', tipo: 'PERSONAL', treinutrix: null, ativo: true, validadeIni: null, validadeFim: null, senhaHash: hashPassword('P001') };
   store.persons.set(pt.id, pt);
   store.rules.push({ personId: pt.id, deviceId: d1.id, diasSemana: 127, horaIni: '05:00', horaFim: '23:59' });
+  if (store.users.size > 0) return;
+  store.users.set('usr_admin', {
+    id: 'usr_admin', nome: 'Administrador', login: process.env.SEED_ADMIN_LOGIN || 'admin',
+    senhaHash: hashPassword(process.env.SEED_ADMIN_PASSWORD || 'admin123'), perfil: 'gerencia',
+  });
 }

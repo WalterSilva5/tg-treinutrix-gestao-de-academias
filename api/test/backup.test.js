@@ -11,7 +11,7 @@ const { doBackup, listBackups, doRestore, BACKUP_DIR } = await import('../src/ba
 function freshStore() {
   return {
     persons: new Map([['p1', { id: 'p1', nome: 'Ana' }]]),
-    devices: new Map(), rules: [],
+    devices: new Map(), users: new Map(), rules: [],
     events: [{ id: 'e1' }], syncQueue: [],
     notifications: [], meta: { lastBackupAt: null },
   };

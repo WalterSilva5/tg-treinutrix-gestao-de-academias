@@ -9,6 +9,7 @@ import { store, seed, nextId, TIPOS_PESSOA } from './store.js';
 import { getSystemInfo } from './system.js';
 import { evaluateNotifications, ackNotification, listInadimplentes } from './notify.js';
 import { doBackup, listBackups, doRestore } from './backup.js';
+import { hashPassword, verifyPassword, issueToken, verifyToken, authenticate } from './auth.js';
 
 const FRONT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'front');
 const STATIC_TYPES = {
@@ -54,6 +55,15 @@ function readBody(req) {
   });
 }
 
+// Auth: tudo em /api/* exige Bearer, exceto o login. Shell PWA é público.
+function getUser(req) {
+  const h = req.headers.authorization || '';
+  const m = h.match(/^Bearer (.+)$/);
+  return m ? verifyToken(m[1]) : null;
+}
+const isOperador = (u) => u && (u.perfil === 'recepcao' || u.perfil === 'gerencia');
+const isGerencia = (u) => u && u.perfil === 'gerencia';
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': '*', 'Access-Control-Allow-Headers': '*' });
@@ -63,15 +73,67 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/health') return send(res, 200, { ok: true });
 
+  // Login público.
+  if (req.method === 'POST' && url.pathname === '/api/auth/login') {
+    const b = await readBody(req);
+    const who = authenticate(store, b.login, b.senha);
+    if (!who) return send(res, 401, { error: 'credenciais inválidas' });
+    return send(res, 200, { ...who, token: issueToken(who) });
+  }
+
+  // Demais /api/* exigem token.
+  const user = url.pathname.startsWith('/api/') ? getUser(req) : null;
+  if (url.pathname.startsWith('/api/') && !user) return send(res, 401, { error: 'não autenticado' });
+
+  // Troca de senha (qualquer autenticado).
+  if (req.method === 'POST' && url.pathname === '/api/auth/change-password') {
+    const b = await readBody(req);
+    if (!b.nova || String(b.nova).length < 4) return send(res, 400, { error: 'nova senha curta (mín. 4)' });
+    if (user.perfil === 'aluno') {
+      const p = store.persons.get(user.sub);
+      if (!p || !verifyPassword(b.atual, p.senhaHash || '')) return send(res, 401, { error: 'senha atual incorreta' });
+      p.senhaHash = hashPassword(b.nova);
+    } else {
+      const u = store.users.get(user.sub);
+      if (!u || !verifyPassword(b.atual, u.senhaHash)) return send(res, 401, { error: 'senha atual incorreta' });
+      u.senhaHash = hashPassword(b.nova);
+    }
+    return send(res, 200, { ok: true });
+  }
+
+  // Gestão de operadores (só gerência).
+  if (url.pathname === '/api/users') {
+    if (!isGerencia(user)) return send(res, 403, { error: 'só gerência' });
+    if (req.method === 'GET') {
+      return send(res, 200, [...store.users.values()].map(({ senhaHash, ...u }) => u));
+    }
+    if (req.method === 'POST') {
+      const b = await readBody(req);
+      if (!b.login || !b.senha || String(b.senha).length < 4) return send(res, 400, { error: 'login e senha (mín. 4) obrigatórios' });
+      if (!['recepcao', 'gerencia'].includes(b.perfil)) return send(res, 400, { error: 'perfil deve ser recepcao|gerencia' });
+      if ([...store.users.values()].some((u) => u.login === b.login)) return send(res, 409, { error: 'login já existe' });
+      const u = { id: nextId('usr'), nome: b.nome || b.login, login: b.login, senhaHash: hashPassword(b.senha), perfil: b.perfil };
+      store.users.set(u.id, u);
+      const { senhaHash, ...pub } = u;
+      return send(res, 201, pub);
+    }
+  }
+
+  const operadorOnly = () => {
+    if (!isOperador(user)) { send(res, 403, { error: 'só equipe (recepção/gerência)' }); return false; }
+    return true;
+  };
+
   if (req.method === 'GET' && url.pathname === '/api/persons') {
-    return send(res, 200, [...store.persons.values()]);
+    return send(res, 200, [...store.persons.values()].map(({ senhaHash, ...p }) => p));
   }
   if (req.method === 'POST' && url.pathname === '/api/persons') {
+    if (!operadorOnly()) return;
     const b = await readBody(req);
     const id = b.id || nextId('per');
     const tipo = TIPOS_PESSOA.includes(b.tipo) ? b.tipo : 'ALUNO';
     const treinutrix = typeof b.treinutrix === 'string' && b.treinutrix.trim() ? b.treinutrix.trim() : null;
-    const person = { id, nome: b.nome || 'Sem nome', matricula: b.matricula || id, tipo, treinutrix, ativo: b.ativo !== false, validadeIni: b.validadeIni || null, validadeFim: b.validadeFim || null };
+    const person = { id, nome: b.nome || 'Sem nome', matricula: b.matricula || id, tipo, treinutrix, ativo: b.ativo !== false, validadeIni: b.validadeIni || null, validadeFim: b.validadeFim || null, senhaHash: hashPassword(b.senha || b.matricula || id) };
     store.persons.set(id, person);
     for (const d of store.devices.values()) {
       store.syncQueue.push({ id: nextId('sync'), personId: id, deviceId: d.id, operacao: 'UPSERT', status: 'PENDING', tentativas: 0 });
@@ -81,6 +143,7 @@ const server = http.createServer(async (req, res) => {
 
   // Ativar/inativar aluno (inativo some das métricas de inadimplência e nega acesso).
   if (req.method === 'PATCH' && url.pathname.match(/^\/api\/persons\/.+$/)) {
+    if (!operadorOnly()) return;
     const id = decodeURIComponent(url.pathname.split('/')[3]);
     const p = store.persons.get(id);
     if (!p) return send(res, 404, { error: 'person_not_found' });
@@ -89,6 +152,7 @@ const server = http.createServer(async (req, res) => {
     if (b.nome !== undefined) p.nome = b.nome;
     if (TIPOS_PESSOA.includes(b.tipo)) p.tipo = b.tipo;
     if (b.treinutrix !== undefined) p.treinutrix = typeof b.treinutrix === 'string' && b.treinutrix.trim() ? b.treinutrix.trim() : null;
+    if (b.senha) p.senhaHash = hashPassword(b.senha);
     if (b.validadeIni !== undefined) p.validadeIni = b.validadeIni;
     if (b.validadeFim !== undefined) p.validadeFim = b.validadeFim;
     for (const d of store.devices.values()) {
@@ -101,6 +165,7 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, [...store.devices.values()]);
   }
   if (req.method === 'POST' && url.pathname.match(/^\/api\/devices\/.+\/heartbeat$/)) {
+    if (!operadorOnly()) return;
     const id = url.pathname.split('/')[3];
     const dev = store.devices.get(id);
     if (!dev) return send(res, 404, { error: 'device_not_found' });
@@ -114,11 +179,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/sync') {
+    if (!operadorOnly()) return;
     return send(res, 200, store.syncQueue.slice(-100).reverse());
   }
 
   // Motor de decisão: chamado pelo edge a cada identificação facial.
   if (req.method === 'POST' && url.pathname === '/api/identification') {
+    if (!operadorOnly()) return;
     const b = await readBody(req);
     const person = store.persons.get(b.person_id) || null;
     const result = decideAccess({
@@ -139,6 +206,7 @@ const server = http.createServer(async (req, res) => {
 
   // Liberação manual pelo operador.
   if (req.method === 'POST' && url.pathname === '/api/release') {
+    if (!operadorOnly()) return;
     const b = await readBody(req);
     store.events.push({
       id: nextId('evt'), deviceId: b.device_id, personId: b.person_id || null,
@@ -150,6 +218,7 @@ const server = http.createServer(async (req, res) => {
 
   // Painel Sistema: info da máquina + contadores (overview estilo admin/overview).
   if (req.method === 'GET' && url.pathname === '/api/system') {
+    if (!operadorOnly()) return;
     const inad = listInadimplentes(store);
     return send(res, 200, {
       ...getSystemInfo(),
@@ -166,28 +235,34 @@ const server = http.createServer(async (req, res) => {
 
   // Notificações: listar, avaliar agora, baixa manual com responsável.
   if (req.method === 'GET' && url.pathname === '/api/notifications') {
+    if (!operadorOnly()) return;
     return send(res, 200, [...store.notifications].reverse());
   }
   if (req.method === 'POST' && url.pathname === '/api/notifications/evaluate') {
+    if (!operadorOnly()) return;
     return send(res, 200, { created: evaluateNotifications(store) });
   }
   if (req.method === 'POST' && url.pathname.match(/^\/api\/notifications\/.+\/ack$/)) {
+    if (!operadorOnly()) return;
     const b = await readBody(req);
     const n = ackNotification(store, url.pathname.split('/')[3], b.por);
     if (!n) return send(res, 404, { error: 'not_found_or_resolved' });
     return send(res, 200, n);
   }
 
-  // Backup: gerar snapshot, listar, restaurar.
+  // Backup: gerar snapshot, listar, restaurar (restaurar só gerência).
   if (req.method === 'POST' && url.pathname === '/api/backup') {
+    if (!operadorOnly()) return;
     try { return send(res, 201, doBackup(store)); }
     catch (e) { return send(res, 500, { error: e.message }); }
   }
   if (req.method === 'GET' && url.pathname === '/api/backup') {
+    if (!operadorOnly()) return;
     try { return send(res, 200, listBackups()); }
     catch (e) { return send(res, 500, { error: e.message }); }
   }
   if (req.method === 'POST' && url.pathname === '/api/backup/restore') {
+    if (!isGerencia(user)) return send(res, 403, { error: 'só gerência' });
     try {
       const b = await readBody(req);
       return send(res, 200, doRestore(store, b.file));

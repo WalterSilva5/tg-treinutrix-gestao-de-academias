@@ -6,12 +6,38 @@ import { SimulatedPlaca, SimulatedFacial } from './simulators.js';
 const API_URL = process.env.API_URL || 'http://localhost:3001';
 const EDGE_PORT = Number(process.env.EDGE_PORT || 3002);
 const DEVICE_ID = process.env.DEVICE_ID || 'dev_fit4_01';
+// Conta de serviço do edge (operador). Padrão = admin seed; troque via env.
+const EDGE_LOGIN = process.env.EDGE_LOGIN || process.env.SEED_ADMIN_LOGIN || 'admin';
+const EDGE_PASSWORD = process.env.EDGE_PASSWORD || process.env.SEED_ADMIN_PASSWORD || 'admin123';
 
 const placa = new SimulatedPlaca(DEVICE_ID);
 const facial = new SimulatedFacial();
+let edgeToken = null;
 
-async function postJson(url, body) {
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+async function edgeLogin() {
+  try {
+    const res = await fetch(`${API_URL}/api/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login: EDGE_LOGIN, senha: EDGE_PASSWORD }),
+    });
+    if (!res.ok) { console.log('[edge] login falhou:', res.status); return false; }
+    edgeToken = (await res.json()).token;
+    return true;
+  } catch (e) {
+    console.log('[edge] API fora do ar no login');
+    return false;
+  }
+}
+
+async function postJson(url, body, retry = true) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(edgeToken ? { Authorization: `Bearer ${edgeToken}` } : {}) },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401 && retry) {
+    if (await edgeLogin()) return postJson(url, body, false);
+  }
   return res.json();
 }
 
@@ -23,6 +49,7 @@ async function heartbeat() {
   }
 }
 setInterval(heartbeat, 15000);
+await edgeLogin();
 heartbeat();
 
 async function handleIdentification(evt) {

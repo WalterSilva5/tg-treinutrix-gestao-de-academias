@@ -41,22 +41,18 @@ th,td{text-align:left;padding:6px;border-bottom:1px solid #2a2a2a}
 <div id="login" class="card">
   <h2>Entrar</h2>
   <div class="row">
-    <select id="perfil">
-      <option value="aluno">Aluno</option>
-      <option value="recepcao">Recepção</option>
-      <option value="gerencia">Gerência</option>
-    </select>
-    <input id="matricula" placeholder="Matrícula (aluno)" value="per_demo_01">
+    <input id="login" placeholder="Login (aluno: matrícula)" autocomplete="username">
+    <input id="senha" type="password" placeholder="Senha (aluno: matrícula no 1º acesso)" autocomplete="current-password">
     <button onclick="entrar()">Entrar</button>
   </div>
-  <p style="color:#888;font-size:13px">Demonstração em rede local. O login real (JWT) entra na portabilidade para o treina.ai-api.</p>
+  <p style="color:#888;font-size:13px">Operador padrão: <b>admin / admin123</b> — troque após instalar (Sistema → Usuários, ou botão Trocar senha).</p>
 </div>
 
 <!-- APP -->
 <div id="app" class="hidden">
   <div class="topbar">
     <span id="quem"></span>
-    <button class="ghost" onclick="sair()">Sair</button>
+    <span><button class="ghost" onclick="trocarSenha()">Trocar senha</button><button class="ghost" onclick="sair()">Sair</button></span>
   </div>
   <div class="tabs" id="tabs"></div>
 
@@ -88,6 +84,9 @@ th,td{text-align:left;padding:6px;border-bottom:1px solid #2a2a2a}
       <div class="row"><button onclick="carregarSistema()">Atualizar</button></div></div>
     <div class="card"><h3>Pessoas <span id="inadBadge" style="color:#e88"></span></h3>
       <div id="pessoas">—</div></div>
+    <div class="card"><h3>Operadores</h3>
+      <div class="row"><input id="usrNome" placeholder="Nome"><input id="usrLogin" placeholder="Login"><input id="usrSenha" type="password" placeholder="Senha"><select id="usrPerfil"><option>recepcao</option><option>gerencia</option></select><button onclick="criarUsuario()">Criar</button></div>
+      <div id="usuarios">—</div></div>
     <div class="card"><h3>Backup</h3>
       <div class="row"><button onclick="backupAgora()">Fazer backup agora</button><span id="lastBackup" style="color:#888"></span></div>
       <div id="backups">—</div></div>
@@ -107,7 +106,7 @@ function entraUI() {
   $('login').classList.toggle('hidden', !!sess);
   $('app').classList.toggle('hidden', !sess);
   if (!sess) return;
-  $('quem').textContent = `${sess.perfil} · ${sess.matricula || 'operador'}`;
+  $('quem').textContent = `${sess.perfil} · ${sess.nome || ''}`;
   const tabs = $('tabs'); tabs.innerHTML = '';
   const abas = sess.perfil === 'aluno' ? [['aluno', 'Meu acesso']]
     : sess.perfil === 'gerencia' ? [['oper', 'Operação'], ['sistema', 'Sistema']]
@@ -127,25 +126,40 @@ function mostrar(id) {
   $('v-sistema').classList.toggle('hidden', id !== 'sistema');
   if (id === 'sistema') carregarSistema();
 }
-function entrar() {
-  sess = { perfil: $('perfil').value, matricula: $('matricula').value.trim() };
-  localStorage.setItem('pwa_session', JSON.stringify(sess));
-  entraUI();
+async function entrar() {
+  try {
+    const r = await (await fetch(API + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login: $('login').value.trim(), senha: $('senha').value }) })).json();
+    if (!r.token) return alert(r.error || 'Falha no login.');
+    sess = r;
+    localStorage.setItem('pwa_session', JSON.stringify(sess));
+    entraUI();
+  } catch (e) { alert('API fora do ar.'); }
+}
+async function trocarSenha() {
+  const atual = prompt('Senha atual:'); if (atual === null) return;
+  const nova = prompt('Nova senha (mín. 4):'); if (!nova) return;
+  try { await jpost('/api/auth/change-password', { atual, nova }); alert('Senha atualizada.'); }
+  catch (e) { alert('Erro: ' + e.message); }
 }
 function sair() { sess = null; localStorage.removeItem('pwa_session'); entraUI(); }
 
-async function jget(p) { return (await fetch(API + p)).json(); }
-async function jpost(p, b) { return (await fetch(API + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) })).json(); }
+async function req(p, opts = {}) {
+  const r = await fetch(API + p, { ...opts, headers: { 'Content-Type': 'application/json', ...(sess && sess.token ? { Authorization: 'Bearer ' + sess.token } : {}), ...((opts && opts.headers) || {}) } });
+  if (r.status === 401 && sess) { sair(); throw new Error('sessão expirada — entre de novo'); }
+  return r;
+}
+async function jget(p) { return (await req(p)).json(); }
+async function jpost(p, b) { const r = await req(p, { method: 'POST', body: JSON.stringify(b) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; }
 const edgeBase = () => ($('edgeUrl').value || `http://${location.hostname}:3002`);
 
 // ---- aluno ----
 async function carregarAluno() {
   const persons = await jget('/api/persons');
-  const p = persons.find(x => x.id === sess.matricula || x.matricula === sess.matricula);
+  const p = persons.find(x => x.id === sess.sub);
   $('plano').innerHTML = p
     ? `<b>${p.nome}</b> · matrícula ${p.matricula}<br>Ativo: ${p.ativo ? 'sim' : 'NÃO'} · Validade: ${p.validadeIni || '—'} → ${p.validadeFim || '—'}<br>Treinutrix: ${treinutrixLink(p.treinutrix)}`
     : 'Matrícula não encontrada.';
-  const evs = (await jget('/api/events')).filter(e => e.personId === (p && (p.id)) || e.personId === sess.matricula);
+  const evs = (await jget('/api/events')).filter(e => e.personId === sess.sub);
   $('freqStats').innerHTML = `<div class="stat"><b>${evs.filter(e => e.decisao === 'ALLOW').length}</b>entradas</div>
     <div class="stat"><b>${evs.filter(e => e.decisao === 'DENY').length}</b>negados</div>`;
   $('freqList').textContent = JSON.stringify(evs.slice(-10).reverse(), null, 1);
@@ -218,11 +232,25 @@ async function carregarSistema() {
   $('lastBackup').textContent = 'Último backup: ' + (s.lastBackupAt || 'nunca');
   $('inadBadge').textContent = s.counts.inadimplentes ? `(${s.counts.inadimplentes} em atraso — inativos excluídos)` : '';
   await loadPessoas(s.inadimplentes || []);
+  await loadUsuarios();
   await loadBackups(); await loadNotifications();
 }
-async function jpatch(p, b) { return (await fetch(API + p, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) })).json(); }
-async function loadPessoas(inad) {
-  const list = await jget('/api/persons');
+async function loadUsuarios() {
+  try {
+    const list = await jget('/api/users');
+    $('usuarios').innerHTML = list.map(u => `<div class="row"><span style="font-size:14px">● <b>${u.nome}</b> · ${u.login} · ${u.perfil}</span></div>`).join('') || 'Nenhum operador.';
+  } catch (e) { $('usuarios').textContent = 'sem permissão'; }
+}
+async function criarUsuario() {
+  const nome = $('usrNome').value.trim(), login = $('usrLogin').value.trim(), senha = $('usrSenha').value, perfil = $('usrPerfil').value;
+  if (!login || !senha) return alert('Login e senha obrigatórios.');
+  const u = await jpost('/api/users', { nome, login, senha, perfil });
+  alert('Operador ' + u.login + ' criado.');
+  $('usrNome').value = ''; $('usrLogin').value = ''; $('usrSenha').value = '';
+  loadUsuarios();
+}
+async function jpatch(p, b) { const r = await req(p, { method: 'PATCH', body: JSON.stringify(b) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; }
+async function loadPessoas(inad) {  const list = await jget('/api/persons');
   const vencidas = new Set((inad || []).map(p => p.id));
   $('pessoas').innerHTML = list.map(p => `<div class="row" style="justify-content:space-between">
     <span style="font-size:14px">${p.ativo ? '●' : '○'} [${p.tipo || 'ALUNO'}] <b>${p.nome}</b> · ${p.matricula}${p.validadeFim ? ' · até ' + p.validadeFim.slice(0, 10) : ''}${vencidas.has(p.id) ? ' · <b style="color:#e88">EM ATRASO</b>' : ''}${!p.ativo ? ' · <span style="color:#888">inativo</span>' : ''}<br><span style="font-size:12px;color:#888">Treinutrix: ${treinutrixLink(p.treinutrix)}</span></span>
@@ -269,6 +297,7 @@ async function avaliarNotif() {
 }
 setInterval(() => { if (sess && sess.perfil === 'gerencia' && !$('v-sistema').classList.contains('hidden')) loadNotifications(); }, 60000);
 entraUI();
+window.addEventListener('unhandledrejection', e => alert('Erro: ' + ((e.reason && e.reason.message) || e.reason)));
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
