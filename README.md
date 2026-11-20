@@ -21,6 +21,7 @@ front (HTML) <-> api (Node, :3001) <-> store em memória
 - `front/` — PWA instalável (login por perfil aluno/recepção/gerência, responsivo).
   Servido pela própria API: um único endereço IP local, ex. `http://192.168.0.10:3001`.
   QR code na recepção aponta para esse endereço. Banner Treinutrix no topo.
+- `backups/` — snapshots JSON (retidos 7, ignorados no git). Ver `docs/PAINEL-SISTEMA.md`.
 - `prisma/` — modelo de dados de referência para portar ao MySQL/Prisma do `treina.ai-api`.
 - `docs/` — plano, contratos e roteiros de teste.
 

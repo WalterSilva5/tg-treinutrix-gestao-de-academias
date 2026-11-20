@@ -6,6 +6,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decideAccess } from './decision.js';
 import { store, seed, nextId } from './store.js';
+import { getSystemInfo } from './system.js';
+import { evaluateNotifications, ackNotification } from './notify.js';
+import { doBackup, listBackups, doRestore } from './backup.js';
 
 const FRONT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'front');
 const STATIC_TYPES = {
@@ -27,6 +30,12 @@ function serveStatic(pathname, res) {
 
 seed();
 const PORT = Number(process.env.API_PORT || 3001);
+// Scheduler estilo wsi-invest-ai (lá: @Cron; aqui: setInterval zero-dep).
+const NOTIFY_INTERVAL_MS = Number(process.env.NOTIFY_INTERVAL_MS || 5 * 60 * 1000);
+evaluateNotifications(store);
+setInterval(() => {
+  try { evaluateNotifications(store); } catch (e) { console.log('[notify]', e.message); }
+}, NOTIFY_INTERVAL_MS).unref();
 
 function send(res, status, body) {
   const data = JSON.stringify(body);
@@ -117,6 +126,49 @@ const server = http.createServer(async (req, res) => {
       metodo: 'MANUAL', score: null, decisao: 'ALLOW', motivo: b.motivo || 'MANUAL_OPERADOR',
     });
     return send(res, 200, { allow: true, motivo: 'MANUAL_OPERADOR', display_msg: 'Liberado pelo operador.' });
+  }
+
+  // Painel Sistema: info da máquina + contadores (overview estilo admin/overview).
+  if (req.method === 'GET' && url.pathname === '/api/system') {
+    return send(res, 200, {
+      ...getSystemInfo(),
+      counts: {
+        persons: store.persons.size, devices: store.devices.size,
+        events: store.events.length, syncPending: store.syncQueue.filter((s) => s.status === 'PENDING').length,
+        notifications: store.notifications.filter((n) => !n.resolvida).length,
+      },
+      lastBackupAt: store.meta.lastBackupAt,
+    });
+  }
+
+  // Notificações: listar, avaliar agora, baixa manual com responsável.
+  if (req.method === 'GET' && url.pathname === '/api/notifications') {
+    return send(res, 200, [...store.notifications].reverse());
+  }
+  if (req.method === 'POST' && url.pathname === '/api/notifications/evaluate') {
+    return send(res, 200, { created: evaluateNotifications(store) });
+  }
+  if (req.method === 'POST' && url.pathname.match(/^\/api\/notifications\/.+\/ack$/)) {
+    const b = await readBody(req);
+    const n = ackNotification(store, url.pathname.split('/')[3], b.por);
+    if (!n) return send(res, 404, { error: 'not_found_or_resolved' });
+    return send(res, 200, n);
+  }
+
+  // Backup: gerar snapshot, listar, restaurar.
+  if (req.method === 'POST' && url.pathname === '/api/backup') {
+    try { return send(res, 201, doBackup(store)); }
+    catch (e) { return send(res, 500, { error: e.message }); }
+  }
+  if (req.method === 'GET' && url.pathname === '/api/backup') {
+    try { return send(res, 200, listBackups()); }
+    catch (e) { return send(res, 500, { error: e.message }); }
+  }
+  if (req.method === 'POST' && url.pathname === '/api/backup/restore') {
+    try {
+      const b = await readBody(req);
+      return send(res, 200, doRestore(store, b.file));
+    } catch (e) { return send(res, 400, { error: e.message }); }
   }
 
   if (req.method === 'GET' && serveStatic(url.pathname, res)) return;

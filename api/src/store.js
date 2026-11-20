@@ -6,6 +6,8 @@ export const store = {
   rules: [], // { personId, deviceId, diasSemana, horaIni, horaFim }
   events: [], // { id, deviceId, personId, timestamp, direcao, metodo, score, decisao, motivo }
   syncQueue: [], // { id, personId, deviceId, operacao, status, tentativas }
+  notifications: [], // { id, key, tipo, titulo, detalhe, createdAt, resolvida, resolvidaPor, resolvidaEm }
+  meta: { lastBackupAt: null },
 };
 
 let seq = 1;

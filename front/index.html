@@ -80,6 +80,18 @@ th,td{text-align:left;padding:6px;border-bottom:1px solid #2a2a2a}
     <div class="card"><h3>Eventos</h3><div class="row"><button onclick="load()">Atualizar</button>
       <button class="ghost" onclick="csv()">Exportar CSV</button></div><div id="resumo" class="grid"></div><pre id="events"></pre></div>
   </div>
+
+  <!-- SISTEMA (gerência) -->
+  <div id="v-sistema" class="hidden">
+    <div class="card"><h3>Servidor local</h3><div id="sysinfo">—</div>
+      <div class="row"><button onclick="carregarSistema()">Atualizar</button></div></div>
+    <div class="card"><h3>Backup</h3>
+      <div class="row"><button onclick="backupAgora()">Fazer backup agora</button><span id="lastBackup" style="color:#888"></span></div>
+      <div id="backups">—</div></div>
+    <div class="card"><h3>Notificações <span id="ntfBadge"></span></h3>
+      <div class="row"><input id="respNome" placeholder="Seu nome (baixa)"><button class="ghost" onclick="avaliarNotif()">Verificar agora</button></div>
+      <div id="notifs">—</div></div>
+  </div>
 </div>
 
 </div>
@@ -94,7 +106,9 @@ function entraUI() {
   if (!sess) return;
   $('quem').textContent = `${sess.perfil} · ${sess.matricula || 'operador'}`;
   const tabs = $('tabs'); tabs.innerHTML = '';
-  const abas = sess.perfil === 'aluno' ? [['aluno', 'Meu acesso']] : [['oper', 'Operação']];
+  const abas = sess.perfil === 'aluno' ? [['aluno', 'Meu acesso']]
+    : sess.perfil === 'gerencia' ? [['oper', 'Operação'], ['sistema', 'Sistema']]
+    : [['oper', 'Operação']];
   abas.forEach(([id, label], i) => {
     const b = document.createElement('button');
     b.textContent = label; if (i === 0) b.classList.add('on');
@@ -107,6 +121,8 @@ function entraUI() {
 function mostrar(id) {
   $('v-aluno').classList.toggle('hidden', id !== 'aluno');
   $('v-oper').classList.toggle('hidden', id !== 'oper');
+  $('v-sistema').classList.toggle('hidden', id !== 'sistema');
+  if (id === 'sistema') carregarSistema();
 }
 function entrar() {
   sess = { perfil: $('perfil').value, matricula: $('matricula').value.trim() };
@@ -172,6 +188,54 @@ function csv() {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = 'presenca.csv'; a.click();
 }
+
+// ---- sistema (gerência) ----
+async function carregarSistema() {
+  const s = await jget('/api/system');
+  const ips = s.ips.map(i => `${i.iface}: ${i.address}`).join('<br>') || 'nenhum IP externo (só localhost)';
+  $('sysinfo').innerHTML = `Acesse pelo celular na mesma rede: <b>http://${(s.ips[0] && s.ips[0].address) || location.hostname}:${location.port}</b><br>
+    IPs locais:<br>${ips}<br>
+    Máquina: ${s.hostname} · ${s.platform}/${s.arch} · Node ${s.node}<br>
+    Uptime: ${s.uptimeMin} min · RAM: ${s.memMB} MB<br>
+    Pessoas: ${s.counts.persons} · Dispositivos: ${s.counts.devices} · Eventos: ${s.counts.events} · Sync pendente: ${s.counts.syncPending}`;
+  $('lastBackup').textContent = 'Último backup: ' + (s.lastBackupAt || 'nunca');
+  await loadBackups(); await loadNotifications();
+}
+async function loadBackups() {
+  const list = await jget('/api/backup');
+  $('backups').innerHTML = list.map(b => `<div class="row"><span style="font-size:13px">${b.file} (${Math.round(b.size / 1024)} KB)</span><button class="ghost" onclick="restoreBackup('${b.file}')">Restaurar</button></div>`).join('') || 'Nenhum backup.';
+}
+async function backupAgora() {
+  const r = await jpost('/api/backup', {});
+  alert('Backup: ' + r.file);
+  carregarSistema();
+}
+async function restoreBackup(file) {
+  if (!confirm('Restaurar ' + file + '? Dados atuais serão substituídos.')) return;
+  const r = await jpost('/api/backup/restore', { file });
+  alert('Restaurado de ' + r.at);
+  carregarSistema();
+}
+async function loadNotifications() {
+  const list = await jget('/api/notifications');
+  const pend = list.filter(n => !n.resolvida);
+  $('ntfBadge').textContent = pend.length ? `(${pend.length} pendentes)` : '(em dia)';
+  $('notifs').innerHTML = list.slice(0, 20).map(n => `<div class="card" style="margin-bottom:8px">
+    <b>[${n.tipo}] ${n.titulo}</b><br><span style="color:#aaa">${n.detalhe}</span><br>
+    <span style="color:#666;font-size:12px">${n.createdAt}${n.resolvida ? ` · resolvida por ${n.resolvidaPor} em ${n.resolvidaEm}` : ''}</span>
+    ${n.resolvida ? '' : `<div class="row"><button onclick="ackNotif('${n.id}')">Marcar resolvida</button></div>`}
+  </div>`).join('') || 'Nenhuma notificação.';
+}
+async function ackNotif(id) {
+  const por = $('respNome').value.trim() || 'gerente';
+  await jpost(`/api/notifications/${id}/ack`, { por });
+  loadNotifications();
+}
+async function avaliarNotif() {
+  await jpost('/api/notifications/evaluate', {});
+  loadNotifications();
+}
+setInterval(() => { if (sess && sess.perfil === 'gerencia' && !$('v-sistema').classList.contains('hidden')) loadNotifications(); }, 60000);
 entraUI();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
