@@ -4,7 +4,7 @@
 // Compilar (sem projeto, sem dependências):
 //   powershell -ExecutionPolicy Bypass -File build.ps1
 // Rodar:
-//   EasyInnerBridge.exe --port 5011 --inner 1 --porta-inner 3000
+//   EasyInnerBridge.exe --port 5011 --inner 1 --ip 192.168.0.100 --porta-inner 3000
 // Simular sem hardware (para testar o edge):
 //   EasyInnerBridge.exe --port 5011 --simulate
 //
@@ -35,6 +35,10 @@ public static class EasyInner
 
     [DllImport(DLL, CallingConvention = CallingConvention.Winapi)]
     public static extern byte DefinirTipoConexao(byte Tipo); // 2 = porta fixa (TCP)
+
+    // Só existe em versões do SDK com TCP por IP; chamada apenas com --ip.
+    [DllImport(DLL, CallingConvention = CallingConvention.Winapi)]
+    public static extern byte DefinirIP(string Ip);
 
     [DllImport(DLL, CallingConvention = CallingConvention.Winapi)]
     public static extern byte DefinirPadraoCartao(byte Padrao);
@@ -93,6 +97,7 @@ public sealed class Bridge
     private readonly int porta;
     private readonly int inner;
     private readonly int portaInner;
+    private readonly string ip;
     private readonly bool simular;
     private readonly bool teclado;
     private readonly int origemSaida;
@@ -106,11 +111,12 @@ public sealed class Bridge
     private volatile bool rodando = true;
     private bool innerOk;
 
-    public Bridge(int porta, int inner, int portaInner, bool simular, bool teclado, int origemSaida, int padraoCartao)
+    public Bridge(int porta, int inner, int portaInner, string ip, bool simular, bool teclado, int origemSaida, int padraoCartao)
     {
         this.porta = porta;
         this.inner = inner;
         this.portaInner = portaInner;
+        this.ip = ip;
         this.simular = simular;
         this.teclado = teclado;
         this.origemSaida = origemSaida;
@@ -310,6 +316,12 @@ public sealed class Bridge
         {
             byte ret = EasyInner.DefinirTipoConexao(2);
             if (ret != EasyInnerRetorno.RET_COMANDO_OK) { Status(false, "DefinirTipoConexao=" + ret); return false; }
+            if (!string.IsNullOrEmpty(ip))
+            {
+                // TCP por IP: a versão do SDK que aceita DefinirIP precisa dele.
+                ret = EasyInner.DefinirIP(ip);
+                if (ret != EasyInnerRetorno.RET_COMANDO_OK) { Status(false, "DefinirIP(" + ip + ")=" + ret); return false; }
+            }
             EasyInner.DefinirPadraoCartao((byte)padraoCartao);
             ret = EasyInner.ConfigurarInnerOnLine();
             if (ret != EasyInnerRetorno.RET_COMANDO_OK) { Status(false, "ConfigurarInnerOnLine=" + ret); return false; }
@@ -451,6 +463,7 @@ public static class Program
         int porta = 5011;
         int inner = 1;
         int portaInner = 3000;
+        string ip = null;
         int origemSaida = 2;
         int padraoCartao = 1; // PADRAO_LIVRE no exemplo oficial
         bool simular = false;
@@ -464,6 +477,7 @@ public static class Program
             else if (a == "--port" && i + 1 < args.Length) int.TryParse(args[++i], out porta);
             else if (a == "--inner" && i + 1 < args.Length) int.TryParse(args[++i], out inner);
             else if (a == "--porta-inner" && i + 1 < args.Length) int.TryParse(args[++i], out portaInner);
+            else if (a == "--ip" && i + 1 < args.Length) ip = args[++i];
             else if (a == "--origem-saida" && i + 1 < args.Length) int.TryParse(args[++i], out origemSaida);
             else if (a == "--padrao-cartao" && i + 1 < args.Length) int.TryParse(args[++i], out padraoCartao);
         }
@@ -476,7 +490,7 @@ public static class Program
 
         try
         {
-            new Bridge(porta, inner, portaInner, simular, teclado, origemSaida, padraoCartao).Rodar();
+            new Bridge(porta, inner, portaInner, ip, simular, teclado, origemSaida, padraoCartao).Rodar();
             return 0;
         }
         catch (Exception e)

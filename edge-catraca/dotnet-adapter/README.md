@@ -13,13 +13,23 @@ Assinaturas em `EasyInnerReal.cs` copiadas de `C#/COM/EasyInner.cs` do exemplo
 ## Sequência de inicialização (igual ao exemplo)
 
 1. `DefinirTipoConexao(2)` — porta fixa.
-2. `DefinirPadraoCartao(PADRAO_LIVRE)`.
-3. `ConfigurarInnerOnLine()`.
-4. `AbrirPortaComunicacao(porta)`.
-5. Teste de conexão: `ReceberRelogio(numero, ...)`.
-6. `ReceberVersaoFirmware(...)` → `EnviarRelogio(...)` com data/hora atual.
-7. `EnviarFormasEntradasOnLine(...)` → `EnviarMensagemPadraoOnLine(...)`.
-8. Loop de polling (ver `docs/SDK-EASYINNER-MAPEAMENTO.md`).
+2. `DefinirIP(<ip da catraca>)` — **só quando `--ip` é passado** (versões do SDK
+   com TCP por IP).
+3. `DefinirPadraoCartao(PADRAO_LIVRE)`.
+4. `ConfigurarInnerOnLine()`.
+5. `AbrirPortaComunicacao(porta)`.
+6. Teste de conexão: `ReceberRelogio(numero, ...)`.
+7. `ReceberVersaoFirmware(...)` → `EnviarRelogio(...)` com data/hora atual.
+8. `EnviarFormasEntradasOnLine(...)` → `EnviarMensagemPadraoOnLine(...)`.
+9. Loop de polling (ver `docs/SDK-EASYINNER-MAPEAMENTO.md`).
+
+O PC que roda o bridge precisa estar **na mesma faixa da catraca** (ex.:
+catraca `192.168.0.100` → PC `192.168.0.10/24`). Porta TCP comum: `3000` ou
+`3570`; confirme no menu de rede do equipamento e use `--porta-inner`.
+
+```bat
+EasyInnerBridge.exe --port 5011 --inner 1 --ip 192.168.0.100 --porta-inner 3000
+```
 
 ## Ponto de integração com este projeto
 
