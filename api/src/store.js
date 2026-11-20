@@ -24,7 +24,7 @@ export function nextId(prefix) {
 
 export function seed() {
   if (store.devices.size > 0) return;
-  const d1 = { id: 'dev_fit4_01', nome: 'Catraca Fit 4 - Entrada', ip: '192.168.0.100', porta: 3570, tipo: 'FIT4', online: false, lastSeen: null };
+  const d1 = { id: 'dev_fit4_01', nome: 'Catraca Fit 4 - Entrada', fabricante: 'Topdata', modelo: 'Fit 4', driver: 'topdata_easyinner', ip: '192.168.0.100', porta: 3570, endpoint: null, tipo: 'FIT4', online: false, lastSeen: null };
   store.devices.set(d1.id, d1);
   const p1 = { id: 'per_demo_01', nome: 'Visitante Demo', matricula: 'V001', tipo: 'VISITANTE', treinutrix: null, enrollid: 1001, ativo: true, validadeIni: null, validadeFim: null, foto: null, senhaHash: hashPassword('V001') };
   store.persons.set(p1.id, p1);

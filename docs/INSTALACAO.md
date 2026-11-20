@@ -150,13 +150,22 @@ Ativar: `sudo systemctl enable --now painel-api painel-edge`.
 - Ao desligar um aluno, avalie excluir a foto depois do prazo de retenção definido
   pela academia.
 
-## 8. Com catraca real (Windows)
+## 8. Com catraca real (Windows e outras marcas)
 
 1. Obter no Portal do Integrador Topdata: instalador das DLLs + SDK EasyInner + SDK Leitor Facial.
 2. Instalar DLLs (instalador ou `regsvr32`) — ver `edge-catraca/dotnet-adapter/README.md`.
 3. Implementar `EasyInnerReal`/`FacialReal` em C# conforme `docs/SDK-EASYINNER-MAPEAMENTO.md` e `docs/SDK-FACIAL-MAPEAMENTO.md`.
 4. Configurar o leitor: IP do servidor no leitor, modo online (`setdevinfo.server_verify=1`), responder `reg` (obrigatório).
 5. Roteiro de bancada: `docs/CONTRATOS-HARDWARE.md` + checklist do `docs/PLANO-DESENVOLVIMENTO.md`.
+
+### Outras catracas e controladores
+
+- Catálogo em `GET /api/device-catalog`; cadastro em **Operação → Catracas e controladores**
+  (drivers: `topdata_easyinner`, `topdata_facial_ws`, `generic_http`, `simulator`).
+- Controlador de outra marca com API HTTP: driver `generic_http`, apontando
+  `DEVICE_ENDPOINT=http://<ip>:<porta>/open` no edge.
+- Marca com SDK proprietário: criar driver no edge seguindo `docs/DRIVERS-CATRACA.md`.
+- O restante do sistema (regras, alunos, relatórios) não muda ao trocar de equipamento.
 
 ## 9. Multi-academia (outras unidades)
 
@@ -192,3 +201,5 @@ Repetir seções 1–6 em cada unidade (uma instalação por rede local). Regras
 | `AUTH_SECRET` | aleatório (reinício invalida tokens) | API — defina um fixo em produção |
 | `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD` | admin / admin123 | API — primeiro operador |
 | `EDGE_LOGIN` / `EDGE_PASSWORD` | admin / admin123 | edge — conta de serviço (operador) |
+| `DEVICE_DRIVER` | simulator | edge — `simulator` \| `generic_http` |
+| `DEVICE_ENDPOINT` | — | edge — URL do controlador quando `generic_http` |

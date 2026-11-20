@@ -1,6 +1,9 @@
 # wsi-topdata-catraca-painel
 
-Painel de controle de acesso para catraca Topdata Fit 4 com leitor facial.
+Sistema de gestão de academia com controle de acesso integrado a catracas:
+alunos, planos, frequência, recepção e catraca **Topdata Fit 4** — com suporte
+também a outras catracas Topdata (Revolution 4, Box 4, PNE 4), leitor facial e
+controladores HTTP genéricos.
 
 Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces + simuladores. O teste físico entra só na validação final.
 
@@ -26,7 +29,7 @@ front (HTML) <-> api (Node, :3001) <-> store em memória
 - `backups/` — snapshots JSON (retidos 7, ignorados no git). Ver `docs/PAINEL-SISTEMA.md`.
 - `data/photos/` — fotos de cadastro (fora do git; entram no backup). Aluno vê só a própria.
 - `prisma/` — modelo de dados de referência para portar ao MySQL/Prisma do `treina.ai-api`.
-- `docs/` — plano, contratos e roteiros de teste.
+- `docs/` — plano, contratos, drivers de catraca e roteiros de teste.
 
 ## Rodar no Linux (sem catraca)
 

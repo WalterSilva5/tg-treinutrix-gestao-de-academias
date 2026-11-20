@@ -2,16 +2,22 @@
 // Responsabilidades: heartbeat, receber identificação, consultar API, liberar placa.
 import http from 'node:http';
 import { SimulatedPlaca, SimulatedFacial } from './simulators.js';
+import { GenericHttpPlaca } from './generic-http.js';
 
 const API_URL = process.env.API_URL || 'http://localhost:3001';
 const EDGE_PORT = Number(process.env.EDGE_PORT || 3002);
 const DEVICE_ID = process.env.DEVICE_ID || 'dev_fit4_01';
+// Driver da placa: simulator (padrão) | generic_http | easyinner (Windows, via bridge)
+const DEVICE_DRIVER = process.env.DEVICE_DRIVER || 'simulator';
+const DEVICE_ENDPOINT = process.env.DEVICE_ENDPOINT || '';
 // Conta de serviço do edge (operador). Padrão = admin seed; troque via env.
 const EDGE_LOGIN = process.env.EDGE_LOGIN || process.env.SEED_ADMIN_LOGIN || 'admin';
 const EDGE_PASSWORD = process.env.EDGE_PASSWORD || process.env.SEED_ADMIN_PASSWORD || 'admin123';
 
-const placa = new SimulatedPlaca(DEVICE_ID);
 const facial = new SimulatedFacial();
+const placa = DEVICE_DRIVER === 'generic_http'
+  ? new GenericHttpPlaca(DEVICE_ID, DEVICE_ENDPOINT)
+  : new SimulatedPlaca(DEVICE_ID);
 let edgeToken = null;
 
 async function edgeLogin() {
@@ -69,7 +75,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method === 'GET' && url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ ok: true, device: DEVICE_ID, mode: 'SIMULADO' }));
+    return res.end(JSON.stringify({ ok: true, device: DEVICE_ID, driver: DEVICE_DRIVER }));
   }
   if (req.method === 'POST' && url.pathname === '/sim/identify') {
     let raw = '';

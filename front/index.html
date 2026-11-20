@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f97316">
-<title>Catraca · Gestão de Acesso</title>
+<title>Academia · Gestão de alunos e acesso com catraca</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -235,10 +235,10 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
       <div class="brand-mark">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="4" height="12" rx="1"/><rect x="17" y="6" width="4" height="12" rx="1"/><path d="M7 12h10"/></svg>
       </div>
-      <div class="brand-text"><b>Catraca</b><span>Gestão de acesso</span></div>
+      <div class="brand-text"><b>Academia</b><span>Gestão de alunos e acesso</span></div>
     </div>
-    <h1>Entrar na plataforma</h1>
-    <p class="sub">Use seu login de operador ou a matrícula de aluno.</p>
+    <h1>Gestão completa da academia</h1>
+    <p class="sub">Alunos, planos, frequência e controle de acesso integrado a catracas e leitores faciais.</p>
     <form onsubmit="event.preventDefault();entrar()">
       <label class="field"><span>Login</span>
         <input id="login" placeholder="admin ou matrícula" autocomplete="username">
@@ -261,7 +261,7 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
       <div class="brand-mark">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="4" height="12" rx="1"/><rect x="17" y="6" width="4" height="12" rx="1"/><path d="M7 12h10"/></svg>
       </div>
-      <div class="brand-text"><b>Catraca</b><span>Gestão de acesso</span></div>
+      <div class="brand-text"><b>Academia</b><span>Gestão de alunos e acesso</span></div>
     </a>
     <nav class="nav" id="tabs" aria-label="Menu principal"></nav>
     <div class="sidebar-foot">
@@ -357,9 +357,21 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
           </div>
 
           <div class="card">
-            <div class="card-head"><div><h2>Catracas</h2><p class="sub">Conexão com o equipamento</p></div>
+            <div class="card-head"><div><h2>Catracas e controladores</h2><p class="sub">Topdata, leitor facial e controladores HTTP</p></div>
               <div class="card-head-actions"><button class="btn ghost sm" onclick="heartbeat()">Testar</button></div></div>
-            <div class="list" id="devices"></div>
+            <div class="list" id="devices" style="margin-bottom:14px"></div>
+            <details>
+              <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:10px">Adicionar equipamento</summary>
+              <div class="form-grid">
+                <input id="devNome" placeholder="Nome (ex.: Entrada recepção)">
+                <select id="devDriver" onchange="atualizarModelos()"></select>
+                <select id="devModelo"></select>
+                <input id="devIp" placeholder="IP (ex.: 192.168.0.100)">
+                <input id="devPorta" placeholder="Porta (3570 / 80)">
+                <div class="form-actions"><button class="btn sm" onclick="adicionarDevice()">Cadastrar</button></div>
+              </div>
+              <p class="help" id="catalogoHelp">Carregando catálogo…</p>
+            </details>
           </div>
 
           <div class="card">
@@ -413,7 +425,7 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
     </section>
 
     <footer class="footer">
-      <span class="fine">Catraca · gestão de acesso local · Topdata Fit 4</span>
+      <span class="fine">Gestão de academia com controle de acesso · Topdata Fit 4, leitor facial e controladores compatíveis</span>
       <a class="tnx" href="https://treinutrix.com" target="_blank" rel="noopener"><span class="dotmark"></span><b>Treinutrix</b> — Sua musculação mais inteligente</a>
     </footer>
   </main>
@@ -444,7 +456,7 @@ const $ = (id) => document.getElementById(id);
 let sess = JSON.parse(localStorage.getItem('pwa_session') || 'null');
 
 const PAGINAS = {
-  inicio: ['Início', 'Visão geral da academia'],
+  inicio: ['Início', 'Alunos, acessos, planos e recepção'],
   oper: ['Operação', 'Acessos, cadastros e equipamentos'],
   sistema: ['Sistema', 'Servidor, backup e pessoas'],
   aluno: ['Meu acesso', 'Seu plano e frequência'],
@@ -680,16 +692,49 @@ async function carregarAluno() {
 }
 
 // ---------- operação ----------
+let CATALOGO = [];
 async function carregarOper() {
   $('edgeUrl').value = `http://${location.hostname}:3002`;
+  await carregarCatalogo();
   await loadDevices(); await load(); await loadSync();
+}
+async function carregarCatalogo() {
+  try {
+    CATALOGO = await jget('/api/device-catalog');
+    $('devDriver').innerHTML = CATALOGO.map(d => `<option value="${d.id}">${esc(d.nome)} — ${esc(d.fabricante)}</option>`).join('');
+    $('catalogoHelp').innerHTML = CATALOGO.map(d =>
+      `<b>${esc(d.nome)}</b> · ${esc(d.modelos.join(', '))} · ${esc(d.transporte)} · ${esc(d.requisitos)}`).join('<br>');
+    atualizarModelos();
+  } catch (e) { if ($('catalogoHelp')) $('catalogoHelp').textContent = 'catálogo indisponível'; }
+}
+function atualizarModelos() {
+  const d = CATALOGO.find(x => x.id === $('devDriver').value);
+  if (!d) return;
+  $('devModelo').innerHTML = d.modelos.map(m => `<option>${esc(m)}</option>`).join('');
+  $('devPorta').value = d.id === 'generic_http' ? '80' : (d.id === 'simulator' ? '' : '3570');
+  $('devIp').placeholder = d.id === 'simulator' ? 'não necessário' : 'ex.: 192.168.0.100';
+}
+async function adicionarDevice() {
+  const body = {
+    nome: $('devNome').value.trim(), driver: $('devDriver').value,
+    modelo: $('devModelo').value, ip: $('devIp').value.trim(),
+    porta: Number($('devPorta').value) || undefined,
+  };
+  if (!body.nome) return alert('Informe o nome do equipamento.');
+  try {
+    const d = await jpost('/api/devices', body);
+    alert(`Equipamento cadastrado: ${d.nome} (${d.modelo})`);
+    $('devNome').value = ''; $('devIp').value = '';
+    loadDevices();
+  } catch (e) { alert('Erro: ' + e.message); }
 }
 async function heartbeat() { await jpost('/api/devices/dev_fit4_01/heartbeat', {}); await loadDevices(); }
 async function loadDevices() {
   const list = await jget('/api/devices');
   $('devices').innerHTML = list.map(d => `
-    <div class="list-item"><div><div class="t">${esc(d.nome)}</div><div class="d">${esc(d.ip)}:${esc(d.porta)} · ${esc(d.tipo)}</div></div>
-    ${d.online ? '<span class="badge ok dot">online</span>' : '<span class="badge bad dot">offline</span>'}</div>`).join('') || '<div class="empty">Nenhum dispositivo.</div>';
+    <div class="list-item"><div><div class="t">${esc(d.nome)}</div>
+    <div class="d">${esc(d.fabricante || '—')} · ${esc(d.modelo || d.tipo || '')} · ${esc(d.driver || 'topdata_easyinner')} · ${esc(d.ip)}:${esc(d.porta)}</div></div>
+    ${d.online ? '<span class="badge ok dot">online</span>' : '<span class="badge bad dot">offline</span>'}</div>`).join('') || '<div class="empty">Nenhum equipamento cadastrado.</div>';
 }
 async function loadSync() {
   try {

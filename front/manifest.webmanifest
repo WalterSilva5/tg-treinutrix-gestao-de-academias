@@ -1,7 +1,7 @@
 {
-  "name": "Catraca · Gestão de Acesso",
-  "short_name": "Catraca",
-  "description": "Gestão de acesso da academia em rede local",
+  "name": "Academia · Gestão de alunos e acesso",
+  "short_name": "Academia",
+  "description": "Gestão de academia com controle de acesso: alunos, planos, frequência e catracas Topdata Fit 4 e compatíveis",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#fafaf9",

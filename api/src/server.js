@@ -12,6 +12,7 @@ import { doBackup, listBackups, doRestore } from './backup.js';
 import { hashPassword, verifyPassword, issueToken, verifyToken, authenticate } from './auth.js';
 import { visiblePersons, visibleEvents, canSeeOperations } from './scope.js';
 import { parsePhoto, validatePhoto, savePhoto, readPhoto, deletePhoto } from './photos.js';
+import { catalogo, normalizarDevice } from './devices.js';
 
 const FRONT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'front');
 const STATIC_TYPES = {
@@ -253,6 +254,23 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/devices') {
     if (!canSeeOperations(user)) return send(res, 403, { error: 'sem permissão' });
     return send(res, 200, [...store.devices.values()]);
+  }
+
+  // Catálogo de catracas/controladores suportados.
+  if (req.method === 'GET' && url.pathname === '/api/device-catalog') {
+    if (!operadorOnly()) return;
+    return send(res, 200, catalogo());
+  }
+
+  // Cadastro de nova catraca/controlador.
+  if (req.method === 'POST' && url.pathname === '/api/devices') {
+    if (!isGerencia(user)) return send(res, 403, { error: 'só gerência' });
+    const b = await readBody(req);
+    const r = normalizarDevice(b);
+    if (!r.ok) return send(res, 400, { error: r.error });
+    const device = { id: nextId('dev'), ...r.device, online: false, lastSeen: null, createdAt: new Date().toISOString() };
+    store.devices.set(device.id, device);
+    return send(res, 201, device);
   }
   if (req.method === 'POST' && url.pathname.match(/^\/api\/devices\/.+\/heartbeat$/)) {
     if (!operadorOnly()) return;
