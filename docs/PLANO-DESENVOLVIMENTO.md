@@ -13,6 +13,13 @@
 Nenhuma regra de negócio importa DLL ou WebSocket. Tudo passa por
 `decideAccess` + `POST /api/identification`. O hardware é detalhe do edge.
 
+## Drivers de equipamento
+
+`docs/DRIVERS-CATRACA.md` define o contrato. Drivers suportados hoje:
+`topdata_easyinner` (Fit 4, Revolution 4, Box 4, PNE 4), `topdata_facial_ws`
+(leitor facial), `generic_http` (outras marcas com API HTTP) e `simulator`.
+Trocar de catraca não altera regras, eventos ou relatórios.
+
 ## Portabilidade treina.ai-api
 
 | Aqui | Lá |
