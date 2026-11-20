@@ -39,6 +39,7 @@ scripts\iniciar-painel.cmd
 | Drivers de hardware | `edge-catraca/src/*` |
 | Contratos SDK Topdata | `docs/SDK-*.md` |
 | Backlog do handoff | `docs/HANDOFF-WINDOWS.md` |
+| Ordem de execução | `docs/PROXIMOS-PASSOS.md` |
 
 ## Convenções
 

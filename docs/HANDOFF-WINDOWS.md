@@ -1,7 +1,7 @@
 # Handoff — continuação no Windows
 
 Documento para o agente que vai assumir a implementação no PC da academia.
-Leia junto com `AGENTS.md` e `docs/INSTALACAO.md`.
+Leia junto com `docs/PROXIMOS-PASSOS.md` (ordem de execução) e `docs/INSTALACAO.md`.
 
 ## 1. O que já está pronto
 

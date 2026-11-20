@@ -61,7 +61,8 @@ Variáveis de ambiente:
 
 ## No Windows com catraca
 
-1. Ler `docs/HANDOFF-WINDOWS.md` (estado atual e backlog priorizado).
+1. Ler `docs/PROXIMOS-PASSOS.md` (ordem de execução) e `docs/HANDOFF-WINDOWS.md`
+   (estado atual e backlog priorizado).
 2. Rodar `scripts\iniciar-painel.cmd` e depois `scripts\verificar.cmd`.
 3. Implementar `EasyInnerReal` + servidor WebSocket do facial em C#, conforme
    `edge-catraca/dotnet-adapter/README.md` e `docs/SDK-*-MAPEAMENTO.md`.
