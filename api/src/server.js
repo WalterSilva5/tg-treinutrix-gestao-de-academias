@@ -1,7 +1,29 @@
 // API central. Node http puro, zero dependências. Roda em Linux e Windows.
+// Serve também o PWA (front/) na mesma origem: um único endereço IP local.
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { decideAccess } from './decision.js';
 import { store, seed, nextId } from './store.js';
+
+const FRONT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'front');
+const STATIC_TYPES = {
+  '/': 'text/html', '/index.html': 'text/html',
+  '/manifest.webmanifest': 'application/manifest+json',
+  '/sw.js': 'application/javascript', '/icon.svg': 'image/svg+xml',
+};
+
+function serveStatic(pathname, res) {
+  const file = pathname === '/' ? 'index.html' : pathname.slice(1);
+  if (!Object.hasOwn(STATIC_TYPES, pathname)) return false;
+  try {
+    const data = fs.readFileSync(path.join(FRONT_DIR, file));
+    res.writeHead(200, { 'Content-Type': STATIC_TYPES[pathname] });
+    res.end(data);
+    return true;
+  } catch { return false; }
+}
 
 seed();
 const PORT = Number(process.env.API_PORT || 3001);
@@ -62,6 +84,10 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, store.events.slice(-200).reverse());
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/sync') {
+    return send(res, 200, store.syncQueue.slice(-100).reverse());
+  }
+
   // Motor de decisão: chamado pelo edge a cada identificação facial.
   if (req.method === 'POST' && url.pathname === '/api/identification') {
     const b = await readBody(req);
@@ -92,6 +118,8 @@ const server = http.createServer(async (req, res) => {
     });
     return send(res, 200, { allow: true, motivo: 'MANUAL_OPERADOR', display_msg: 'Liberado pelo operador.' });
   }
+
+  if (req.method === 'GET' && serveStatic(url.pathname, res)) return;
 
   return send(res, 404, { error: 'not_found' });
 });

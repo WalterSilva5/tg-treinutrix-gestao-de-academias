@@ -3,67 +3,179 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Painel Catraca Fit 4 (demo sem hardware)</title>
+<meta name="theme-color" content="#1DB954">
+<title>Painel Catraca Fit 4</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon.svg">
 <style>
-body{font-family:system-ui;margin:0;background:#111;color:#eee}
+*{box-sizing:border-box}
+body{font-family:system-ui,system-ui,sans-serif;margin:0;background:#111;color:#eee}
 .banner{display:block;text-align:center;background:linear-gradient(90deg,#0a7a3d,#1DB954);color:#fff;font-weight:700;font-size:18px;padding:14px 16px;text-decoration:none}
 .banner small{display:block;font-weight:400;font-size:13px;opacity:.9}
-.wrap{padding:24px}
+.wrap{padding:16px;max-width:960px;margin:0 auto}
 .card{background:#1e1e1e;border:1px solid #333;border-radius:8px;padding:16px;margin-bottom:16px}
-button{background:#1DB954;border:0;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;margin-right:8px}
-pre{background:#000;padding:12px;border-radius:6px;max-height:300px;overflow:auto}
-input{background:#222;border:1px solid #444;color:#eee;padding:6px;border-radius:4px}
+button{background:#1DB954;border:0;color:#fff;padding:10px 16px;border-radius:6px;cursor:pointer;margin:4px 8px 4px 0;font-size:15px}
+button.ghost{background:#333}
+input,select{background:#222;border:1px solid #444;color:#eee;padding:9px;border-radius:4px;font-size:15px;margin:4px 8px 4px 0;max-width:100%}
+pre{background:#000;padding:12px;border-radius:6px;max-height:320px;overflow:auto;font-size:12px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.stat{background:#222;border:1px solid #333;border-radius:8px;padding:12px;text-align:center}
+.stat b{display:block;font-size:24px;color:#1DB954}
+.tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+.tabs button{background:#222}
+.tabs button.on{background:#1DB954}
+.hidden{display:none!important}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.topbar span{color:#aaa;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px;border-bottom:1px solid #2a2a2a}
+@media (max-width:600px){h1{font-size:20px}.banner{font-size:15px}}
 </style>
 </head>
 <body>
 <a class="banner" href="https://treinutrix.com" target="_blank" rel="noopener">Treinutrix — Sua musculação mais inteligente<small>treinutrix.com — toque para conhecer a plataforma</small></a>
 <div class="wrap">
-<h1>Painel Catraca Fit 4 — modo simulado</h1>
-<div class="card">
-  <h3>Dispositivos</h3>
-  <div id="devices">carregando...</div>
-  <button onclick="heartbeat()">Enviar heartbeat</button>
+
+<!-- LOGIN -->
+<div id="login" class="card">
+  <h2>Entrar</h2>
+  <div class="row">
+    <select id="perfil">
+      <option value="aluno">Aluno</option>
+      <option value="recepcao">Recepção</option>
+      <option value="gerencia">Gerência</option>
+    </select>
+    <input id="matricula" placeholder="Matrícula (aluno)" value="per_demo_01">
+    <button onclick="entrar()">Entrar</button>
+  </div>
+  <p style="color:#888;font-size:13px">Demonstração em rede local. O login real (JWT) entra na portabilidade para o treina.ai-api.</p>
 </div>
-<div class="card">
-  <h3>Simular identificação facial</h3>
-  <input id="person" value="per_demo_01">
-  <input id="score" value="0.95" size="5">
-  <button onclick="identify()">Identificar</button>
-  <button onclick="release()">Liberar manual</button>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <div class="topbar">
+    <span id="quem"></span>
+    <button class="ghost" onclick="sair()">Sair</button>
+  </div>
+  <div class="tabs" id="tabs"></div>
+
+  <!-- ALUNO -->
+  <div id="v-aluno" class="hidden">
+    <div class="card"><h3>Meu plano</h3><div id="plano">—</div></div>
+    <div class="card"><h3>Minha frequência</h3><div class="grid" id="freqStats"></div><pre id="freqList"></pre></div>
+  </div>
+
+  <!-- OPERAÇÃO (recepção + gerência) -->
+  <div id="v-oper" class="hidden">
+    <div class="card"><h3>Dispositivos</h3><div id="devices">—</div>
+      <div class="row"><button onclick="heartbeat()">Enviar heartbeat</button></div></div>
+    <div class="card"><h3>Simular identificação facial</h3>
+      <div class="row"><input id="person" value="per_demo_01"><input id="score" value="0.95" size="5">
+      <input id="edgeUrl" size="22" title="URL do edge"><button onclick="identify()">Identificar</button>
+      <button onclick="release()">Liberar manual</button></div></div>
+    <div class="card"><h3>Cadastrar visitante (validade 1 dia)</h3>
+      <div class="row"><input id="visNome" placeholder="Nome do visitante"><button onclick="visitante()">Cadastrar</button></div></div>
+    <div class="card"><h3>Fila de sincronização</h3><pre id="sync">—</pre></div>
+    <div class="card"><h3>Eventos</h3><div class="row"><button onclick="load()">Atualizar</button>
+      <button class="ghost" onclick="csv()">Exportar CSV</button></div><div id="resumo" class="grid"></div><pre id="events"></pre></div>
+  </div>
 </div>
-<div class="card">
-  <h3>Eventos</h3>
-  <button onclick="load()">Atualizar</button>
-  <pre id="events"></pre>
+
 </div>
 <script>
-const API='http://localhost:3001', EDGE='http://localhost:3002';
-async function heartbeat(){
-  await fetch(`${API}/api/devices/dev_fit4_01/heartbeat`,{method:'POST'});
-  loadDevices();
+const API = ''; // mesma origem: a API serve este painel
+const $ = (id) => document.getElementById(id);
+let sess = JSON.parse(localStorage.getItem('pwa_session') || 'null');
+
+function entraUI() {
+  $('login').classList.toggle('hidden', !!sess);
+  $('app').classList.toggle('hidden', !sess);
+  if (!sess) return;
+  $('quem').textContent = `${sess.perfil} · ${sess.matricula || 'operador'}`;
+  const tabs = $('tabs'); tabs.innerHTML = '';
+  const abas = sess.perfil === 'aluno' ? [['aluno', 'Meu acesso']] : [['oper', 'Operação']];
+  abas.forEach(([id, label], i) => {
+    const b = document.createElement('button');
+    b.textContent = label; if (i === 0) b.classList.add('on');
+    b.onclick = () => { mostrar(id); [...tabs.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); };
+    tabs.appendChild(b);
+  });
+  mostrar(abas[0][0]);
+  if (sess.perfil === 'aluno') carregarAluno(); else carregarOper();
 }
-async function loadDevices(){
-  const d=await (await fetch(`${API}/api/devices`)).json();
-  document.getElementById('devices').textContent=JSON.stringify(d,null,2);
+function mostrar(id) {
+  $('v-aluno').classList.toggle('hidden', id !== 'aluno');
+  $('v-oper').classList.toggle('hidden', id !== 'oper');
 }
-async function load(){
-  const e=await (await fetch(`${API}/api/events`)).json();
-  document.getElementById('events').textContent=JSON.stringify(e,null,2);
+function entrar() {
+  sess = { perfil: $('perfil').value, matricula: $('matricula').value.trim() };
+  localStorage.setItem('pwa_session', JSON.stringify(sess));
+  entraUI();
 }
-async function identify(){
-  const person_id=document.getElementById('person').value;
-  const score=Number(document.getElementById('score').value);
-  const r=await (await fetch(`${EDGE}/sim/identify`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({person_id,score})})).json();
-  alert(JSON.stringify(r.decisao));
-  load();
+function sair() { sess = null; localStorage.removeItem('pwa_session'); entraUI(); }
+
+async function jget(p) { return (await fetch(API + p)).json(); }
+async function jpost(p, b) { return (await fetch(API + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) })).json(); }
+const edgeBase = () => ($('edgeUrl').value || `http://${location.hostname}:3002`);
+
+// ---- aluno ----
+async function carregarAluno() {
+  const persons = await jget('/api/persons');
+  const p = persons.find(x => x.id === sess.matricula || x.matricula === sess.matricula);
+  $('plano').innerHTML = p
+    ? `<b>${p.nome}</b> · matrícula ${p.matricula}<br>Ativo: ${p.ativo ? 'sim' : 'NÃO'} · Validade: ${p.validadeIni || '—'} → ${p.validadeFim || '—'}`
+    : 'Matrícula não encontrada.';
+  const evs = (await jget('/api/events')).filter(e => e.personId === (p && (p.id)) || e.personId === sess.matricula);
+  $('freqStats').innerHTML = `<div class="stat"><b>${evs.filter(e => e.decisao === 'ALLOW').length}</b>entradas</div>
+    <div class="stat"><b>${evs.filter(e => e.decisao === 'DENY').length}</b>negados</div>`;
+  $('freqList').textContent = JSON.stringify(evs.slice(-10).reverse(), null, 1);
 }
-async function release(){
-  const r=await (await fetch(`${API}/api/release`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:'dev_fit4_01',motivo:'MANUAL_OPERADOR'})})).json();
-  alert(JSON.stringify(r));
-  load();
+
+// ---- operação ----
+async function carregarOper() {
+  $('edgeUrl').value = `http://${location.hostname}:3002`;
+  await loadDevices(); await load(); await loadSync();
 }
-loadDevices(); load();
+async function heartbeat() { await jpost('/api/devices/dev_fit4_01/heartbeat', {}); await loadDevices(); }
+async function loadDevices() { $('devices').textContent = JSON.stringify(await jget('/api/devices'), null, 1); }
+async function loadSync() { try { $('sync').textContent = JSON.stringify(await jget('/api/sync'), null, 1); } catch (e) { $('sync').textContent = 'indisponível'; } }
+let lastEvents = [];
+async function load() {
+  lastEvents = await jget('/api/events');
+  const hoje = new Date().toISOString().slice(0, 10);
+  const h = lastEvents.filter(e => e.timestamp.slice(0, 10) === hoje);
+  $('resumo').innerHTML = `<div class="stat"><b>${h.length}</b>eventos hoje</div>
+    <div class="stat"><b>${h.filter(e => e.decisao === 'ALLOW').length}</b>liberados</div>
+    <div class="stat"><b>${h.filter(e => e.decisao === 'DENY').length}</b>negados</div>`;
+  $('events').textContent = JSON.stringify(lastEvents, null, 1);
+}
+async function identify() {
+  const r = await (await fetch(`${edgeBase()}/sim/identify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ person_id: $('person').value, score: Number($('score').value) }) })).json();
+  alert(JSON.stringify(r.decisao)); load();
+}
+async function release() {
+  const r = await jpost('/api/release', { device_id: 'dev_fit4_01', person_id: $('person').value || null, motivo: 'MANUAL_OPERADOR' });
+  alert(JSON.stringify(r)); load();
+}
+async function visitante() {
+  const nome = $('visNome').value.trim(); if (!nome) return alert('Informe o nome.');
+  const fim = new Date(Date.now() + 864e5).toISOString();
+  const p = await jpost('/api/persons', { nome, ativo: true, validadeFim: fim });
+  alert('Visitante ' + p.matricula + ' válido até ' + fim);
+  $('visNome').value = '';
+}
+function csv() {
+  const rows = [['timestamp', 'device', 'person', 'direcao', 'metodo', 'decisao', 'motivo']];
+  lastEvents.forEach(e => rows.push([e.timestamp, e.deviceId, e.personId || '', e.direcao, e.metodo, e.decisao, e.motivo || '']));
+  const blob = new Blob([rows.map(r => r.join(';')).join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'presenca.csv'; a.click();
+}
+entraUI();
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
 </script>
-</div>
 </body>
 </html>

@@ -18,7 +18,9 @@ front (HTML) <-> api (Node, :3001) <-> store em memória
 
 - `api/` — API central + motor de decisão ALLOW/DENY. Zero dependências, roda em Linux e Windows com Node 18+.
 - `edge-catraca/` — serviço de borda. No Linux usa simuladores. No Windows troca pelos adaptadores reais sem mudar o motor.
-- `front/` — painel operador estático, sem build.
+- `front/` — PWA instalável (login por perfil aluno/recepção/gerência, responsivo).
+  Servido pela própria API: um único endereço IP local, ex. `http://192.168.0.10:3001`.
+  QR code na recepção aponta para esse endereço. Banner Treinutrix no topo.
 - `prisma/` — modelo de dados de referência para portar ao MySQL/Prisma do `treina.ai-api`.
 - `docs/` — plano, contratos e roteiros de teste.
 

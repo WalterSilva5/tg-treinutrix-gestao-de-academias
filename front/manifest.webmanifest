@@ -1,0 +1,10 @@
+{
+  "name": "Catraca Fit 4 — Painel",
+  "short_name": "Catraca",
+  "description": "Painel de acesso da academia em rede local",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#1DB954",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
