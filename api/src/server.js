@@ -20,13 +20,15 @@ import { parsePhoto, validatePhoto, savePhoto, readPhoto, deletePhoto } from './
 import { localDayKey, parseDate, isDateOnly } from './time.js';
 import { enqueueSync, enqueueDelete, ackSync } from './sync.js';
 import { DATA_FILE, loadState, saveIfDirty, startAutoSave, markDirty, appendEvent, compactEvents } from './persist.js';
+import { catalogo, normalizarDevice } from './devices.js';
+import { diasFrequentados, alunosNoDia } from './frequency.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FRONT_DIR = path.join(HERE, '..', '..', 'front');
 const STATIC_TYPES = {
   '/': 'text/html', '/index.html': 'text/html',
   '/manifest.webmanifest': 'application/manifest+json',
-  '/sw.js': 'application/javascript', '/icon.svg': 'image/svg+xml',
+  '/sw.js': 'application/javascript', '/icon.svg': 'image/svg+xml', '/qr.js': 'application/javascript',
 };
 
 const PORT = Number(process.env.API_PORT || 3001);
@@ -235,16 +237,6 @@ function pushEvent(evt) {
 function todayEvents(now = new Date()) {
   const dia = localDayKey(now);
   return store.events.filter((e) => localDayKey(new Date(e.timestamp)) === dia);
-}
-
-// Presentes = última decisão ALLOW do dia e sem saída registrada depois.
-function presentesHoje(events) {
-  const ultima = new Map();
-  for (const e of events) {
-    if (e.decisao !== 'ALLOW' || !e.personId) continue;
-    ultima.set(e.personId, e.direcao === 'OUT' ? 'OUT' : 'IN');
-  }
-  return [...ultima.values()].filter((d) => d !== 'OUT').length;
 }
 
 function normalizeValidity(value) {
@@ -527,19 +519,21 @@ async function route(req, res) {
     if (!canSeeOperations(user)) throw fail(403, 'sem permissão');
     return send(res, 200, [...store.devices.values()]);
   }
+  // Catálogo de catracas/controladores suportados.
+  if (req.method === 'GET' && url.pathname === '/api/device-catalog') {
+    operadorOnly();
+    return send(res, 200, catalogo());
+  }
   if (req.method === 'POST' && url.pathname === '/api/devices') {
     gerenciaOnly();
     const b = await readBody(req);
-    const nome = cleanText(b.nome, 120);
-    if (!nome) return send(res, 400, { error: 'nome obrigatório' });
+    const r = normalizarDevice(b);
+    if (!r.ok) return send(res, 400, { error: r.error });
     const id = b.id ? cleanId(b.id) : nextId('dev');
     if (!id) return send(res, 400, { error: 'id inválido' });
     if (store.devices.has(id)) return send(res, 409, { error: 'dispositivo já existe' });
-    const porta = Number(b.porta || 3570);
-    if (!Number.isInteger(porta) || porta < 1 || porta > 65535) return send(res, 400, { error: 'porta inválida' });
     const dev = {
-      id, nome, ip: cleanText(b.ip, 60) || '', porta, tipo: cleanText(b.tipo, 20) || 'FIT4',
-      online: false, lastSeen: null, criadoEm: new Date().toISOString(),
+      id, ...r.device, online: false, lastSeen: null, criadoEm: new Date().toISOString(),
     };
     store.devices.set(id, dev);
     // Novos dispositivos já enxergam os cadastros existentes (regra + sync).
@@ -563,6 +557,14 @@ async function route(req, res) {
   // ------------------------------------------------------------------ eventos
   if (req.method === 'GET' && url.pathname === '/api/events') {
     return send(res, 200, visibleEvents(store.events, user).slice(-200).reverse());
+  }
+
+  // Frequência por dias distintos (não por passagens).
+  if (req.method === 'GET' && url.pathname === '/api/frequency') {
+    const alvo = url.searchParams.get('personId') || (user.perfil === 'aluno' ? user.sub : null);
+    if (!alvo) return send(res, 400, { error: 'informe personId' });
+    if (user.perfil === 'aluno' && alvo !== user.sub) return send(res, 403, { error: 'sem permissão' });
+    return send(res, 200, diasFrequentados(store.events, alvo));
   }
 
   // --------------------------------------------------------------- sincronismo
@@ -661,13 +663,39 @@ async function route(req, res) {
     operadorOnly();
     const inad = listInadimplentes(store);
     const hoje = todayEvents();
+    const dia = localDayKey();
+    // Últimos 7 dias no fuso local (não usar toISOString: muda de dia à noite).
+    const semana = [];
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = localDayKey(d);
+      const evs = store.events.filter((e) => localDayKey(new Date(e.timestamp)) === key);
+      semana.push({
+        dia: key,
+        total: evs.length,
+        liberados: evs.filter((e) => e.decisao === 'ALLOW').length,
+        alunos: alunosNoDia(store.events, key),
+      });
+    }
+    // Quem entrou e não saiu: último evento ALLOW por pessoa é de entrada.
+    const ultimoPorPessoa = new Map();
+    for (const e of store.events) {
+      if (e.decisao === 'ALLOW' && e.personId) ultimoPorPessoa.set(e.personId, e);
+    }
+    const presentes = [...ultimoPorPessoa.values()]
+      .filter((e) => (e.direcao || 'IN') !== 'OUT' && localDayKey(new Date(e.timestamp)) === dia)
+      .map((e) => ({ personId: e.personId, timestamp: e.timestamp }));
     return send(res, 200, {
-      dia: localDayKey(),
+      dia,
+      semana,
+      presentes,
       kpis: {
         eventosHoje: hoje.length,
         liberados: hoje.filter((e) => e.decisao === 'ALLOW').length,
         negados: hoje.filter((e) => e.decisao === 'DENY').length,
-        presentes: presentesHoje(hoje),
+        alunosHoje: alunosNoDia(store.events, dia),
+        presentes: presentes.length,
         inadimplentes: inad.length,
         syncPendente: store.syncQueue.filter((s) => s.status === 'PENDING').length,
         notifPendentes: store.notifications.filter((n) => !n.resolvida).length,

@@ -37,6 +37,13 @@ Nenhuma regra de negócio importa DLL ou WebSocket. Tudo passa por
 O payload da fila (`sync.js`) e o contrato do leitor (`facial-ws.js`) devem
 andar juntos — qualquer mudança precisa de teste.
 
+## Drivers de equipamento
+
+`docs/DRIVERS-CATRACA.md` define o contrato. Drivers suportados hoje:
+`topdata_easyinner` (Fit 4, Revolution 4, Box 4, PNE 4), `topdata_facial_ws`
+(leitor facial), `generic_http` (outras marcas com API HTTP) e `simulator`.
+Trocar de catraca não altera regras, eventos ou relatórios.
+
 ## Portabilidade treina.ai-api
 
 | Aqui | Lá |

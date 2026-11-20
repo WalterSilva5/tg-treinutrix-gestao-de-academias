@@ -203,20 +203,29 @@ Repetir para o edge (`EDGE_PORT=3002`, `API_URL=http://localhost:3001`,
 - Ao desligar um aluno, avalie excluir a foto depois do prazo de retenção definido
   pela academia. Eventos históricos não contêm biometria.
 
-## 9. Com catraca real (Windows)
+## 8. Com catraca real (Windows e outras marcas)
 
 1. Obter no Portal do Integrador Topdata: instalador das DLLs + SDK EasyInner + SDK Leitor Facial.
 2. Instalar DLLs (instalador ou `regsvr32`) — ver `edge-catraca/dotnet-adapter/README.md`.
-3. Implementar `EasyInnerReal`/`FacialReal` em C# conforme `docs/SDK-EASYINNER-MAPEAMENTO.md` e `docs/SDK-FACIAL-MAPEAMENTO.md`.
-4. Configurar o leitor: IP do servidor no leitor, modo online (`setdevinfo.server_verify=1`), responder `reg` (obrigatório).
-5. Subir o edge com `USE_REAL_HARDWARE=1` (desativa `/sim/*`) e testar o caminho
-   completo na bancada (`docs/CONTRATOS-HARDWARE.md`).
+3. Compilar a ponte: `powershell -ExecutionPolicy Bypass -File edge-catraca/dotnet-adapter/build.ps1`
+   (use `-X86` se a `EasyInner.dll` for 32 bits).
+4. Configurar o leitor: IP do servidor no leitor, modo online (`setdevinfo.server_verify=1`),
+   responder `reg` (obrigatório). O edge já hospeda o WebSocket do facial.
+5. Subir o edge com `USE_REAL_HARDWARE=1` (desativa `/sim/*`; a catraca usa o
+   bridge em `127.0.0.1:5011`) e testar o caminho completo na bancada
+   (`docs/CONTRATOS-HARDWARE.md`).
 
-> Estado atual: os adaptadores reais são esqueleto. O edge avisa e continua em
-> simulador até a implementação C# estar pronta — não leve para a catraca antes
-> do teste de bancada.
+### Outras catracas e controladores
 
-## 10. Multi-academia (outras unidades)
+- Catálogo em `GET /api/device-catalog`; cadastro de novas catracas em
+  **Operação → Catracas e controladores** (drivers: `topdata_easyinner`,
+  `topdata_facial_ws`, `generic_http`, `simulator`).
+- Controlador de outra marca com API HTTP: driver `generic_http` no edge,
+  apontando `DEVICE_ENDPOINT=http://<ip>:<porta>/open`.
+- Marca com SDK proprietário: criar driver no edge seguindo `docs/DRIVERS-CATRACA.md`.
+- O restante do sistema (regras, alunos, relatórios) não muda ao trocar de equipamento.
+
+## 9. Multi-academia (outras unidades)
 
 Repetir seções 1–8 em cada unidade (uma instalação por rede local). Regras:
 
@@ -269,3 +278,5 @@ Repetir seções 1–8 em cada unidade (uma instalação por rede local). Regras
 | `MAX_BODY_BYTES` | 2097152 | API |
 | `CORS_ORIGIN` | vazio | API — só se o front estiver em outra origem |
 | `EDGE_LOGIN` / `EDGE_PASSWORD` | admin / admin123 | edge — conta de serviço (operador) |
+| `DEVICE_DRIVER` | simulator (easyinner com `USE_REAL_HARDWARE=1`) | edge - `simulator` \| `generic_http` \| `easyinner` \| `topdata_facial_ws` |
+| `DEVICE_ENDPOINT` | — | edge — URL do controlador quando `generic_http` |

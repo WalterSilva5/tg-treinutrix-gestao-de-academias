@@ -10,6 +10,7 @@ import http from 'node:http';
 import { SimulatedPlaca, SimulatedFacial } from './simulators.js';
 import { EasyInnerReal } from './easyinner.js';
 import { FacialReal } from './facial-real.js';
+import { GenericHttpPlaca } from './generic-http.js';
 import { buildSetUserinfo, buildDeleteUser, buildSetDevinfo } from './facial-ws.js';
 
 const API_URL = (process.env.API_URL || 'http://localhost:3001').replace(/\/$/, '');
@@ -18,6 +19,13 @@ const DEVICE_ID = process.env.DEVICE_ID || 'dev_fit4_01';
 const CARTAO_DEVICE_ID = process.env.CARTAO_DEVICE_ID || DEVICE_ID;
 const FACIAL_DEVICE_ID = process.env.FACIAL_DEVICE_ID || DEVICE_ID;
 const USE_REAL = process.env.USE_REAL_HARDWARE === '1';
+// simulator | generic_http | easyinner (ou topdata_easyinner) | topdata_facial_ws
+const DEVICE_DRIVER = process.env.DEVICE_DRIVER || (USE_REAL ? 'easyinner' : 'simulator');
+const DEVICE_ENDPOINT = process.env.DEVICE_ENDPOINT || '';
+const DRIVER_EASYINNER = DEVICE_DRIVER === 'easyinner' || DEVICE_DRIVER === 'topdata_easyinner';
+const DRIVER_HTTP = DEVICE_DRIVER === 'generic_http';
+const FACIAL_REAL = USE_REAL || DEVICE_DRIVER === 'topdata_facial_ws';
+const HARDWARE_REAL = USE_REAL || DRIVER_EASYINNER || DRIVER_HTTP || FACIAL_REAL;
 const SYNC_ENABLED = process.env.SYNC_ENABLED !== '0';
 const EDGE_TOKEN = process.env.EDGE_TOKEN || '';
 const SYNC_INTERVAL_MS = Number(process.env.SYNC_INTERVAL_MS || 30000);
@@ -100,19 +108,29 @@ async function decidir(evt) {
 let placa;
 let facial;
 
-if (USE_REAL) {
+if (DRIVER_HTTP) {
+  if (!DEVICE_ENDPOINT) {
+    console.error('[edge] DEVICE_DRIVER=generic_http exige DEVICE_ENDPOINT');
+    process.exit(1);
+  }
+  placa = new GenericHttpPlaca(CARTAO_DEVICE_ID, DEVICE_ENDPOINT);
+} else if (DRIVER_EASYINNER) {
   placa = new EasyInnerReal({
     deviceId: CARTAO_DEVICE_ID,
     onIdentificacao: (evt) => handleIdentification(evt),
     onStatus: (st) => console.log(`[edge] catraca ${st.conectado ? 'ok' : 'offline'}`),
   });
+} else {
+  placa = new SimulatedPlaca(CARTAO_DEVICE_ID);
+}
+
+if (FACIAL_REAL) {
   facial = new FacialReal({
     deviceId: FACIAL_DEVICE_ID,
     // No facial quem mostra a mensagem é o campo `message` da resposta online.
     onAccess: (evt) => decidir(evt),
   });
 } else {
-  placa = new SimulatedPlaca(CARTAO_DEVICE_ID);
   facial = new SimulatedFacial(FACIAL_DEVICE_ID);
 }
 
@@ -146,7 +164,7 @@ async function sincronizarItem(item) {
 
 async function sincronizarPendentes() {
   if (!SYNC_ENABLED) return;
-  if (USE_REAL && !facial.conectado) {
+  if (FACIAL_REAL && !facial.conectado) {
     logErro('leitor facial desconectado, sync adiado');
     return;
   }
@@ -219,7 +237,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, {
         ok: true,
         device: DEVICE_ID,
-        mode: USE_REAL ? 'REAL' : 'SIMULADO',
+        mode: HARDWARE_REAL ? 'REAL' : 'SIMULADO',
+        driver: DEVICE_DRIVER,
         api: ultimoErro ? 'indisponivel' : 'ok',
         facial: facial.conectado === undefined ? 'simulado' : (facial.conectado ? 'conectado' : 'desconectado'),
         catraca: placa.conectado === undefined ? 'simulado' : (placa.conectado ? 'conectado' : 'desconectado'),
@@ -243,8 +262,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Simulador de leitor: só existe sem hardware real.
-    if (url.pathname.startsWith('/sim/') && USE_REAL) {
-      return json(res, 404, { error: 'simulador desativado (USE_REAL_HARDWARE=1)' });
+    if (url.pathname.startsWith('/sim/') && HARDWARE_REAL) {
+      return json(res, 404, { error: 'simulador desativado (hardware real configurado)' });
     }
     if (url.pathname.startsWith('/sim/')) {
       res.setHeader('Access-Control-Allow-Origin', '*');
@@ -278,8 +297,8 @@ await edgeLogin();
 heartbeat();
 setInterval(heartbeat, 15000).unref();
 
-if (USE_REAL) {
-  placa.start();
+if (DRIVER_EASYINNER) placa.start();
+if (FACIAL_REAL) {
   try {
     await facial.start();
   } catch (e) {
@@ -293,7 +312,7 @@ if (USE_REAL) {
 sincronizarPendentes();
 setInterval(sincronizarPendentes, SYNC_INTERVAL_MS).unref();
 
-server.listen(EDGE_PORT, () => console.log(`Edge em http://localhost:${EDGE_PORT} (device ${DEVICE_ID}, ${USE_REAL ? 'REAL' : 'SIMULADO'})`));
+server.listen(EDGE_PORT, () => console.log(`Edge em http://localhost:${EDGE_PORT} (device ${DEVICE_ID}, driver ${DEVICE_DRIVER}, ${HARDWARE_REAL ? 'REAL' : 'SIMULADO'})`));
 
 async function encerrar() {
   console.log('[edge] encerrando...');

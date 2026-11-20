@@ -41,7 +41,7 @@ export function ensureRules(store, personId, devices = [...store.devices.values(
 
 export function seed() {
   if (store.devices.size > 0) return;
-  const d1 = { id: 'dev_fit4_01', nome: 'Catraca Fit 4 - Entrada', ip: '192.168.0.100', porta: 3570, tipo: 'FIT4', online: false, lastSeen: null };
+  const d1 = { id: 'dev_fit4_01', nome: 'Catraca Fit 4 - Entrada', fabricante: 'Topdata', modelo: 'Fit 4', driver: 'topdata_easyinner', ip: '192.168.0.100', porta: 3570, endpoint: null, tipo: 'FIT4', online: false, lastSeen: null };
   store.devices.set(d1.id, d1);
 
   // SEED_DEMO=0 instala sem alunos de demonstração (produção).

@@ -75,12 +75,30 @@ ou Agendador de Tarefas) e teste o restore periodicamente.
 - A fila de sincronização leva `setuserinfo` com `backupnum 50` e a URL da foto;
   o edge baixa, converte para base64 e envia ao leitor facial.
 
-## PWA — aba Sistema (perfil gerência)
+## Interface (PWA)
 
-- **Servidor local:** endereço para o celular (`http://IP:3001`) + IPs, uptime, contadores.
-- **Backup:** backup agora, lista com restaurar (confirmação).
+- Tema claro padrão com alternância para escuro (botão na barra lateral, persistido).
+- Avisos em toast (não bloqueiam a tela) para cadastro, renovação, backup e erros.
+- Dashboard com KPIs, gráfico dos últimos 7 dias e lista de **presentes agora**.
+- **Frequência por dias distintos**: várias entradas no mesmo dia contam como 1
+  dia (`GET /api/frequency`, `api/src/frequency.js`). Eventos ficam como auditoria.
+- Busca por nome/matrícula/Treinutrix e filtros por tipo/situação na lista de pessoas.
+- Renovação rápida de plano (+30 e +90 dias) direto na linha da pessoa.
 - **Pessoas:** Horário (janela de acesso), Validade (renovar/remover),
   Vincular Treinutrix, Foto, Inativar/Reativar e Excluir (gerência).
+
+## Compartilhar acesso (link + QR)
+- Botão **Compartilhar acesso** no topo (equipe) e no cartão do servidor em Sistema.
+- Modal mostra o endereço da rede local (`http://IP:porta`), seletor de IP quando a
+  máquina tem mais de um, **Copiar link** e **Baixar QR** (PNG).
+- QR gerado no navegador por `front/qr.js` (byte mode, correção M, versões 1–10),
+  sem chamada a serviço externo — funciona em rede isolada.
+- Validado por testes (`api/test/qr.test.js`) e decodificado com `zbarimg`.
+
+## PWA — aba Sistema (perfil gerência)
+- **Servidor local:** mostra o endereço para o celular (`http://IP:3001`) + todos
+  os IPs da máquina, uptime, contadores.
+- **Backup:** botão backup agora, lista com restaurar (confirmação).
 - **Notificações:** polling a cada 60s na aba, badge de pendentes, botão
   "Verificar agora", baixa manual com nome do responsável.
 

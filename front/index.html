@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f97316">
-<title>Catraca · Gestão de Acesso</title>
+<title>Academia · Gestão de alunos e acesso com catraca</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -182,6 +182,86 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
 .grid2>*{min-width:0}
 @media(max-width:1050px){.grid2{grid-template-columns:1fr}}
 
+/* ---------- refinamentos modernos ---------- */
+html{color-scheme:light}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --canvas:#0e0d0c; --surface:#1a1917; --surface-hover:#242220; --sunken:#211f1d;
+  --surface-alt:#201e1c;
+  --ink:#f7f6f5; --ink-2:#c9c5c1; --ink-3:#97918b;
+  --line:#2e2b28; --line-strong:#403c37;
+  --primary-soft:rgba(249,115,22,.16); --primary-text:#fdba74; --primary-border:rgba(249,115,22,.38);
+  --success-soft:rgba(34,197,94,.16); --danger-soft:rgba(239,68,68,.16);
+  --warning-soft:rgba(245,158,11,.16); --info-soft:rgba(14,165,233,.16);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --shadow-md:0 10px 30px -18px rgba(0,0,0,.8);
+}
+html[data-theme="dark"] .qr-box{background:#fff}
+html[data-theme="dark"] .avatar-inline,html[data-theme="dark"] .list-item,html[data-theme="dark"] .info-item,html[data-theme="dark"] tbody tr:hover{background:var(--surface-alt)}
+html[data-theme="dark"] .btn.ghost{background:var(--surface-alt)}
+
+.card{box-shadow:0 1px 2px rgba(28,25,23,.04),0 10px 28px -22px rgba(28,25,23,.5);transition:box-shadow .2s ease,transform .2s ease}
+.card:hover{box-shadow:0 2px 4px rgba(28,25,23,.05),0 18px 40px -24px rgba(28,25,23,.55)}
+.btn{background-image:linear-gradient(180deg,#fb923c,#f97316);border-color:#f97316;box-shadow:0 1px 2px rgba(249,115,22,.35);transition:transform .12s ease,box-shadow .18s ease,background-image .18s ease}
+.btn:hover{background-image:linear-gradient(180deg,#f97316,#ea580c);box-shadow:0 4px 14px -6px rgba(249,115,22,.6)}
+.btn:active{transform:translateY(1px)}
+.btn.ghost,.btn.danger{background-image:none;box-shadow:none}
+.topbar{position:relative;z-index:1;padding:0;margin:0 0 18px}
+html[data-theme="dark"] .topbar{background:none}
+.sidebar{background:linear-gradient(180deg,var(--surface),var(--surface) 60%,var(--surface-alt,var(--surface)))}
+.nav button.on{background:linear-gradient(90deg,var(--primary-soft),rgba(249,115,22,.04));box-shadow:inset 2px 0 0 var(--primary)}
+html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249,115,22,.22),rgba(249,115,22,.05))}
+.nav button{transition:background .15s ease,color .15s ease,transform .12s ease}
+.nav button:hover{transform:translateX(2px)}
+
+/* toolbar de busca */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.search{position:relative;flex:1;min-width:190px}
+.search input{padding-left:34px}
+.search .mag{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-3);font-size:14px;pointer-events:none}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{background:var(--surface);border:1px solid var(--line-strong);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--ink-2);cursor:pointer;transition:all .15s ease}
+.chip:hover{border-color:var(--primary-border);color:var(--primary-text)}
+.chip.on{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary-text)}
+
+/* gráfico */
+.chart{display:flex;align-items:flex-end;gap:8px;height:150px;padding:8px 0 0}
+.chart .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;height:100%}
+.chart .bar{width:100%;max-width:42px;border-radius:7px 7px 3px 3px;background:linear-gradient(180deg,#fdba74,#f97316);min-height:3px;transition:height .45s cubic-bezier(.2,.8,.2,1);box-shadow:0 2px 8px -4px rgba(249,115,22,.7)}
+.chart .bar.zero{background:var(--line);box-shadow:none}
+.chart .val{font-size:11px;font-weight:700;color:var(--ink-3)}
+.chart .lbl{font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em}
+.legend{display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--ink-3)}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
+
+/* toasts */
+.toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:90;max-width:min(360px,calc(100vw - 32px))}
+.toast{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--primary);border-radius:12px;padding:12px 14px;font-size:13px;box-shadow:0 12px 30px -16px rgba(28,25,23,.5);animation:toastIn .22s ease}
+.toast.ok{border-left-color:var(--success)}
+.toast.err{border-left-color:var(--danger)}
+.toast b{display:block;font-size:13px;margin-bottom:2px}
+.toast span{color:var(--ink-3);font-size:12px}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* presentes */
+.present{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.present:last-child{border-bottom:0}
+.present .t{font-size:13px;font-weight:600}
+.present .d{font-size:11px;color:var(--ink-3)}
+.icon-btn{background:var(--surface);border:1px solid var(--line);border-radius:10px;width:36px;height:36px;display:grid;place-items:center;cursor:pointer;font-size:15px;color:var(--ink-2);transition:all .15s ease}
+.icon-btn:hover{background:var(--surface-hover);border-color:var(--primary-border);color:var(--primary-text)}
+
+.modal-backdrop{position:fixed;inset:0;background:rgba(28,25,23,.5);display:grid;place-items:center;padding:18px;z-index:50;backdrop-filter:blur(2px)}
+.modal{background:var(--surface);border-radius:20px;border:1px solid var(--line);box-shadow:var(--shadow-lg,0 20px 50px rgba(28,25,23,.18));width:100%;max-width:420px;padding:22px;max-height:92vh;overflow:auto}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+.modal-head h2{margin:0;font-size:17px;letter-spacing:-.01em}
+.share-url{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;font-weight:600;color:var(--primary-text);background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:10px;padding:10px 12px;margin:12px 0;word-break:break-all;text-align:center}
+.qr-box{display:grid;place-items:center;padding:12px;background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:14px}
+.qr-box canvas{width:100%;max-width:260px;height:auto;image-rendering:pixelated}
+@media(max-width:600px){
+  .modal{padding:18px;border-radius:16px}
+}
+
 @media(max-width:600px){
   .hide-sm{display:none!important}
   .sidebar-foot > div:last-child{width:100%;justify-content:flex-end}
@@ -223,10 +303,10 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
       <div class="brand-mark">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="4" height="12" rx="1"/><rect x="17" y="6" width="4" height="12" rx="1"/><path d="M7 12h10"/></svg>
       </div>
-      <div class="brand-text"><b>Catraca</b><span>Gestão de acesso</span></div>
+      <div class="brand-text"><b>Academia</b><span>Gestão de alunos e acesso</span></div>
     </div>
-    <h1>Entrar na plataforma</h1>
-    <p class="sub">Use seu login de operador ou a matrícula de aluno.</p>
+    <h1>Gestão completa da academia</h1>
+    <p class="sub">Alunos, planos, frequência e controle de acesso integrado a catracas e leitores faciais.</p>
     <form onsubmit="event.preventDefault();entrar()">
       <label class="field"><span>Login</span>
         <input id="login" placeholder="admin ou matrícula" autocomplete="username">
@@ -249,7 +329,7 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
       <div class="brand-mark">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="4" height="12" rx="1"/><rect x="17" y="6" width="4" height="12" rx="1"/><path d="M7 12h10"/></svg>
       </div>
-      <div class="brand-text"><b>Catraca</b><span>Gestão de acesso</span></div>
+      <div class="brand-text"><b>Academia</b><span>Gestão de alunos e acesso</span></div>
     </a>
     <nav class="nav" id="tabs" aria-label="Menu principal"></nav>
     <div class="sidebar-foot">
@@ -258,6 +338,7 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
         <div class="who"><b id="quemNome">—</b><span id="quemPerfil">—</span></div>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Tema claro/escuro" aria-label="Alternar tema">🌙</button>
         <button class="btn ghost sm" style="flex:1" onclick="trocarSenha()">Senha</button>
         <button class="btn ghost sm" style="flex:1" onclick="sair()">Sair</button>
       </div>
@@ -276,12 +357,21 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
       <div class="grid2">
         <div>
           <div class="card">
-            <div class="card-head"><div><h2>Últimas entradas</h2><p class="sub">Movimentação de hoje</p></div>
+            <div class="card-head"><div><h2>Últimos 7 dias</h2><p class="sub">Alunos distintos por dia (frequência)</p></div>
               <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarInicio()">Atualizar</button></div></div>
+            <div class="chart" id="ovChart"></div>
+            <div class="legend"><span><i style="background:#f97316"></i>alunos que frequentaram</span></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h2>Últimas entradas</h2><p class="sub">Movimentação de hoje</p></div></div>
             <div class="table-wrap"><table><thead><tr><th>Hora</th><th>Pessoa</th><th>Método</th><th>Status</th></tr></thead><tbody id="ovEntradas"></tbody></table></div>
           </div>
         </div>
         <div>
+          <div class="card">
+            <div class="card-head"><div><h2>Presentes agora</h2><p class="sub">Quem entrou e não saiu</p></div><span class="badge accent" id="ovDentro">0</span></div>
+            <div id="ovPresentes"></div>
+          </div>
           <div class="card">
             <div class="card-head"><div><h2>Pendências</h2><p class="sub">O que precisa de atenção</p></div></div>
             <div class="list" id="ovPend"></div>
@@ -302,9 +392,9 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
           <div id="plano"></div>
         </div>
         <div class="card">
-          <div class="card-head"><div><h2>Minha frequência</h2><p class="sub">Últimos acessos</p></div></div>
+          <div class="card-head"><div><h2>Dias frequentados</h2><p class="sub">Cada dia conta uma vez, mesmo com várias entradas</p></div></div>
           <div class="kpis" id="freqStats" style="margin-bottom:14px"></div>
-          <div class="table-wrap"><table><thead><tr><th>Data</th><th>Status</th><th>Motivo</th></tr></thead><tbody id="freqList"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Data</th><th>Dia</th><th></th></tr></thead><tbody id="freqList"></tbody></table></div>
         </div>
       </div>
     </section>
@@ -345,9 +435,21 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
           </div>
 
           <div class="card">
-            <div class="card-head"><div><h2>Catracas</h2><p class="sub">Conexão com o equipamento</p></div>
+            <div class="card-head"><div><h2>Catracas e controladores</h2><p class="sub">Topdata, leitor facial e controladores HTTP</p></div>
               <div class="card-head-actions"><button class="btn ghost sm" onclick="heartbeat()">Testar</button></div></div>
-            <div class="list" id="devices"></div>
+            <div class="list" id="devices" style="margin-bottom:14px"></div>
+            <details>
+              <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:10px">Adicionar equipamento</summary>
+              <div class="form-grid">
+                <input id="devNome" placeholder="Nome (ex.: Entrada recepção)">
+                <select id="devDriver" onchange="atualizarModelos()"></select>
+                <select id="devModelo"></select>
+                <input id="devIp" placeholder="IP (ex.: 192.168.0.100)">
+                <input id="devPorta" placeholder="Porta (3570 / 80)">
+                <div class="form-actions"><button class="btn sm" onclick="adicionarDevice()">Cadastrar</button></div>
+              </div>
+              <p class="help" id="catalogoHelp">Carregando catálogo…</p>
+            </details>
           </div>
 
           <div class="card">
@@ -375,7 +477,19 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
 
       <div class="card">
         <div class="card-head"><div><h2>Pessoas</h2><p class="sub">Alunos, personais e visitantes</p></div><span id="inadBadge"></span></div>
+        <div class="toolbar">
+          <div class="search"><span class="mag">⌕</span><input id="pessoaBusca" placeholder="Buscar por nome, matrícula ou Treinutrix" oninput="renderPessoas()"></div>
+          <div class="chips" id="pessoaChips">
+            <button class="chip on" data-f="TODOS" onclick="filtrarPessoas('TODOS')">Todos</button>
+            <button class="chip" data-f="ALUNO" onclick="filtrarPessoas('ALUNO')">Alunos</button>
+            <button class="chip" data-f="PERSONAL" onclick="filtrarPessoas('PERSONAL')">Personais</button>
+            <button class="chip" data-f="VISITANTE" onclick="filtrarPessoas('VISITANTE')">Visitantes</button>
+            <button class="chip" data-f="ATRASO" onclick="filtrarPessoas('ATRASO')">Em atraso</button>
+            <button class="chip" data-f="INATIVO" onclick="filtrarPessoas('INATIVO')">Inativos</button>
+          </div>
+        </div>
         <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Tipo</th><th>Validade</th><th>Situação</th><th></th></tr></thead><tbody id="pessoas"></tbody></table></div>
+        <p class="help" id="pessoasResumo"></p>
       </div>
 
       <div class="card">
@@ -401,19 +515,38 @@ pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;pad
     </section>
 
     <footer class="footer">
-      <span class="fine">Catraca · gestão de acesso local · Topdata Fit 4</span>
+      <span class="fine">Gestão de academia com controle de acesso · Topdata Fit 4, leitor facial e controladores compatíveis</span>
       <a class="tnx" href="https://treinutrix.com" target="_blank" rel="noopener"><span class="dotmark"></span><b>Treinutrix</b> — Sua musculação mais inteligente</a>
     </footer>
   </main>
 </div>
 
+<!-- MODAL: COMPARTILHAR ACESSO -->
+<div id="shareModal" class="modal-backdrop hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+    <div class="modal-head">
+      <h2 id="shareTitle">Compartilhar acesso</h2>
+      <button class="btn-icon" onclick="fecharShare()" aria-label="Fechar">×</button>
+    </div>
+    <p class="help" style="margin-top:0">Aluno ou operador abre este endereço no celular, na mesma rede Wi-Fi, e entra com login e senha.</p>
+    <select id="shareIps" onchange="desenharShare()"></select>
+    <div class="share-url" id="shareUrl">—</div>
+    <div class="qr-box"><canvas id="shareQr" width="260" height="260"></canvas></div>
+    <div class="form-actions">
+      <button class="btn" onclick="copiarLink()">Copiar link</button>
+      <button class="btn ghost" onclick="baixarQr()">Baixar QR</button>
+    </div>
+  </div>
+</div>
+
+<script src="/qr.js"></script>
 <script>
 const API = ''; // mesma origem: a API serve este painel
 const $ = (id) => document.getElementById(id);
 let sess = JSON.parse(localStorage.getItem('pwa_session') || 'null');
 
 const PAGINAS = {
-  inicio: ['Início', 'Visão geral da academia'],
+  inicio: ['Início', 'Alunos, acessos, planos e recepção'],
   oper: ['Operação', 'Acessos, cadastros e equipamentos'],
   sistema: ['Sistema', 'Servidor, backup e pessoas'],
   aluno: ['Meu acesso', 'Seu plano e frequência'],
@@ -421,6 +554,31 @@ const PAGINAS = {
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ---------- tema e avisos ----------
+function aplicarTema(t) {
+  document.documentElement.dataset.theme = t;
+  localStorage.setItem('pwa_theme', t);
+  const b = $('themeBtn');
+  if (b) b.textContent = t === 'dark' ? '☀' : '🌙';
+}
+function toggleTheme() {
+  aplicarTema(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+}
+function toast(titulo, msg = '', tipo = 'ok') {
+  const box = $('toasts');
+  if (!box) return;
+  const el = document.createElement('div');
+  el.className = 'toast ' + tipo;
+  el.innerHTML = `<b>${esc(titulo)}</b>${msg ? `<span>${esc(msg)}</span>` : ''}`;
+  box.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'all .25s ease';
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(8px)';
+    setTimeout(() => el.remove(), 260);
+  }, 3800);
 }
 function hora(iso) {
   if (!iso) return '—';
@@ -526,6 +684,15 @@ function entraUI() {
     tabs.appendChild(b);
   });
   mostrar(abas[0][0]);
+  const top = $('topActions');
+  if (top && sess.perfil !== 'aluno') {
+    top.innerHTML = '';
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.textContent = 'Compartilhar acesso';
+    b.onclick = abrirShare;
+    top.appendChild(b);
+  }
 }
 function mostrar(id) {
   for (const v of ['aluno', 'oper', 'sistema', 'inicio']) {
@@ -546,34 +713,62 @@ function mostrarNav(id) {
 async function entrar() {
   try {
     const r = await (await fetch(API + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login: $('login').value.trim(), senha: $('senha').value }) })).json();
-    if (!r.token) return alert(r.error || 'Falha no login.');
+    if (!r.token) return toast('Não foi possível entrar', r.error || 'Verifique login e senha', 'err');
     sess = r;
     localStorage.setItem('pwa_session', JSON.stringify(sess));
     // Recarrega para montar apenas a interface permitida ao perfil.
     location.reload();
-  } catch (e) { alert('API fora do ar.'); }
+  } catch (e) { toast('API fora do ar', 'Verifique se o servidor está rodando', 'err'); }
 }
 function sair() { sess = null; localStorage.removeItem('pwa_session'); location.reload(); }
 async function trocarSenha() {
   const atual = prompt('Senha atual:'); if (atual === null) return;
   const nova = prompt('Nova senha (mín. 4):'); if (!nova) return;
-  try { await jpost('/api/auth/change-password', { atual, nova }); alert('Senha atualizada.'); }
-  catch (e) { alert('Erro: ' + e.message); }
+  try { await jpost('/api/auth/change-password', { atual, nova }); toast('Senha atualizada', 'Use a nova senha no próximo acesso'); }
+  catch (e) { toast('Falha ao trocar senha', e.message, 'err'); }
 }
 
 // ---------- início ----------
+function desenharSemana(semana) {
+  const el = $('ovChart');
+  if (!el) return;
+  const max = Math.max(1, ...semana.map(d => d.alunos || 0));
+  const dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  el.innerHTML = semana.map(d => {
+    const alunos = d.alunos || 0;
+    const alt = alunos ? Math.max(8, Math.round((alunos / max) * 100)) : 0;
+    const label = dias[new Date(d.dia + 'T12:00:00').getDay()];
+    return `<div class="col" title="${d.dia}: ${alunos} aluno(s) · ${d.liberados} acesso(s)">
+      <span class="val">${alunos || ''}</span>
+      <div style="width:100%;display:flex;justify-content:center;align-items:flex-end;height:100%">
+        <div class="bar ${alunos ? '' : 'zero'}" style="height:${alt}%"></div>
+      </div>
+      <span class="lbl">${label}</span>
+    </div>`;
+  }).join('');
+}
 async function carregarInicio() {
   const [o, persons] = await Promise.all([jget('/api/overview'), jget('/api/persons')]);
   window.__pessoasObj = Object.fromEntries(persons.map(p => [p.id, p]));
   window.__pessoas = Object.fromEntries(persons.map(p => [p.id, p.nome]));
   const k = o.kpis;
   $('ovKpis').innerHTML = `
-    <div class="kpi info"><div class="v">${k.eventosHoje}</div><div class="l">Eventos hoje</div></div>
-    <div class="kpi ok"><div class="v">${k.liberados}</div><div class="l">Liberados</div></div>
+    <div class="kpi info"><div class="v">${k.alunosHoje ?? 0}</div><div class="l">Alunos hoje</div></div>
+    <div class="kpi ok"><div class="v">${k.liberados}</div><div class="l">Acessos liberados</div></div>
     <div class="kpi bad"><div class="v">${k.negados}</div><div class="l">Negados</div></div>
     <div class="kpi accent"><div class="v">${k.presentes}</div><div class="l">Presentes</div></div>
     <div class="kpi warn"><div class="v">${k.inadimplentes}</div><div class="l">Inadimplentes</div></div>
     <div class="kpi"><div class="v">${k.syncPendente}</div><div class="l">Sync pendente</div></div>`;
+  desenharSemana(o.semana || []);
+
+  const dentro = o.presentes || [];
+  $('ovDentro').textContent = dentro.length;
+  $('ovPresentes').innerHTML = dentro.length ? dentro.slice(0, 8).map(p => `
+    <div class="present">
+      <div class="stack">${avatarHtml(p.personId || '', 30)}<div><div class="t">${esc(nomePorId(p.personId))}</div><div class="d">entrou ${hora(p.timestamp)}</div></div></div>
+      <span class="badge ok dot">dentro</span>
+    </div>`).join('') : '<div class="empty">Ninguém na academia agora.</div>';
+
 
   const entradas = o.ultimasEntradas || [];
   $('ovEntradas').innerHTML = entradas.length ? entradas.map(e => `
@@ -637,32 +832,69 @@ async function carregarAluno() {
     </div>
     ${vencido || inativo ? '<p class="help">Seu acesso está bloqueado. Fale com a recepção para regularizar.</p>' : '<p class="help">Apresente seu rosto no leitor para entrar.</p>'}
     <div class="form-actions" style="margin-top:10px"><button class="btn ghost sm" onclick="trocarFoto('${esc(p.id)}')">Atualizar minha foto</button></div>`;
-  const evs = (await jget('/api/events')).filter(e => e.personId === sess.sub);
+  const freq = await jget('/api/frequency');
   $('freqStats').innerHTML = `
-    <div class="kpi ok"><div class="v">${evs.filter(e => e.decisao === 'ALLOW').length}</div><div class="l">Entradas</div></div>
-    <div class="kpi bad"><div class="v">${evs.filter(e => e.decisao === 'DENY').length}</div><div class="l">Negados</div></div>`;
-  $('freqList').innerHTML = evs.slice(-10).reverse().map(e => `
-    <tr><td class="mono muted">${dataCurta(e.timestamp)} ${hora(e.timestamp)}</td><td>${badgeDecisao(e.decisao)}</td><td class="muted">${esc(motivoHumano(e.motivo))}</td></tr>`).join('')
-    || '<tr><td colspan="3"><div class="empty">Nenhum acesso registrado ainda.</div></td></tr>';
+    <div class="kpi ok"><div class="v">${freq.diasNoMes}</div><div class="l">Dias no mês</div></div>
+    <div class="kpi accent"><div class="v">${freq.ultimos30}</div><div class="l">Últimos 30 dias</div></div>
+    <div class="kpi info"><div class="v">${freq.totalDias}</div><div class="l">Total de dias</div></div>`;
+  const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  const ultimos = (freq.dias || []).slice(-10).reverse();
+  $('freqList').innerHTML = ultimos.map(d => {
+    const data = new Date(d + 'T12:00:00');
+    return `<tr><td class="mono">${data.toLocaleDateString('pt-BR')}</td><td class="muted" style="text-transform:capitalize">${DIAS[data.getDay()]}</td><td style="text-align:right"><span class="badge ok dot">frequentou</span></td></tr>`;
+  }).join('') || '<tr><td colspan="3"><div class="empty">Nenhum dia registrado ainda.</div></td></tr>';
 }
 
 // ---------- operação ----------
+let CATALOGO = [];
 async function carregarOper() {
   $('edgeUrl').value = `http://${location.hostname}:3002`;
+  await carregarCatalogo();
   await loadDevices(); await load(); await loadSync();
 }
 async function heartbeat() {
   const d = (window.__devices || [])[0];
-  if (!d) return alert('Nenhum dispositivo cadastrado.');
+  if (!d) return toast('Sem equipamento', 'Cadastre uma catraca antes', 'err');
   await jpost(`/api/devices/${encodeURIComponent(d.id)}/heartbeat`, {});
   await loadDevices();
+}
+async function carregarCatalogo() {
+  try {
+    CATALOGO = await jget('/api/device-catalog');
+    $('devDriver').innerHTML = CATALOGO.map(d => `<option value="${d.id}">${esc(d.nome)} — ${esc(d.fabricante)}</option>`).join('');
+    $('catalogoHelp').innerHTML = CATALOGO.map(d =>
+      `<b>${esc(d.nome)}</b> · ${esc(d.modelos.join(', '))} · ${esc(d.transporte)} · ${esc(d.requisitos)}`).join('<br>');
+    atualizarModelos();
+  } catch (e) { if ($('catalogoHelp')) $('catalogoHelp').textContent = 'catálogo indisponível'; }
+}
+function atualizarModelos() {
+  const d = CATALOGO.find(x => x.id === $('devDriver').value);
+  if (!d) return;
+  $('devModelo').innerHTML = d.modelos.map(m => `<option>${esc(m)}</option>`).join('');
+  $('devPorta').value = d.id === 'generic_http' ? '80' : (d.id === 'simulator' ? '' : '3570');
+  $('devIp').placeholder = d.id === 'simulator' ? 'não necessário' : 'ex.: 192.168.0.100';
+}
+async function adicionarDevice() {
+  const body = {
+    nome: $('devNome').value.trim(), driver: $('devDriver').value,
+    modelo: $('devModelo').value, ip: $('devIp').value.trim(),
+    porta: Number($('devPorta').value) || undefined,
+  };
+  if (!body.nome) return toast('Nome obrigatório', 'Informe o nome do equipamento', 'err');
+  try {
+    const d = await jpost('/api/devices', body);
+    toast('Equipamento cadastrado', `${d.nome} · ${d.modelo}`);
+    $('devNome').value = ''; $('devIp').value = '';
+    loadDevices();
+  } catch (e) { toast('Falha ao cadastrar', e.message, 'err'); }
 }
 async function loadDevices() {
   const list = await jget('/api/devices');
   window.__devices = list;
   $('devices').innerHTML = list.map(d => `
-    <div class="list-item"><div><div class="t">${esc(d.nome)}</div><div class="d">${esc(d.ip)}:${esc(d.porta)} · ${esc(d.tipo)}</div></div>
-    ${d.online ? '<span class="badge ok dot">online</span>' : '<span class="badge bad dot">offline</span>'}</div>`).join('') || '<div class="empty">Nenhum dispositivo.</div>';
+    <div class="list-item"><div><div class="t">${esc(d.nome)}</div>
+    <div class="d">${esc(d.fabricante || '—')} · ${esc(d.modelo || d.tipo || '')} · ${esc(d.driver || 'topdata_easyinner')} · ${esc(d.ip)}:${esc(d.porta)}</div></div>
+    ${d.online ? '<span class="badge ok dot">online</span>' : '<span class="badge bad dot">offline</span>'}</div>`).join('') || '<div class="empty">Nenhum equipamento cadastrado.</div>';
 }
 async function loadSync() {
   try {
@@ -697,26 +929,29 @@ async function load() {
 const edgeBase = () => ($('edgeUrl').value || `http://${location.hostname}:3002`);
 async function identify() {
   const r = await (await fetch(`${edgeBase()}/sim/identify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ person_id: $('person').value, score: Number($('score').value) }) })).json();
-  alert(r.decisao ? `Acesso ${r.decisao.allow ? 'liberado' : 'negado'} — ${r.decisao.motivo}` : 'Falha na simulação.');
+  if (r.decisao) toast(r.decisao.allow ? 'Acesso liberado' : 'Acesso negado', r.decisao.motivo || '', r.decisao.allow ? 'ok' : 'err');
+  else toast('Falha na simulação', '', 'err');
   load();
 }
 async function release() {
-  const r = await jpost('/api/release', { device_id: ($('devices') && (window.__devices || [])[0] ? window.__devices[0].id : 'dev_fit4_01'), person_id: $('person').value || null, motivo: 'MANUAL_OPERADOR' });
-  alert(r.display_msg || 'Liberado pelo operador.'); load(); loadSync();
+  const dev = (window.__devices || [])[0];
+  const r = await jpost('/api/release', { device_id: dev ? dev.id : 'dev_fit4_01', person_id: $('person').value || null, motivo: 'MANUAL_OPERADOR' });
+  toast('Liberação manual', r.display_msg || 'Liberado pelo operador', r.forwarded ? 'ok' : 'warn');
+  load(); loadSync();
 }
 async function cadastrarPessoa() {
-  const nome = $('visNome').value.trim(); if (!nome) return alert('Informe o nome.');
+  const nome = $('visNome').value.trim(); if (!nome) return toast('Nome obrigatório', 'Informe o nome da pessoa', 'err');
   const tipo = $('visTipo').value;
   const treinutrix = $('visTreinutrix').value.trim() || null;
   const foto = $('visFoto').dataset.data || null;
   const fim = tipo === 'VISITANTE' ? new Date(Date.now() + 864e5).toISOString() : null;
   try {
     const p = await jpost('/api/persons', { nome, tipo, treinutrix, foto, ativo: true, validadeFim: fim });
-    alert(`${tipo} cadastrado: matrícula ${p.matricula} (cartão ${p.enrollid}).` + (fim ? ' Válido até ' + dataCurta(fim) : '') + `\nSenha inicial: ${p.matricula}`);
+    toast('Pessoa cadastrada', `${p.nome} · ${tipo} · matrícula ${p.matricula} · senha inicial ${p.matricula}` + (fim ? ' · válido até ' + dataCurta(fim) : ''));
     $('visNome').value = ''; $('visTreinutrix').value = ''; $('visFoto').value = ''; $('visFoto').dataset.data = '';
     $('visFotoPreview').innerHTML = '';
     load();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Falha ao cadastrar', e.message, 'err'); }
 }
 
 // Foto: prévia no cadastro e troca em cadastro existente (inclusive pelo aluno).
@@ -724,7 +959,7 @@ let fotoTarget = null;
 function trocarFoto(id) { fotoTarget = id; const el = $('fotoFile'); el.value = ''; el.click(); }
 async function enviarFoto(dataUrl) {
   await jpost(`/api/persons/${encodeURIComponent(fotoTarget)}/photo`, { foto: dataUrl });
-  alert('Foto atualizada.');
+  toast('Foto atualizada', 'Já aparece no painel e será enviada ao leitor');
   if (sess.perfil === 'aluno') carregarAluno(); else carregarSistema();
 }
 function ligarFotos() {
@@ -736,14 +971,14 @@ function ligarFotos() {
       const data = await comprimirFoto(f);
       input.dataset.data = data;
       $('visFotoPreview').innerHTML = `<img src="${data}" alt="prévia da foto"><span class="muted">${Math.round(data.length * 0.75 / 1024)} KB</span>`;
-    } catch (e) { alert(e.message); }
+    } catch (e) { toast('Foto inválida', e.message, 'err'); }
   });
   const file = $('fotoFile');
   if (file) file.addEventListener('change', async () => {
     const f = file.files[0];
     if (!f || !fotoTarget) return;
     try { await enviarFoto(await comprimirFoto(f)); }
-    catch (e) { alert('Erro: ' + e.message); }
+    catch (e) { toast('Falha ao enviar foto', e.message, 'err'); }
   });
 }
 ligarFotos();
@@ -768,7 +1003,7 @@ async function carregarSistema() {
   $('sysinfo').innerHTML = `
     <div class="ip-hero">
       <div><div class="url">${esc(url)}</div><div class="hint">Abra este endereço no celular conectado ao mesmo Wi-Fi.</div></div>
-      <button class="btn ghost sm" onclick="navigator.clipboard&&navigator.clipboard.writeText('${esc(url)}')">Copiar</button>
+      <div class="card-head-actions"><button class="btn ghost sm" onclick="navigator.clipboard&&navigator.clipboard.writeText('${esc(url)}')">Copiar</button><button class="btn sm" onclick="abrirShare()">Compartilhar</button></div>
     </div>
     <div class="info-grid">
       <div class="info-item"><div class="k">Máquina</div><div class="v">${esc(s.hostname)}</div></div>
@@ -788,17 +1023,40 @@ async function carregarSistema() {
   await loadUsuarios();
   await loadBackups(); await loadNotifications();
 }
+let PESSOAS_CACHE = [];
+let PESSOAS_INAD = new Set();
+let filtroPessoa = 'TODOS';
+
 async function loadPessoas(inad) {
-  const list = await jget('/api/persons');
-  window.__pessoas = Object.fromEntries(list.map(p => [p.id, p.nome]));
-  const vencidas = new Set((inad || []).map(p => p.id));
+  PESSOAS_CACHE = await jget('/api/persons');
+  window.__pessoasObj = Object.fromEntries(PESSOAS_CACHE.map(p => [p.id, p]));
+  window.__pessoas = Object.fromEntries(PESSOAS_CACHE.map(p => [p.id, p.nome]));
+  PESSOAS_INAD = new Set((inad || []).map(p => p.id));
+  renderPessoas();
+}
+function filtrarPessoas(f) {
+  filtroPessoa = f;
+  document.querySelectorAll('#pessoaChips .chip').forEach(c => c.classList.toggle('on', c.dataset.f === f));
+  renderPessoas();
+}
+function renderPessoas() {
+  const q = ($('pessoaBusca') ? $('pessoaBusca').value : '').toLowerCase().trim();
+  const list = PESSOAS_CACHE.filter(p => {
+    if (q && !`${p.nome} ${p.matricula} ${p.treinutrix || ''}`.toLowerCase().includes(q)) return false;
+    if (filtroPessoa === 'TODOS') return true;
+    if (filtroPessoa === 'ATRASO') return PESSOAS_INAD.has(p.id);
+    if (filtroPessoa === 'INATIVO') return p.ativo === false;
+    return (p.tipo || 'ALUNO') === filtroPessoa;
+  });
   $('pessoas').innerHTML = list.map(p => `
     <tr>
       <td><div class="stack">${avatarHtml(p, 30)}<div><b>${esc(p.nome)}</b><div class="muted">${esc(p.matricula)} · cartão ${esc(p.enrollid)} · Treinutrix: ${treinutrixLink(p.treinutrix)}</div></div></div></td>
       <td>${badgeTipo(p.tipo)}</td>
       <td class="mono muted">${p.validadeFim ? dataCurta(p.validadeFim) : '—'}</td>
-      <td>${!p.ativo ? '<span class="badge neutral dot">inativo</span>' : vencidas.has(p.id) ? '<span class="badge bad dot">em atraso</span>' : '<span class="badge ok dot">ativo</span>'}</td>
+      <td>${!p.ativo ? '<span class="badge neutral dot">inativo</span>' : PESSOAS_INAD.has(p.id) ? '<span class="badge bad dot">em atraso</span>' : '<span class="badge ok dot">ativo</span>'}</td>
       <td style="text-align:right;white-space:nowrap">
+        <button class="btn ghost sm" onclick="renovar('${esc(p.id)}', 30)" title="Renovar +30 dias">+30d</button>
+        <button class="btn ghost sm" onclick="renovar('${esc(p.id)}', 90)" title="Renovar +90 dias">+90d</button>
         <button class="btn ghost sm" onclick="trocarFoto('${esc(p.id)}')">Foto</button>
         <button class="btn ghost sm" onclick="editarHorario('${esc(p.id)}')">Horário</button>
         <button class="btn ghost sm" onclick="renovarValidade('${esc(p.id)}')">Validade</button>
@@ -806,7 +1064,20 @@ async function loadPessoas(inad) {
         <button class="btn ${p.ativo ? 'danger' : 'ghost'} sm" onclick="toggleAtivo('${esc(p.id)}', ${p.ativo ? 'false' : 'true'})">${p.ativo ? 'Inativar' : 'Reativar'}</button>
         ${sess.perfil === 'gerencia' ? `<button class="btn danger sm" onclick="excluirPessoa('${esc(p.id)}', '${esc((p.nome || '').replace(/'/g, ''))}')">Excluir</button>` : ''}
       </td>
-    </tr>`).join('') || '<tr><td colspan="5"><div class="empty">Nenhuma pessoa cadastrada.</div></td></tr>';
+    </tr>`).join('') || '<tr><td colspan="5"><div class="empty">Nenhuma pessoa encontrada.</div></td></tr>';
+  if ($('pessoasResumo')) $('pessoasResumo').textContent = `${list.length} de ${PESSOAS_CACHE.length} pessoa(s)`;
+}
+async function renovar(id, dias) {
+  const p = PESSOAS_CACHE.find(x => x.id === id);
+  if (!p) return;
+  const hoje = new Date();
+  const base = p.validadeFim && new Date(p.validadeFim) > hoje ? new Date(p.validadeFim) : hoje;
+  base.setDate(base.getDate() + dias);
+  try {
+    await jpatch(`/api/persons/${encodeURIComponent(id)}`, { validadeFim: base.toISOString() });
+    toast('Plano atualizado', `${p.nome} renovado até ${dataCurta(base)}`);
+    carregarSistema();
+  } catch (e) { toast('Falha ao renovar', e.message, 'err'); }
 }
 
 // Máscara oficial: dom=1 seg=2 ter=4 qua=8 qui=16 sex=32 sab=64.
@@ -829,7 +1100,7 @@ async function editarHorario(id) {
     const dias = prompt('Dias (1=dom 2=seg 3=ter 4=qua 5=qui 6=sex 7=sáb). Ex.: 23456 para seg-sex:', diasParaTexto(atual.diasSemana));
     if (dias === null) return;
     const mask = textoParaDias(dias);
-    if (mask === null) return alert('Informe ao menos um dia (1 a 7).');
+    if (mask === null) return toast('Dias inválidos', 'Informe ao menos um dia (1 a 7)', 'err');
     const ini = prompt('Hora inicial (HH:MM):', atual.horaIni);
     if (ini === null) return;
     const fim = prompt('Hora final (HH:MM):', atual.horaFim);
@@ -838,9 +1109,9 @@ async function editarHorario(id) {
     await jput(`/api/persons/${encodeURIComponent(id)}/rules`, {
       rules: devices.map(d => ({ deviceId: d.id, diasSemana: mask, horaIni: ini.trim(), horaFim: fim.trim() })),
     });
-    alert('Horário atualizado.');
+    toast('Horário atualizado', 'Vale para todos os equipamentos');
     carregarSistema();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro no horário', e.message, 'err'); }
 }
 async function renovarValidade(id) {
   const sug = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
@@ -848,20 +1119,21 @@ async function renovarValidade(id) {
   if (fim === null) return;
   try {
     await jpatch(`/api/persons/${encodeURIComponent(id)}`, { validadeFim: fim.trim() || null });
-    alert(fim.trim() ? 'Validade atualizada.' : 'Vencimento removido.');
+    toast('Validade atualizada', fim.trim() ? `Vence em ${dataCurta(fim.trim())}` : 'Vencimento removido');
     carregarSistema();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro na validade', e.message, 'err'); }
 }
 async function excluirPessoa(id, nome) {
   if (!confirm(`Excluir ${nome}? Cadastro, foto, regras e acesso no leitor serão removidos. O histórico de eventos é mantido.`)) return;
   try {
     await jdel(`/api/persons/${encodeURIComponent(id)}`);
-    alert('Cadastro excluído.');
+    toast('Cadastro excluído', nome);
     carregarSistema();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Erro ao excluir', e.message, 'err'); }
 }
 async function toggleAtivo(id, ativo) {
   await jpatch(`/api/persons/${encodeURIComponent(id)}`, { ativo });
+  toast(ativo ? 'Cadastro reativado' : 'Cadastro inativado', ativo ? 'Volta a contar nas métricas' : 'Não aparece mais como inadimplente');
   carregarSistema();
 }
 async function vincularTreinutrix(id, atual) {
@@ -881,13 +1153,13 @@ async function loadUsuarios() {
 }
 async function criarUsuario() {
   const nome = $('usrNome').value.trim(), login = $('usrLogin').value.trim(), senha = $('usrSenha').value, perfil = $('usrPerfil').value;
-  if (!login || !senha) return alert('Login e senha obrigatórios.');
+  if (!login || !senha) return toast('Dados incompletos', 'Login e senha são obrigatórios', 'err');
   try {
     const u = await jpost('/api/users', { nome, login, senha, perfil });
-    alert('Operador ' + u.login + ' criado.');
+    toast('Operador criado', u.login + ' · ' + u.perfil);
     $('usrNome').value = ''; $('usrLogin').value = ''; $('usrSenha').value = '';
     loadUsuarios();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) { toast('Falha ao criar operador', e.message, 'err'); }
 }
 async function loadBackups() {
   const list = await jget('/api/backup');
@@ -898,13 +1170,13 @@ async function loadBackups() {
 }
 async function backupAgora() {
   const r = await jpost('/api/backup', {});
-  alert('Backup criado: ' + r.file);
+  toast('Backup criado', r.file);
   carregarSistema();
 }
 async function restoreBackup(file) {
   if (!confirm('Restaurar ' + file + '? Os dados atuais serão substituídos.')) return;
   const r = await jpost('/api/backup/restore', { file });
-  alert('Restaurado de ' + new Date(r.at).toLocaleString('pt-BR'));
+  toast('Backup restaurado', new Date(r.at).toLocaleString('pt-BR'));
   carregarSistema();
 }
 async function loadNotifications() {
@@ -921,6 +1193,7 @@ async function loadNotifications() {
 async function ackNotif(id) {
   const por = $('respNome').value.trim() || 'gerente';
   await jpost(`/api/notifications/${id}/ack`, { por });
+  toast('Notificação resolvida', 'Baixa registrada por ' + por);
   loadNotifications();
 }
 async function avaliarNotif() {
@@ -928,12 +1201,71 @@ async function avaliarNotif() {
   loadNotifications();
 }
 
+// ---------- compartilhar acesso (link + QR) ----------
+let shareUrls = [];
+async function abrirShare() {
+  const s = await jget('/api/system').catch(() => null);
+  const port = location.port || '3001';
+  const ips = (s && s.ips ? s.ips : []).map(i => i.address);
+  const urls = [...new Set(ips.map(ip => `http://${ip}:${port}`))];
+  if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') urls.unshift(location.origin);
+  if (!urls.length) urls.push(location.origin);
+  shareUrls = urls;
+  $('shareIps').innerHTML = urls.map((u, i) => `<option value="${i}">${esc(u)}</option>`).join('');
+  $('shareIps').value = '0';
+  desenharShare();
+  $('shareModal').classList.remove('hidden');
+}
+function desenharShare() {
+  const url = shareUrls[Number($('shareIps').value)] || location.origin;
+  $('shareUrl').textContent = url;
+  $('shareUrl').dataset.url = url;
+  try {
+    const qr = QR.qrMatrix(url);
+    const quiet = 4;
+    const scale = Math.max(3, Math.floor(280 / (qr.size + quiet * 2)));
+    const dim = (qr.size + quiet * 2) * scale;
+    const canvas = $('shareQr');
+    canvas.width = dim; canvas.height = dim;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, dim, dim);
+    ctx.fillStyle = '#1c1917';
+    for (let r = 0; r < qr.size; r++) for (let c = 0; c < qr.size; c++) {
+      if (qr.modules[r][c]) ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
+    }
+  } catch (e) { toast('Falha no QR', e.message, 'err'); }
+}
+function fecharShare() { $('shareModal').classList.add('hidden'); }
+async function copiarLink() {
+  const url = $('shareUrl').dataset.url || $('shareUrl').textContent;
+  try {
+    if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(url);
+    else {
+      const ta = document.createElement('textarea');
+      ta.value = url; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    toast('Link copiado', url);
+  } catch (e) { toast('Não foi possível copiar', 'Selecione o link manualmente', 'err'); }
+}
+function baixarQr() {
+  const url = $('shareUrl').dataset.url || '';
+  const a = document.createElement('a');
+  a.href = $('shareQr').toDataURL('image/png');
+  a.download = 'qrcode-acesso.png';
+  a.click();
+}
+$('shareModal').addEventListener('click', (e) => { if (e.target.id === 'shareModal') fecharShare(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharShare(); });
+
 // ---------- boot ----------
+aplicarTema(localStorage.getItem('pwa_theme') || 'light');
 entraUI();
-window.addEventListener('unhandledrejection', e => alert('Erro: ' + ((e.reason && e.reason.message) || e.reason)));
+window.addEventListener('unhandledrejection', e => toast('Erro inesperado', String((e.reason && e.reason.message) || e.reason), 'err'));
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 </script>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 </body>
 </html>

@@ -1,6 +1,9 @@
 # wsi-topdata-catraca-painel
 
-Painel de controle de acesso para catraca Topdata Fit 4 com leitor facial.
+Sistema de gestão de academia com controle de acesso integrado a catracas:
+alunos, planos, frequência, recepção e catraca **Topdata Fit 4** — com suporte
+também a outras catracas Topdata (Revolution 4, Box 4, PNE 4), leitor facial e
+controladores HTTP genéricos.
 
 Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces
 + simuladores. O teste físico entra só na validação final.
@@ -23,14 +26,19 @@ front (HTML) <-> api (Node, :3001) <-> store persistido (data/state.json)
   Zero dependências, roda em Linux e Windows com Node 18+.
 - `edge-catraca/` — serviço de borda: heartbeat, worker de sincronização da
   fila (envia `setuserinfo`/`deleteuser` ao leitor), decisão e abertura do giro.
+  No Linux usa simuladores; no Windows usa os adaptadores reais (bridge
+  EasyInner + servidor WebSocket do facial) sem mudar o motor.
 - `front/` — PWA servido pela própria API (um único IP local, ex.
-  `http://192.168.0.10:3001`), login por perfil, Horário/Validade por pessoa.
-- `backups/` — snapshots JSON + fotos (retidos 7, ignorados no git).
+  `http://192.168.0.10:3001`), tema claro/escuro, login por perfil, KPIs,
+  gráfico semanal, presentes agora, Horário/Validade por pessoa e
+  compartilhamento por link/QR.
+- `backups/` — snapshots JSON + fotos (retidos 7, ignorados no git). Ver
+  `docs/PAINEL-SISTEMA.md`.
 - `data/` — estado persistido (`state.json`), log de acessos (`events.jsonl`)
   e fotos (`data/photos/`). Fora do git; entra no backup.
 - `prisma/` — modelo de dados de referência para portar ao MySQL/Prisma do
   `treina.ai-api`.
-- `docs/` — plano, contratos, roteiros de instalação, revisão.
+- `docs/` — plano, contratos, drivers de catraca, instalação e revisão.
 
 ## Rodar no Linux (sem catraca)
 
@@ -117,13 +125,18 @@ ver `docs/INSTALACAO.md` — guia passo a passo para agente de IA.
 
 ## No Windows com catraca
 
-1. Ler `edge-catraca/dotnet-adapter/README.md`.
-2. Implementar `EasyInnerReal` + `FacialReal` em C# conforme SDK do Portal de
-   Integradores Topdata.
-3. Ligar com `USE_REAL_HARDWARE=1`, manter o mesmo contrato de
-   `simulators.js` e de `facial-ws.js`.
-4. Seguir `docs/CONTRATOS-HARDWARE.md` e o roteiro de bancada
-   (`docs/TESTE-COM-CATRACA.md`, a criar).
+1. Ler `docs/PROXIMOS-PASSOS.md` (ordem de execução) e `docs/HANDOFF-WINDOWS.md`
+   (estado atual e backlog priorizado).
+2. Rodar `scripts\iniciar-painel.cmd` e depois `scripts\verificar.cmd`.
+3. Compilar a ponte da catraca: `powershell -ExecutionPolicy Bypass -File
+   edge-catraca\dotnet-adapter\build.ps1`.
+4. Subir o edge com `USE_REAL_HARDWARE=1` (bridge EasyInner + servidor WebSocket
+   do facial, conforme `edge-catraca/dotnet-adapter/README.md` e
+   `docs/SDK-*-MAPEAMENTO.md`).
+5. Outras marcas com API HTTP: `DEVICE_DRIVER=generic_http` e `DEVICE_ENDPOINT`.
+6. Seguir o roteiro de bancada em `docs/CONTRATOS-HARDWARE.md`.
+
+Agentes de IA: ler `AGENTS.md` antes de alterar o código.
 
 ## SDK oficial
 
