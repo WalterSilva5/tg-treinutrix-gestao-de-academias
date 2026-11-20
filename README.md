@@ -54,6 +54,12 @@ Variáveis de ambiente:
 3. Ligar com `USE_REAL_HARDWARE=1`, manter o mesmo contrato de `simulators.js`.
 4. Seguir `docs/TESTE-COM-CATRACA.md` (a criar na bancada).
 
+## SDK oficial
+
+- EasyInner modo On-line mapeado em `docs/SDK-EASYINNER-MAPEAMENTO.md` e
+  `edge-catraca/dotnet-adapter/EasyInnerReal.cs` (fonte: exemplo C# oficial).
+- DLL, instaladores e manuais do Portal do Integrador não são commitados.
+
 ## Licença
 
 Business Source License 1.1 — ver `LICENSE`. Uso não-produtivo livre; produção exige licença comercial do mantenedor. Converte-se para Apache-2.0 em 2030-11-20.

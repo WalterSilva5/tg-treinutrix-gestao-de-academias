@@ -1,44 +1,40 @@
-# Adaptador real Windows (.NET) — implementar na bancada com a catraca
+# Adaptador real Windows (.NET) — SDK EasyInner modo On-line
 
-Este repositório desenvolve no Linux com simuladores. O código real do
-hardware roda **só no Windows**, pois `EasyInner.dll` é nativa Windows e o
-suporte Topdata distribui exemplos em C#/.NET.
+Equivalente em produção de `edge-catraca/src/simulators.js`. Roda **só no Windows**:
+`EasyInner.dll` é nativa x86/x64, exige `.NET Framework 3.5` e DLL registrada.
 
-## O que fazer no PC da portaria (Windows)
+## Fonte
 
-1. Instalar .NET 8 SDK.
-2. Obter no Portal de Integradores Topdata: `SDK EasyInner` + `SDK Leitor Facial`.
-3. Criar projeto Worker Service que implemente o mesmo contrato de
-   `edge-catraca/src/simulators.js`:
-   - `liberar(direcao)` → chama função de liberação da EasyInner.
-   - `mensagem(texto)` → envia texto ao display.
-   - identificação facial → cliente WebSocket que recebe o evento e faz
-     `POST /api/identification` na API central (mesmo JSON do simulador).
-4. Manter `USE_REAL_HARDWARE=1` só nesse ambiente.
+Exemplo oficial Topdata "SDK Inner Acesso Online" (C#), Portal do Integrador:
+página `Download do SDK para Catracas e Coletores da Linha Inner – SDK EasyInner`.
+Assinaturas em `EasyInnerReal.cs` copiadas de `C#/COM/EasyInner.cs` do exemplo
+(subconjunto do modo On-line; o SDK completo tem 231 funções).
 
-## Template C# (ajustar nomes conforme header real do SDK recebido)
+## Sequência de inicialização (igual ao exemplo)
 
-```csharp
-using System.Runtime.InteropServices;
+1. `DefinirTipoConexao(2)` — porta fixa.
+2. `DefinirPadraoCartao(PADRAO_LIVRE)`.
+3. `ConfigurarInnerOnLine()`.
+4. `AbrirPortaComunicacao(porta)`.
+5. Teste de conexão: `ReceberRelogio(numero, ...)`.
+6. `ReceberVersaoFirmware(...)` → `EnviarRelogio(...)` com data/hora atual.
+7. `EnviarFormasEntradasOnLine(...)` → `EnviarMensagemPadraoOnLine(...)`.
+8. Loop de polling (ver `docs/SDK-EASYINNER-MAPEAMENTO.md`).
 
-public sealed class EasyInnerReal
-{
-    // TODO: conferir assinatura exata no header .h / exemplo C# do SDK.
-    // Os nomes abaixo são PLACEHOLDERS do contrato, não a assinatura Topdata.
-    [DllImport("EasyInner.dll", CallingConvention = CallingConvention.StdCall)]
-    private static extern int EI_LiberarCatraca(int equipamento, int direcao);
+## Ponto de integração com este projeto
 
-    [DllImport("EasyInner.dll", CallingConvention = CallingConvention.StdCall)]
-    private static extern int EI_EnviarMensagem(int equipamento, string texto);
+No exemplo, a decisão de acesso está em `PassosAcesso.LiberarAcesso(cartao)`
+(consulta a grid da UI — simulação). Aqui ela é substituída por:
 
-    private readonly int _equipamento;
-    public EasyInnerReal(int equipamento) { _equipamento = equipamento; }
-
-    public bool Liberar(int direcao) => EI_LiberarCatraca(_equipamento, direcao) == 0;
-    public bool Mensagem(string texto) => EI_EnviarMensagem(_equipamento, texto) == 0;
-}
+```
+cartao do polling → POST /api/identification → { allow }
+allow=true  → LiberarCatracaEntrada/Saida/DoisSentidos + mensagem
+allow=false → EnviarMensagemPadraoOnLine(" ACESSO NEGADO!") + AcionarBipLongo
 ```
 
-Regras:
-- Nunca commitar `EasyInner.dll` nem PDFs do Portal se a licença Topdata proibir.
-- Todo retorno da DLL deve ser logado com código + timestamp para replay contra o simulador.
+## Regras
+
+- Nunca commitar `EasyInner.dll`, instaladores ou PDFs do Portal se a licença Topdata proibir.
+- Logar todo retorno da DLL com código + timestamp para replay contra o simulador.
+- Facial integrado ao Inner chega como cartão no polling. Leitor facial avulso
+  (linha Easy) usa o SDK do Leitor Facial via WebSocket — SDK diferente.

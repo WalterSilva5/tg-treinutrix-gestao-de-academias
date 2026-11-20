@@ -20,6 +20,14 @@ Motivos de negação: `PESSOA_NAO_ENCONTRADA, PESSOA_INATIVA, FORA_VALIDADE, SCO
 - `mensagem(texto)` → escreve no display.
 - Implementação simulada em `edge-catraca/src/simulators.js`, real em C# no Windows.
 
+## Origem do evento facial
+
+- Facial **integrado ao Inner** (Fit 4 linha Inner): o reconhecimento chega como
+  cartão no polling `ReceberDadosOnLine` — ver `docs/SDK-EASYINNER-MAPEAMENTO.md`.
+- Leitor facial **avulso / linha Easy**: usa o SDK do Leitor Facial via WebSocket
+  (SDK diferente, exemplos C#/.NET no Portal do Integrador). O edge converte para
+  o mesmo `POST /api/identification`.
+
 ## Fotos
 
 Padrão de cadastro: JPEG frontal, mínimo 480x640, menor que 200KB, fundo claro.
