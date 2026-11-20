@@ -217,6 +217,30 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Painel Sistema: info da máquina + contadores (overview estilo admin/overview).
+  if (req.method === 'GET' && url.pathname === '/api/overview') {
+    if (!operadorOnly()) return;
+    const inad = listInadimplentes(store);
+    const dia = new Date().toISOString().slice(0, 10);
+    const hoje = store.events.filter((e) => e.timestamp.slice(0, 10) === dia);
+    return send(res, 200, {
+      dia,
+      kpis: {
+        eventosHoje: hoje.length,
+        liberados: hoje.filter((e) => e.decisao === 'ALLOW').length,
+        negados: hoje.filter((e) => e.decisao === 'DENY').length,
+        presentes: new Set(hoje.filter((e) => e.decisao === 'ALLOW').map((e) => e.personId)).size,
+        inadimplentes: inad.length,
+        syncPendente: store.syncQueue.filter((s) => s.status === 'PENDING').length,
+        notifPendentes: store.notifications.filter((n) => !n.resolvida).length,
+        persons: store.persons.size,
+      },
+      inadimplentes: inad.map((p) => ({ id: p.id, nome: p.nome, matricula: p.matricula, validadeFim: p.validadeFim })),
+      ultimasEntradas: hoje.slice(-8).reverse(),
+      notifPendentes: store.notifications.filter((n) => !n.resolvida).slice(-5).reverse(),
+      devices: [...store.devices.values()],
+      lastBackupAt: store.meta.lastBackupAt,
+    });
+  }
   if (req.method === 'GET' && url.pathname === '/api/system') {
     if (!operadorOnly()) return;
     const inad = listInadimplentes(store);

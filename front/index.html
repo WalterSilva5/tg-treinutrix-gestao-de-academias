@@ -25,6 +25,10 @@ pre{background:#000;padding:12px;border-radius:6px;max-height:320px;overflow:aut
 .tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
 .tabs button{background:#222}
 .tabs button.on{background:#1DB954}
+.menu{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;position:sticky;top:0;background:#111;padding:8px 0;z-index:5}
+.menu button{background:#222;border:1px solid #333}
+.menu button.on{background:#1DB954;border-color:#1DB954}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px}
 .hidden{display:none!important}
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
 .topbar span{color:#aaa;font-size:14px}
@@ -54,7 +58,15 @@ th,td{text-align:left;padding:6px;border-bottom:1px solid #2a2a2a}
     <span id="quem"></span>
     <span><button class="ghost" onclick="trocarSenha()">Trocar senha</button><button class="ghost" onclick="sair()">Sair</button></span>
   </div>
-  <div class="tabs" id="tabs"></div>
+  <nav class="menu" id="tabs" aria-label="Menu"></nav>
+
+  <!-- INÍCIO (painel de gerenciamento) -->
+  <div id="v-inicio" class="hidden">
+    <div class="card"><h3>Visão geral — <span id="ovDia"></span></h3><div class="kpis" id="ovKpis"></div>
+      <div class="row"><button onclick="mostrarNav('oper')">Operação</button><button id="btnSistema" class="ghost" onclick="mostrarNav('sistema')">Sistema e backup</button><button class="ghost" onclick="avaliarNotif();carregarInicio()">Verificar notificações</button></div></div>
+    <div class="card"><h3>Pendências</h3><div id="ovPend">—</div></div>
+    <div class="card"><h3>Últimas entradas</h3><pre id="ovEntradas">—</pre></div>
+  </div>
 
   <!-- ALUNO -->
   <div id="v-aluno" class="hidden">
@@ -109,22 +121,28 @@ function entraUI() {
   $('quem').textContent = `${sess.perfil} · ${sess.nome || ''}`;
   const tabs = $('tabs'); tabs.innerHTML = '';
   const abas = sess.perfil === 'aluno' ? [['aluno', 'Meu acesso']]
-    : sess.perfil === 'gerencia' ? [['oper', 'Operação'], ['sistema', 'Sistema']]
-    : [['oper', 'Operação']];
+    : sess.perfil === 'gerencia' ? [['inicio', 'Início'], ['oper', 'Operação'], ['sistema', 'Sistema']]
+    : [['inicio', 'Início'], ['oper', 'Operação']];
   abas.forEach(([id, label], i) => {
     const b = document.createElement('button');
-    b.textContent = label; if (i === 0) b.classList.add('on');
-    b.onclick = () => { mostrar(id); [...tabs.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); };
+    b.textContent = label; b.dataset.v = id; if (i === 0) b.classList.add('on');
+    b.onclick = () => mostrarNav(id);
     tabs.appendChild(b);
   });
   mostrar(abas[0][0]);
   if (sess.perfil === 'aluno') carregarAluno(); else carregarOper();
 }
 function mostrar(id) {
-  $('v-aluno').classList.toggle('hidden', id !== 'aluno');
-  $('v-oper').classList.toggle('hidden', id !== 'oper');
-  $('v-sistema').classList.toggle('hidden', id !== 'sistema');
+  for (const v of ['aluno', 'oper', 'sistema', 'inicio']) {
+    $('v-' + v).classList.toggle('hidden', id !== v);
+  }
   if (id === 'sistema') carregarSistema();
+  if (id === 'inicio') carregarInicio();
+  if (id === 'oper' && sess && sess.perfil !== 'aluno') carregarOper();
+}
+function mostrarNav(id) {
+  mostrar(id);
+  [...$('tabs').children].forEach(x => x.classList.toggle('on', x.dataset.v === id));
 }
 async function entrar() {
   try {
@@ -151,6 +169,26 @@ async function req(p, opts = {}) {
 async function jget(p) { return (await req(p)).json(); }
 async function jpost(p, b) { const r = await req(p, { method: 'POST', body: JSON.stringify(b) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; }
 const edgeBase = () => ($('edgeUrl').value || `http://${location.hostname}:3002`);
+
+// ---- início (painel de gerenciamento) ----
+async function carregarInicio() {
+  const o = await jget('/api/overview');
+  $('ovDia').textContent = o.dia;
+  $('btnSistema').style.display = sess.perfil === 'gerencia' ? '' : 'none';
+  const k = o.kpis;
+  $('ovKpis').innerHTML = `<div class="stat"><b>${k.eventosHoje}</b>eventos hoje</div>
+    <div class="stat"><b>${k.liberados}</b>liberados</div>
+    <div class="stat"><b>${k.negados}</b>negados</div>
+    <div class="stat"><b>${k.presentes}</b>presentes</div>
+    <div class="stat"><b>${k.inadimplentes}</b>inadimplentes</div>
+    <div class="stat"><b>${k.syncPendente}</b>sync pendente</div>`;
+  const pend = [];
+  o.notifPendentes.forEach(n => pend.push(`<b>[${n.tipo}]</b> ${n.titulo}`));
+  o.inadimplentes.slice(0, 5).forEach(p => pend.push(`EM ATRASO: ${p.nome} (${p.matricula})`));
+  if (!o.lastBackupAt) pend.push('Nunca fez backup — Sistema → Backup.');
+  $('ovPend').innerHTML = pend.length ? '<br>'.concat(pend.join('<br>')) : 'Nada pendente. Em dia.';
+  $('ovEntradas').textContent = JSON.stringify(o.ultimasEntradas, null, 1);
+}
 
 // ---- aluno ----
 async function carregarAluno() {
