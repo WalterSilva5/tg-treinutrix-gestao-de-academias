@@ -1,71 +1,81 @@
 # SDK Leitor Facial — mapeamento WebSocket
 
-Fonte: exemplo oficial C# "SDK Leitor Facial" (.NET 8, `WebSocketSharp`).
+Fontes: "Manual WebSocket Facial", "Comandos do Leitor Facial" e exemplo C#
+(.NET 8, `WebSocketSharp`). Implementação de referência em
+`edge-catraca/src/facial-ws.js`.
 
-## Topologia (importante)
+## Topologia
 
-**Seu software é o servidor WebSocket. O leitor conecta em você.**
-Classe `FacialReaderConnection : WebSocketBehavior` no exemplo. Cada leitor
-abre uma conexão com o servidor e envia JSON com chave `cmd` ou `ret`.
+**Seu software é o servidor WebSocket. O leitor (cliente) conecta em você.**
+Handshake obrigatório:
 
-## Mensagens leitor → software
+1. Configurar o IP do servidor no leitor; ele tenta conectar periodicamente.
+2. Leitor envia `{"cmd":"reg","sn","devinfo":{...}}`.
+3. Servidor **deve** responder `{"ret":"reg","result":true,"cloudtime"}` —
+   sem isso o leitor reenvia `reg` e a comunicação é perdida.
+4. Eventos represados no off-line chegam logo após a resposta do `reg`.
 
-| `cmd` | Significado | Ação do software |
-|-------|-------------|------------------|
-| `reg` | registro do leitor (`sn`) | memorizar `sn` do equipamento |
-| `sendlog` | solicitação de acesso, `record[0]` com data/hora + matrícula | validar regras e responder `ValidaAcesso` |
-| `senduser` | retorno de dados do usuário, `backupnum` indica o tipo | processar conforme `backupnum` |
+Envio e recebimento são **independentes**: `sendlog` pode chegar enquanto você
+envia comandos. Respostas (`ret`) são correlacionadas no listener.
 
-`backupnum` no `senduser`: `50` foto, `11` cartão, `10` senha, `0` todos.
+## Modos de operação (`setdevinfo.server_verify`)
 
-`sendlog` com `record` vazio deve ser ignorado (não derrubar a conexão).
-Registro é on-line se `|dataHora - agora| <= 7s`, senão off-line.
+| Valor | Modo | Comportamento |
+|-------|------|---------------|
+| 0 | Offline | leitor decide sozinho; `sendlog` é só aviso |
+| 1 | Online | **usar neste projeto**: app responde `access:true/false` |
+| 2 | Automático | alterna online/offline (fallback) |
 
-## Mensagens software → leitor
+No offline é possível enviar tabelas de horário ao leitor (`setdevlock`).
 
-Cadastro (`EnviarUsuario` / `EnviarFoto`):
+## Eventos leitor → software
 
-```json
-{ "cmd": "setuserinfo", "enrollid": 123, "name": "Nome",
-  "backupnum": 50, "record": "<base64 jpeg 800x800>",
-  "card": 0, "admin": 0, "enable": true }
-```
-
-- `enrollid` (long, até 12 dígitos) = id do usuário = **número do cartão**
-  que o facial repassa à catraca via conexão física.
-- `backupnum` foto = `50`; sem foto = `TodosDados` com `record: "0"`.
-- `card`: se matrícula > 8 dígitos ou fora do padrão Wiegand, enviar `0`
-  (validação `validarWiegand` no exemplo; conversão WG26→WG10 quando aplicável).
-- Foto: JPEG redimensionado para 800x800 antes do base64
-  (`Utils.FormatarImagemPadraoLeitor(foto, 800, 800, ...)`).
-
-Exclusão:
+**`sendlog`** — toda detecção de rosto, cadastrado ou não:
 
 ```json
-{ "cmd": "deleteuser", "enrollid": 123, "backupnum": 13 }
+{ "cmd": "sendlog", "sn": "1234567890", "count": 1, "logindex": 0,
+  "record": [{ "enrollid": 300, "name": "Nome", "time": "2026-11-20 12:00:00",
+               "mode": 8, "inout": 0, "event": 0 }] }
 ```
 
-Resposta a acesso (`ValidaAcesso`):
+- `mode`: 2 senha, 3 cartão, 8 facial, 1 desconhecido.
+- Desconhecido: `enrollid` 99999999, `event` 2, com `image` base64.
+- `record` vazio: ignorar, nunca derrubar a conexão.
+- Resposta **sempre** exigida no online (mesmo em falha interna):
 
 ```json
-{ "ret": "sendlog", "result": true, "sn": "<serial>",
-  "access": true, "enrollid": 123,
-  "cloudtime": "2026-11-20 12:00:00", "message": "Acesso liberado." }
+{ "ret": "sendlog", "result": true, "cloudtime": "2026-11-20 12:00:00",
+  "message": "Texto exibido no leitor", "access": false }
 ```
 
-Após processar `senduser`, responder comando OK (`ResponderComandoOK("senduser")`).
+**`senduser`** — cadastro feito no próprio leitor (`backupnum`: 50 foto,
+11 cartão, 10 senha, 0 todos). Responder `{"ret":"senduser","result":...}`.
 
-## Fluxo completo Facial + Inner (oficial)
+## Comandos software → leitor
 
-1. **Cadastro (WS):** software → leitor: `setuserinfo` com foto + `enrollid`.
-2. **Acesso:** leitor reconhece → envia `enrollid` à catraca (físico) →
-   catraca repassa via `ReceberDadosOnLine` (EasyInner) → software valida em
-   `POST /api/identification` → `LiberarCatraca*` ou mensagem de negado.
-3. **Catraca Easy (sem Inner):** o próprio leitor libera; confirmação de giro
-   via WS, não via DLL.
+| Comando | Uso no projeto |
+|---------|----------------|
+| `setuserinfo` | cadastrar/atualizar (foto `backupnum` 50 + base64, sem foto `backupnum` 0 + `record` "0") |
+| `deleteuser` | remover (`backupnum` 13 = Todos, conforme exemplo; doc cita 0/10/11/50 por dado) |
+| `setdevinfo` | `server_verify: 1`, volume, `verifymode`, `stranger_lock` etc. |
+| `setuserlock` | restrição por usuário (`weekzone` + vigência, `verifymode` 0/2/3/8/9/10/11/14) |
+| `setdevlock` | `cardformat`, `dayzone` (até 8, 5 seções), `weekzone` (até 8) |
+| `getuserlist` | auditoria: `stn:true` primeira página, `stn:false` próximas até `to == count` |
+| `getuserinfo` | detalhe por `enrollid` (`backupnum` 0 todos / 10 senha / 13 sem foto / 50 foto) |
+| `getalllog` / `cleanlog` | exportar com `stn/from/to`, limpar logs |
+| `enabledevice` / `disabledevice` | pausar/retomar validação sem cortar comandos |
+| `cleanuser` | **cuidado**: apaga todos os usuários; exigir confirmação |
 
-## Regras do exemplo
+## Cadastro de foto
 
-- `cmd`/`backupnum` desconhecidos: logar e ignorar, nunca fechar a conexão.
-- Requisitos do exemplo: Windows + .NET Core 3.1 (exemplo atual em net8.0).
-- DLLs/manuais do Portal não são commitados.
+- Ideal oficial (FAQ): **480x640 px**, até **150KB**.
+- Exemplo envia JPEG 800x800 em base64 (`record`); `card` segue validação
+  Wiegand (fora do padrão → `0`).
+- `enrollid` (long, até 12 dígitos) = número do cartão repassado à catraca.
+
+## Fluxo Facial + Inner (oficial)
+
+1. **Cadastro (WS):** `setuserinfo` com foto + `enrollid`.
+2. **Acesso:** leitor → catraca (físico) → `ReceberDadosOnLine` (EasyInner) →
+   `POST /api/identification` → `LiberarCatraca*` ou negado.
+3. **Catraca Easy:** o próprio leitor libera; sem DLL.
