@@ -50,8 +50,15 @@ e devolve as fotos do snapshot quando a pasta existir.
 - A fila de sincronização leva `setuserinfo` com `backupnum 50` e a URL da foto,
   que o edge baixa para enviar ao leitor facial.
 
-## Compartilhar acesso (link + QR)
+## Interface (PWA)
 
+- Tema claro padrão com alternância para escuro (botão na barra lateral, persistido).
+- Avisos em toast (não bloqueiam a tela) para cadastro, renovação, backup e erros.
+- Dashboard com KPIs, gráfico dos últimos 7 dias e lista de **presentes agora**.
+- Busca por nome/matrícula/Treinutrix e filtros por tipo/situação na lista de pessoas.
+- Renovação rápida de plano (+30 e +90 dias) direto na linha da pessoa.
+
+## Compartilhar acesso (link + QR)
 - Botão **Compartilhar acesso** no topo (equipe) e no cartão do servidor em Sistema.
 - Modal mostra o endereço da rede local (`http://IP:porta`), seletor de IP quando a
   máquina tem mais de um, **Copiar link** e **Baixar QR** (PNG).

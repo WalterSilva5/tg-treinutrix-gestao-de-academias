@@ -330,8 +330,22 @@ const server = http.createServer(async (req, res) => {
     const inad = listInadimplentes(store);
     const dia = new Date().toISOString().slice(0, 10);
     const hoje = store.events.filter((e) => e.timestamp.slice(0, 10) === dia);
+    const semana = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const evs = store.events.filter((e) => e.timestamp.slice(0, 10) === key);
+      semana.push({ dia: key, total: evs.length, liberados: evs.filter((e) => e.decisao === 'ALLOW').length });
+    }
+    const ultimoPorPessoa = new Map();
+    for (const e of store.events) if (e.decisao === 'ALLOW' && e.personId) ultimoPorPessoa.set(e.personId, e);
+    const presentes = [...ultimoPorPessoa.values()]
+      .filter((e) => (e.direcao || 'IN') !== 'OUT')
+      .map((e) => ({ personId: e.personId, timestamp: e.timestamp }));
     return send(res, 200, {
       dia,
+      semana,
+      presentes,
       kpis: {
         eventosHoje: hoje.length,
         liberados: hoje.filter((e) => e.decisao === 'ALLOW').length,
