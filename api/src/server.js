@@ -6,6 +6,7 @@
 // - Bootstrap: carrega data/state.json, completa com o seed, autossalva.
 // - Todo erro é convertido em resposta JSON (nunca derruba o processo).
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +18,7 @@ import { doBackup, listBackups, doRestore } from './backup.js';
 import { hashPassword, verifyPassword, issueToken, verifyToken, authenticate } from './auth.js';
 import { visiblePersons, visibleEvents, canSeeOperations } from './scope.js';
 import { parsePhoto, validatePhoto, savePhoto, readPhoto, deletePhoto } from './photos.js';
-import { localDayKey, parseDate, isDateOnly } from './time.js';
+import { localDayKey, parseDate, isDateOnly, endOfDay } from './time.js';
 import { enqueueSync, enqueueDelete, ackSync } from './sync.js';
 import { DB_FILE, loadState, saveNow, saveIfDirty, startAutoSave, markDirty, appendEvent, compactEvents, closeDb } from './persist.js';
 import { catalogo, normalizarDevice } from './devices.js';
@@ -25,9 +26,9 @@ import { diasFrequentados, alunosNoDia } from './frequency.js';
 import { descobrirCatracas, probarTcp, redesLocais, normalizarSubnet } from './discovery.js';
 import {
   normalizarEvento, normalizarSorteio, novoEvento, novaInscricao, elegiveis, sortear,
-  STATUS_PARTICIPANTE,
+  STATUS_PARTICIPANTE, promoverEspera, gerarRecorrencias, eventoPorToken,
 } from './social.js';
-import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento } from './report.js';
+import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento, eventosParaCsv, eventosParaPdf } from './report.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FRONT_DIR = path.join(HERE, '..', '..', 'front');
@@ -35,6 +36,7 @@ const STATIC_TYPES = {
   '/': 'text/html', '/index.html': 'text/html',
   '/manifest.webmanifest': 'application/manifest+json',
   '/sw.js': 'application/javascript', '/icon.svg': 'image/svg+xml', '/qr.js': 'application/javascript',
+  '/evento.html': 'text/html',
 };
 
 const PORT = Number(process.env.API_PORT || 3001);
@@ -248,6 +250,10 @@ const isOperador = (u) => Boolean(u) && (u.perfil === 'recepcao' || u.perfil ===
 const isGerencia = (u) => Boolean(u) && u.perfil === 'gerencia';
 
 const loginAttempts = new Map();
+const publicAttempts = new Map();
+const PUBLIC_MAX = Number(process.env.PUBLIC_MAX_HITS || 20);
+const PUBLIC_WINDOW_MS = Number(process.env.PUBLIC_WINDOW_MS || 10 * 60 * 1000);
+
 function clientIp(req) {
   return req.socket.remoteAddress || 'desconhecido';
 }
@@ -263,6 +269,21 @@ function loginFailed(ip) {
   a.until = Date.now() + LOGIN_WINDOW_MS;
   loginAttempts.set(ip, a);
   if (loginAttempts.size > 2000) loginAttempts.clear();
+}
+
+// Limite simples para inscrição pública (sem autenticação).
+function publicBlocked(ip) {
+  const a = publicAttempts.get(ip);
+  if (!a) return false;
+  if (Date.now() > a.until) { publicAttempts.delete(ip); return false; }
+  return a.count >= PUBLIC_MAX;
+}
+function publicHit(ip) {
+  const a = publicAttempts.get(ip) || { count: 0, until: 0 };
+  a.count += 1;
+  a.until = Date.now() + PUBLIC_WINDOW_MS;
+  publicAttempts.set(ip, a);
+  if (publicAttempts.size > 5000) publicAttempts.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -402,6 +423,46 @@ async function forwardRelease({ deviceId, direcao }) {
   }
 }
 
+// Resumo dos eventos para relatórios (filtro por período de início).
+function notificarEspera(eventId, participante) {
+  const ev = store.socialEvents.find((e) => e.id === eventId);
+  if (!ev) return;
+  const key = `evento-espera:${eventId}:${participante.id}`;
+  if (store.notifications.some((n) => n.key === key)) return;
+  store.notifications.push({
+    id: nextId('ntf'), key, tipo: 'EVENTO',
+    titulo: `Lista de espera: ${ev.nome}`,
+    detalhe: `${participante.nome} entrou na espera (capacidade ${ev.capacidade}).`,
+    createdAt: new Date().toISOString(), resolvida: false, resolvidaPor: null, resolvidaEm: null,
+  });
+}
+
+function resumoEventos(inicio, fim) {
+  const de = inicio ? parseDate(inicio) : null;
+  const ate = fim ? parseDate(fim, { endOfDay: true }) : null;
+  return [...store.socialEvents]
+    .filter((e) => {
+      const d = parseDate(e.inicio);
+      if (!d) return false;
+      if (de && d < de) return false;
+      if (ate && d > ate) return false;
+      return true;
+    })
+    .sort((a, b) => String(a.inicio).localeCompare(String(b.inicio)))
+    .map((e) => {
+      const ps = store.eventParticipants.filter((p) => p.eventId === e.id && p.status !== 'CANCELADO');
+      const inscritos = ps.filter((p) => p.status !== 'ESPERA').length;
+      return {
+        id: e.id, nome: e.nome, inicio: e.inicio, local: e.local || '',
+        capacidade: e.capacidade || null, inscritos,
+        presentes: ps.filter((p) => p.status === 'PRESENTE').length,
+        espera: ps.filter((p) => p.status === 'ESPERA').length,
+        receita: ps.reduce((s, p) => s + Number(p.valorPago || 0), 0),
+        valor: e.valor || 0, ativo: e.ativo !== false, inscricoesAbertas: e.inscricoesAbertas !== false,
+      };
+    });
+}
+
 // ---------------------------------------------------------------------------
 // rotas
 // ---------------------------------------------------------------------------
@@ -458,6 +519,45 @@ async function route(req, res) {
     saveNow(store);
     console.log(`[auth] administrador restaurado (${login})`);
     return send(res, 200, { ok: true, login });
+  }
+
+  // Inscrição pública por link/QR (sem login), limitada por IP.
+  const publicEventoRoute = url.pathname.match(/^\/api\/public\/eventos\/([^/]+)$/);
+  const publicParticipanteRoute = url.pathname.match(/^\/api\/public\/eventos\/([^/]+)\/participantes$/);
+  if (req.method === 'GET' && publicEventoRoute) {
+    const ev = eventoPorToken(store, safeDecode(publicEventoRoute[1]));
+    if (!ev || !ev.ativo) return send(res, 404, { error: 'evento não encontrado ou cancelado' });
+    const ps = store.eventParticipants.filter((p) => p.eventId === ev.id && p.status !== 'CANCELADO');
+    const inscritos = ps.filter((p) => p.status !== 'ESPERA').length;
+    return send(res, 200, {
+      nome: ev.nome, descricao: ev.descricao, local: ev.local, inicio: ev.inicio, fim: ev.fim,
+      valor: ev.valor || 0, capacidade: ev.capacidade || null,
+      inscritos, espera: ps.filter((p) => p.status === 'ESPERA').length,
+      restantes: ev.capacidade ? Math.max(0, ev.capacidade - inscritos) : null,
+      permiteVisitantes: ev.permiteVisitantes !== false,
+      inscricoesAbertas: ev.inscricoesAbertas !== false && ev.ativo !== false,
+    });
+  }
+  if (req.method === 'POST' && publicParticipanteRoute) {
+    const ip = clientIp(req);
+    if (publicBlocked(ip)) return send(res, 429, { error: 'muitas inscrições — tente mais tarde' });
+    publicHit(ip);
+    const ev = eventoPorToken(store, safeDecode(publicParticipanteRoute[1]));
+    if (!ev || !ev.ativo) return send(res, 404, { error: 'evento não encontrado ou cancelado' });
+    const b = await readBody(req);
+    try {
+      const p = novaInscricao(store, ev.id, { nome: b.nome, contato: b.contato, documento: b.documento });
+      store.eventParticipants.push(p);
+      if (p.status === 'ESPERA') notificarEspera(ev.id, p);
+      markDirty();
+      return send(res, 201, {
+        nome: p.nome, status: p.status, codigo: p.codigo,
+        evento: ev.nome, inicio: ev.inicio,
+        mensagem: p.status === 'ESPERA' ? 'Evento lotado: você entrou na lista de espera.' : 'Inscrição confirmada.',
+      });
+    } catch (e) {
+      return send(res, 400, { error: e.message });
+    }
   }
 
   // Demais /api/* exigem token.
@@ -886,14 +986,52 @@ async function route(req, res) {
     let participante;
     try { participante = novaInscricao(store, eventId, b); } catch (e) { return send(res, 400, { error: e.message }); }
     store.eventParticipants.push(participante);
+    if (participante.status === 'ESPERA') notificarEspera(eventId, participante);
     markDirty();
     return send(res, 201, participante);
   }
+  // Importação de participantes (CSV convertido pelo painel).
+  const eventoImportRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/participantes\/import$/);
+  if (req.method === 'POST' && eventoImportRoute) {
+    operadorOnly();
+    const eventId = safeDecode(eventoImportRoute[1]);
+    const b = await readBody(req);
+    const linhas = Array.isArray(b.pessoas) ? b.pessoas : null;
+    if (!linhas) return send(res, 400, { error: 'pessoas deve ser uma lista' });
+    if (linhas.length > 1000) return send(res, 413, { error: 'máximo de 1000 linhas por importação' });
+    const itens = [];
+    let criados = 0;
+    let espera = 0;
+    linhas.forEach((linha, i) => {
+      try {
+        let personId = linha.personId || null;
+        if (!personId && linha.matricula) {
+          const pessoa = [...store.persons.values()].find((p) => p.matricula === String(linha.matricula).trim());
+          if (!pessoa) throw new Error('matrícula não encontrada');
+          personId = pessoa.id;
+        }
+        const p = novaInscricao(store, eventId, { personId, nome: linha.nome, contato: linha.contato, documento: linha.documento });
+        store.eventParticipants.push(p);
+        if (p.status === 'ESPERA') { espera += 1; notificarEspera(eventId, p); } else criados += 1;
+        itens.push({ linha: i + 1, nome: p.nome, status: p.status, codigo: p.codigo });
+      } catch (e) {
+        itens.push({ linha: i + 1, nome: linha.nome || null, status: 'ERRO', erro: e.message });
+      }
+    });
+    markDirty();
+    return send(res, 200, {
+      total: linhas.length, criados, espera,
+      erros: itens.filter((i) => i.status === 'ERRO').length,
+      itens: itens.slice(0, 500),
+    });
+  }
+
   const eventoParticipanteRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/participantes\/([^/]+)$/);
   if (eventoParticipanteRoute) {
     operadorOnly();
     const eventId = safeDecode(eventoParticipanteRoute[1]);
     const pid = safeDecode(eventoParticipanteRoute[2]);
+    const evento = store.socialEvents.find((e) => e.id === eventId);
     const p = store.eventParticipants.find((x) => x.id === pid && x.eventId === eventId);
     if (!p) return send(res, 404, { error: 'participante_not_found' });
     if (req.method === 'PATCH') {
@@ -907,14 +1045,141 @@ async function route(req, res) {
       if (b.nome !== undefined && !p.personId) p.nome = cleanText(b.nome, 120);
       if (b.contato !== undefined) p.contato = cleanText(b.contato, 120);
       if (b.documento !== undefined) p.documento = cleanText(b.documento, 60);
+      if (b.pago !== undefined) {
+        p.pago = b.pago !== false;
+        p.valorPago = p.pago ? Math.max(0, Number(b.valorPago ?? evento?.valor ?? 0) || 0) : 0;
+        p.pagoEm = p.pago ? new Date().toISOString() : null;
+        p.pagoPor = p.pago ? (cleanText(b.por, 80) || 'operador') : null;
+      }
+      const promovido = p.status === 'CANCELADO' ? promoverEspera(store, eventId) : null;
       markDirty();
-      return send(res, 200, p);
+      return send(res, 200, { ...p, promovido });
     }
     if (req.method === 'DELETE') {
       store.eventParticipants = store.eventParticipants.filter((x) => x.id !== pid);
+      const promovido = promoverEspera(store, eventId);
       markDirty();
-      return send(res, 200, { ok: true });
+      return send(res, 200, { ok: true, promovido });
     }
+  }
+
+  // Check-in por código curto (QR/impresso na recepção).
+  const eventoCheckinRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/checkin$/);
+  if (req.method === 'POST' && eventoCheckinRoute) {
+    operadorOnly();
+    const eventId = safeDecode(eventoCheckinRoute[1]);
+    const b = await readBody(req);
+    const codigo = String(b.codigo || '').trim().toUpperCase();
+    const p = store.eventParticipants.find(
+      (x) => x.eventId === eventId && String(x.codigo || '').toUpperCase() === codigo && x.status !== 'CANCELADO',
+    );
+    if (!p) return send(res, 404, { error: 'código não encontrado' });
+    p.status = 'PRESENTE';
+    p.checkinAt = new Date().toISOString();
+    markDirty();
+    return send(res, 200, p);
+  }
+
+  // Promove um participante externo a aluno/visitante cadastrado.
+  const eventoPromoverRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/participantes\/([^/]+)\/promover$/);
+  if (req.method === 'POST' && eventoPromoverRoute) {
+    operadorOnly();
+    const eventId = safeDecode(eventoPromoverRoute[1]);
+    const pid = safeDecode(eventoPromoverRoute[2]);
+    const p = store.eventParticipants.find((x) => x.id === pid && x.eventId === eventId);
+    if (!p) return send(res, 404, { error: 'participante_not_found' });
+    if (p.personId) return send(res, 409, { error: 'participante já tem cadastro' });
+    const b = await readBody(req);
+    try {
+      const pessoa = criarPessoa({
+        nome: p.nome, tipo: b.tipo === 'VISITANTE' ? 'VISITANTE' : 'ALUNO',
+        matricula: b.matricula, senha: b.senha, validadeFim: b.validadeFim,
+      });
+      store.persons.set(pessoa.id, pessoa);
+      ensureRules(store, pessoa.id);
+      enqueueSync(store, pessoa);
+      p.personId = pessoa.id;
+      p.tipo = pessoa.tipo;
+      p.matricula = pessoa.matricula;
+      markDirty();
+      return send(res, 200, { pessoa: publicPerson(pessoa), participante: p });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message });
+    }
+  }
+
+  // Duplicar, repetir e rotacionar link público.
+  const eventoDuplicarRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/duplicar$/);
+  if (req.method === 'POST' && eventoDuplicarRoute) {
+    operadorOnly();
+    const id = safeDecode(eventoDuplicarRoute[1]);
+    const ev = id ? store.socialEvents.find((e) => e.id === id) : null;
+    if (!ev) return send(res, 404, { error: 'evento_not_found' });
+    const b = await readBody(req);
+    try {
+      const copia = novoEvento({
+        ...ev,
+        nome: cleanText(b.nome, 120) || `${ev.nome} (cópia)`,
+        inicio: b.inicio || ev.inicio,
+        fim: b.fim !== undefined ? b.fim : ev.fim,
+      });
+      copia.serieId = ev.serieId || ev.id;
+      store.socialEvents.push(copia);
+      markDirty();
+      return send(res, 201, copia);
+    } catch (e) { return send(res, 400, { error: e.message }); }
+  }
+  const eventoRecorrenciaRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/recorrencia$/);
+  if (req.method === 'POST' && eventoRecorrenciaRoute) {
+    operadorOnly();
+    const id = safeDecode(eventoRecorrenciaRoute[1]);
+    const ev = id ? store.socialEvents.find((e) => e.id === id) : null;
+    if (!ev) return send(res, 404, { error: 'evento_not_found' });
+    const b = await readBody(req);
+    try {
+      const criados = gerarRecorrencias(ev, { tipo: b.tipo, vezes: b.vezes });
+      store.socialEvents.push(...criados);
+      markDirty();
+      return send(res, 201, { criados });
+    } catch (e) { return send(res, 400, { error: e.message }); }
+  }
+  const eventoTokenRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/token$/);
+  if (req.method === 'POST' && eventoTokenRoute) {
+    gerenciaOnly();
+    const id = safeDecode(eventoTokenRoute[1]);
+    const ev = id ? store.socialEvents.find((e) => e.id === id) : null;
+    if (!ev) return send(res, 404, { error: 'evento_not_found' });
+    ev.publicToken = crypto.randomBytes(8).toString('hex');
+    markDirty();
+    return send(res, 200, { publicToken: ev.publicToken });
+  }
+
+  // Relatórios de eventos por período (JSON, CSV e PDF).
+  const relatorioEventosRoute = url.pathname.match(/^\/api\/relatorios\/eventos(?:\.(csv|pdf))?$/);
+  if (req.method === 'GET' && relatorioEventosRoute) {
+    operadorOnly();
+    const formato = relatorioEventosRoute[1];
+    const inicio = url.searchParams.get('inicio');
+    const fim = url.searchParams.get('fim');
+    const eventos = resumoEventos(inicio, fim);
+    if (!formato) return send(res, 200, { inicio, fim, total: eventos.length, eventos });
+    if (formato === 'csv') {
+      const corpo = eventosParaCsv(eventos);
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="relatorio-eventos.csv"',
+        ...corsHeaders(),
+      });
+      return res.end(corpo);
+    }
+    const pdf = eventosParaPdf(eventos, { inicio, fim });
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="relatorio-eventos.pdf"',
+      'Content-Length': pdf.length,
+      ...corsHeaders(),
+    });
+    return res.end(pdf);
   }
 
   const eventoExportRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/export\.(csv|pdf)$/);
@@ -1314,6 +1579,17 @@ async function route(req, res) {
       return send(res, 200, out);
     } catch (e) {
       throw fail(400, e.message);
+    }
+  }
+
+  // Página pública de inscrição: /e/<token> (sem login).
+  if (req.method === 'GET' && /^\/e\/[A-Za-z0-9]{6,64}\/?$/.test(url.pathname)) {
+    try {
+      const html = fs.readFileSync(path.join(FRONT_DIR, 'evento.html'));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(html);
+    } catch {
+      return send(res, 404, { error: 'página não encontrada' });
     }
   }
 

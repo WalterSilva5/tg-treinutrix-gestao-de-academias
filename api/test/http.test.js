@@ -454,3 +454,124 @@ test('sorteio valida p?blico e evento', async () => {
   const publicoRuim = await api('/api/sorteios', { method: 'POST', token: admin, body: { nome: 'X', publico: 'NADA' } });
   assert.equal(publicoRuim.status, 400);
 });
+
+
+test('evento: lista de espera, check-in por c?digo e pagamento', async () => {
+  const ev = await api('/api/eventos', {
+    method: 'POST', token: admin,
+    body: { nome: 'Lotado ' + run, inicio: '2026-12-03T19:00', capacidade: 1, valor: 50, permiteVisitantes: true, listaEspera: true },
+  });
+  assert.equal(ev.status, 201, ev.text);
+  const id = ev.json.id;
+  assert.match(ev.json.publicToken, /^[0-9a-f]{16}$/);
+
+  const a = await api('/api/eventos/' + id + '/participantes', { method: 'POST', token: admin, body: { nome: 'Primeiro ' + run } });
+  assert.equal(a.status, 201);
+  assert.equal(a.json.status, 'INSCRITO');
+  assert.match(a.json.codigo, /^[0-9A-F]{6}$/);
+  const b = await api('/api/eventos/' + id + '/participantes', { method: 'POST', token: admin, body: { nome: 'Segundo ' + run } });
+  assert.equal(b.status, 201);
+  assert.equal(b.json.status, 'ESPERA');
+
+  const cancel = await api('/api/eventos/' + id + '/participantes/' + a.json.id, { method: 'PATCH', token: admin, body: { status: 'CANCELADO' } });
+  assert.equal(cancel.status, 200);
+  assert.equal(cancel.json.promovido.nome, 'Segundo ' + run);
+  assert.equal(cancel.json.promovido.status, 'INSCRITO');
+
+  const checkin = await api('/api/eventos/' + id + '/checkin', { method: 'POST', token: admin, body: { codigo: b.json.codigo } });
+  assert.equal(checkin.status, 200);
+  assert.equal(checkin.json.status, 'PRESENTE');
+
+  const pago = await api('/api/eventos/' + id + '/participantes/' + b.json.id, { method: 'PATCH', token: admin, body: { pago: true } });
+  assert.equal(pago.status, 200);
+  assert.equal(pago.json.valorPago, 50);
+  assert.equal(pago.json.pago, true);
+});
+
+test('evento p?blico: link sem login, inscri??o e p?gina', async () => {
+  const ev = await api('/api/eventos', {
+    method: 'POST', token: admin,
+    body: { nome: 'P?blico ' + run, inicio: '2026-12-04T19:00', capacidade: 5, permiteVisitantes: true },
+  });
+  const token = ev.json.publicToken;
+  const id = ev.json.id;
+
+  const info = await api('/api/public/eventos/' + token, { auth: false });
+  assert.equal(info.status, 200);
+  assert.equal(info.json.nome, 'P?blico ' + run);
+  assert.equal(info.json.restantes, 5);
+
+  const insc = await api('/api/public/eventos/' + token + '/participantes', {
+    method: 'POST', auth: false,
+    body: { nome: 'Externo P?blico ' + run, contato: '11 98888' },
+  });
+  assert.equal(insc.status, 201, insc.text);
+  assert.equal(insc.json.status, 'INSCRITO');
+  assert.match(insc.json.codigo, /^[0-9A-F]{6}$/);
+
+  const pagina = await api('/e/' + token, { auth: false });
+  assert.equal(pagina.status, 200);
+  assert.match(pagina.text, /Inscri/);
+
+  const rot = await api('/api/eventos/' + id + '/token', { method: 'POST', token: admin, body: {} });
+  assert.equal(rot.status, 200);
+  assert.notEqual(rot.json.publicToken, token);
+  const velho = await api('/api/public/eventos/' + token, { auth: false });
+  assert.equal(velho.status, 404);
+  const novo = await api('/api/public/eventos/' + rot.json.publicToken, { auth: false });
+  assert.equal(novo.status, 200);
+});
+
+test('evento: duplicar, repetir, importar e promover externo', async () => {
+  const ev = await api('/api/eventos', {
+    method: 'POST', token: admin,
+    body: { nome: 'S?rie ' + run, inicio: '2026-12-05T19:00', permiteVisitantes: true, valor: 0 },
+  });
+  const id = ev.json.id;
+
+  const dup = await api('/api/eventos/' + id + '/duplicar', { method: 'POST', token: admin, body: {} });
+  assert.equal(dup.status, 201);
+  assert.match(dup.json.nome, /c?pia/);
+
+  const rec = await api('/api/eventos/' + id + '/recorrencia', { method: 'POST', token: admin, body: { tipo: 'SEMANAL', vezes: 2 } });
+  assert.equal(rec.status, 201);
+  assert.equal(rec.json.criados.length, 2);
+
+  const imp = await api('/api/eventos/' + id + '/participantes/import', {
+    method: 'POST', token: admin,
+    body: { pessoas: [{ nome: 'Importado A ' + run, contato: '1' }, { nome: 'Importado B ' + run, contato: '2' }] },
+  });
+  assert.equal(imp.status, 200, imp.text);
+  assert.equal(imp.json.criados, 2);
+  assert.equal(imp.json.erros, 0);
+
+  const det = await api('/api/eventos/' + id, { token: admin });
+  const externo = det.json.participantes.find((p) => p.nome === 'Importado A ' + run);
+  assert.ok(externo, JSON.stringify(det.json.participantes.map((p) => p.nome)));
+  const promo = await api('/api/eventos/' + id + '/participantes/' + externo.id + '/promover', {
+    method: 'POST', token: admin, body: { tipo: 'VISITANTE' },
+  });
+  assert.equal(promo.status, 200, promo.text);
+  assert.equal(promo.json.pessoa.tipo, 'VISITANTE');
+  assert.ok(promo.json.pessoa.matricula);
+  const pessoas = await api('/api/persons', { token: admin });
+  assert.ok(pessoas.json.some((p) => p.id === promo.json.pessoa.id));
+});
+
+test('relat?rio de eventos: JSON, CSV e PDF por per?odo', async () => {
+  const rel = await api('/api/relatorios/eventos?inicio=2026-12-01&fim=2026-12-31', { token: admin });
+  assert.equal(rel.status, 200);
+  assert.ok(rel.json.total >= 1);
+  assert.ok(rel.json.eventos.some((e) => e.nome.startsWith('S?rie ' + run)));
+
+  const csv = await fetch(base + '/api/relatorios/eventos.csv?inicio=2026-12-01&fim=2026-12-31', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers.get('content-type'), /text\/csv/);
+  assert.match(await csv.text(), /S?rie /);
+
+  const pdf = await fetch(base + '/api/relatorios/eventos.pdf?inicio=2026-12-01&fim=2026-12-31', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(pdf.status, 200);
+  const buf = Buffer.from(await pdf.arrayBuffer());
+  assert.equal(buf.subarray(0, 8).toString(), '%PDF-1.4');
+  assert.match(buf.subarray(-20).toString('latin1'), /%%EOF/);
+});

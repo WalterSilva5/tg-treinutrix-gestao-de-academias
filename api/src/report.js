@@ -1,6 +1,7 @@
 // Exportação de eventos em CSV e PDF, sem dependências.
 // PDF mínimo (A4, Helvetica/WinAnsi) gerado à mão: suficiente para listas de
 // presença/inscrição impressas na recepção.
+import { parseDate } from './time.js';
 
 const A4 = { largura: 595, altura: 842, margem: 42 };
 const MAX_CHARS = 92;
@@ -24,10 +25,12 @@ function csvCelula(valor) {
 
 export function eventoParaCsv(evento, participantes) {
   const linhas = [
-    ['Nome', 'Tipo', 'Matrícula', 'Documento', 'Contato', 'Status', 'Check-in', 'Inscrito em'],
+    ['Nome', 'Tipo', 'Matrícula', 'Documento', 'Contato', 'Status', 'Código', 'Pago', 'Valor pago', 'Check-in', 'Inscrito em'],
     ...participantes.map((p) => [
       p.nome, p.tipo || '', p.matricula || '', p.documento || '', p.contato || '',
-      p.status || 'INSCRITO', p.checkinAt ? new Date(p.checkinAt).toLocaleString('pt-BR') : '',
+      p.status || 'INSCRITO', p.codigo || '', p.pago ? 'sim' : 'não',
+      Number(p.valorPago || 0).toFixed(2).replace('.', ','),
+      p.checkinAt ? new Date(p.checkinAt).toLocaleString('pt-BR') : '',
       p.criadoEm ? new Date(p.criadoEm).toLocaleString('pt-BR') : '',
     ]),
   ];
@@ -73,8 +76,7 @@ function formatarData(iso) {
   return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString('pt-BR');
 }
 
-export function eventoParaPdf(evento, participantes, { geradoEm = new Date() } = {}) {
-  const paginas = [];
+export function eventoParaPdf(evento, participantes, { geradoEm = new Date() } = {}) {  const paginas = [];
   let pagina = [];
   let y = A4.altura - A4.margem;
 
@@ -118,6 +120,8 @@ export function eventoParaPdf(evento, participantes, { geradoEm = new Date() } =
       p.documento ? `doc. ${p.documento}` : '',
       p.contato || '',
       p.status || 'INSCRITO',
+      p.codigo ? `cod. ${p.codigo}` : '',
+      p.pago ? `pago R$ ${Number(p.valorPago || 0).toFixed(2).replace('.', ',')}` : '',
       p.checkinAt ? `check-in ${formatarData(p.checkinAt)}` : '',
     ].filter(Boolean).join(' - ');
     paragrafo(`${String(i + 1).padStart(3, '0')}  ${detalhe}`, { size: 9, max: 96, espaco: 13 });
@@ -131,8 +135,7 @@ export function eventoParaPdf(evento, participantes, { geradoEm = new Date() } =
   return montarPdf(paginas);
 }
 
-function montarPdf(paginas) {
-  const n = paginas.length;
+function montarPdf(paginas) {  const n = paginas.length;
   const idPagina = (i) => 5 + i;
   const idConteudo = (i) => 5 + n + i;
   const objetos = [];
@@ -166,4 +169,63 @@ function montarPdf(paginas) {
   const rodape = `trailer\n<< /Size ${objetos.length} /Root 1 0 R >>\nstartxref\n${offset}\n%%EOF\n`;
   partes.push(Buffer.from(xref.join('') + rodape, 'latin1'));
   return Buffer.concat(partes);
+}
+
+// ---------- relatório de vários eventos ----------
+export function eventosParaCsv(eventos) {
+  const linhas = [
+    ['Evento', 'Início', 'Local', 'Capacidade', 'Inscritos', 'Presentes', 'Espera', 'Receita', 'Situação'],
+    ...eventos.map((e) => [
+      e.nome, e.inicio ? new Date(e.inicio).toLocaleString('pt-BR') : '', e.local || '',
+      e.capacidade || '', e.inscritos ?? 0, e.presentes ?? 0, e.espera ?? 0,
+      Number(e.receita || 0).toFixed(2).replace('.', ','),
+      e.ativo === false ? 'CANCELADO' : e.inscricoesAbertas === false ? 'INSCRIÇÕES FECHADAS' : 'ATIVO',
+    ]),
+  ];
+  return `\uFEFF${linhas.map((l) => l.map(csvCelula).join(';')).join('\r\n')}\r\n`;
+}
+
+function pdfDeLinhas(titulo, subtitulo, linhas, { geradoEm = new Date() } = {}) {
+  const paginas = [];
+  let pagina = [];
+  let y = A4.altura - A4.margem;
+  const novaPagina = (continuacao = false) => {
+    pagina = [];
+    paginas.push(pagina);
+    y = A4.altura - A4.margem;
+    if (continuacao) {
+      pagina.push(`BT /F2 11 Tf ${A4.margem} ${y} Td (${escaparPdf(`${titulo} - continuacao`)}) Tj ET`);
+      y -= 24;
+    }
+  };
+  const escrever = (texto, { size = 10, bold = false, espaco = 14 } = {}) => {
+    if (y < A4.margem + 30) novaPagina(true);
+    pagina.push(`BT /${bold ? 'F2' : 'F1'} ${size} Tf ${A4.margem} ${y} Td (${escaparPdf(texto)}) Tj ET`);
+    y -= espaco;
+  };
+  novaPagina(false);
+  escrever(titulo, { size: 18, bold: true, espaco: 24 });
+  if (subtitulo) escrever(subtitulo, { size: 10, espaco: 18 });
+  escrever(`Gerado em: ${geradoEm.toLocaleString('pt-BR')}`, { size: 9, espaco: 20 });
+  for (const linha of linhas) {
+    for (const pedaco of quebrar(linha, 96)) escrever(pedaco, { size: 9, espaco: 13 });
+  }
+  paginas.forEach((p, i) => {
+    p.push(`BT /F1 8 Tf ${A4.largura - A4.margem - 60} ${A4.margem - 16} Td (Pagina ${i + 1} de ${paginas.length}) Tj ET`);
+  });
+  return montarPdf(paginas);
+}
+
+export function eventosParaPdf(eventos, { inicio, fim, geradoEm = new Date() } = {}) {
+  const de = inicio ? parseDate(inicio) : null;
+  const ate = fim ? parseDate(fim, { endOfDay: true }) : null;
+  const periodo = de || ate
+    ? `Período: ${de ? de.toLocaleDateString('pt-BR') : 'início'} a ${ate ? ate.toLocaleDateString('pt-BR') : 'hoje'}`
+    : 'Todos os eventos';
+  const linhas = eventos.map((e, i) => {
+    const data = e.inicio ? new Date(e.inicio).toLocaleString('pt-BR') : '-';
+    return `${String(i + 1).padStart(3, '0')}  ${e.nome} - ${data} - ${e.local || 'sem local'}`
+      + ` - ${e.inscritos ?? 0} inscrito(s), ${e.presentes ?? 0} presente(s), ${e.espera ?? 0} na espera`;
+  });
+  return pdfDeLinhas('Relatório de eventos', periodo, linhas, { geradoEm });
 }

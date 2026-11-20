@@ -20,6 +20,7 @@ const COOLDOWN_MS = {
   SINCRONISMO: 6 * 3600 * 1000,
   INATIVACAO: 30 * 24 * 3600 * 1000,
   METRICAS: BACKUP_INTERVAL_MS,
+  EVENTO: 24 * 3600 * 1000,
 };
 
 function criar(store, { key, tipo, titulo, detalhe, now }) {
@@ -116,6 +117,23 @@ export function evaluateNotifications(store, now = new Date()) {
     now,
   });
   if (n) criadas.push(n);
+
+  // 6. Eventos da agenda: lembrete nas próximas 24h.
+  for (const ev of store.socialEvents || []) {
+    if (ev.ativo === false) continue;
+    const inicio = parseDate(ev.inicio);
+    if (!inicio) continue;
+    const falta = inicio - now;
+    if (falta < 0 || falta > 24 * 3600 * 1000) continue;
+    const ps = (store.eventParticipants || []).filter((p) => p.eventId === ev.id && p.status !== 'CANCELADO');
+    const n = criar(store, {
+      key: `evento-lembrete:${ev.id}`, tipo: 'EVENTO',
+      titulo: `Evento em breve: ${ev.nome}`,
+      detalhe: `${inicio.toLocaleString('pt-BR')} · ${ps.filter((p) => p.status !== 'ESPERA').length} inscrito(s), ${ps.filter((p) => p.status === 'ESPERA').length} na espera.`,
+      now,
+    });
+    if (n) criadas.push(n);
+  }
 
   return criadas;
 }

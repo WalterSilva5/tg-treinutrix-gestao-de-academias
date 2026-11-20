@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inscrição no evento</title>
+<style>
+  :root { --primary:#f97316; --ink:#1c1917; --muted:#78716c; --line:#e7e5e4; --bg:#fafaf9; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; padding:20px;
+    font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+  .card { width:100%; max-width:520px; background:#fff; border:1px solid var(--line); border-radius:20px;
+    box-shadow:0 20px 50px rgba(28,25,23,.08); padding:26px; }
+  h1 { margin:0 0 4px; font-size:22px; letter-spacing:-.02em; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 18px; }
+  .meta { display:grid; gap:6px; background:var(--bg); border-radius:12px; padding:12px 14px; margin-bottom:18px; font-size:13px; }
+  .meta b { color:var(--ink); }
+  label { display:block; font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.05em; margin:12px 0 5px; }
+  input { width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px; font:inherit; }
+  input:focus { outline:2px solid var(--primary); border-color:transparent; }
+  button { width:100%; margin-top:16px; padding:12px; border:0; border-radius:10px; background:var(--primary);
+    color:#fff; font:inherit; font-weight:700; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .erro { color:#b91c1c; font-size:13px; margin-top:10px; }
+  .ok { text-align:center; }
+  .ok .codigo { font-size:30px; letter-spacing:.18em; font-weight:800; margin:10px 0; }
+  .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700;
+    background:#dcfce7; color:#166534; }
+  .badge.espera { background:#fef3c7; color:#92400e; }
+  canvas { display:block; margin:12px auto 0; }
+  .foot { text-align:center; color:var(--muted); font-size:11px; margin-top:18px; }
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <h1>Carregando…</h1>
+  <p class="sub">Inscrição no evento</p>
+</div>
+<script src="/qr.js"></script>
+<script>
+const token = (location.pathname.match(/^\/e\/([A-Za-z0-9]+)/) || [])[1] || '';
+const card = document.getElementById('card');
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dataFmt = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+
+function desenharQr(texto) {
+  try {
+    const qr = QR.qrMatrix(texto);
+    const quiet = 4, scale = Math.max(3, Math.floor(220 / (qr.size + quiet * 2)));
+    const dim = (qr.size + quiet * 2) * scale;
+    const canvas = document.createElement('canvas');
+    canvas.width = dim; canvas.height = dim;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, dim, dim);
+    ctx.fillStyle = '#1c1917';
+    for (let r = 0; r < qr.size; r++) for (let c = 0; c < qr.size; c++) {
+      if (qr.modules[r][c]) ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
+    }
+    return canvas;
+  } catch { return null; }
+}
+
+async function carregar() {
+  if (!token) {
+    card.innerHTML = '<h1>Link inválido</h1><p class="sub">Peça um novo link para a recepção.</p>';
+    return;
+  }
+  try {
+    const r = await fetch('/api/public/eventos/' + encodeURIComponent(token));
+    const ev = await r.json();
+    if (!r.ok) throw new Error(ev.error || 'Evento indisponível');
+    const aberto = ev.inscricoesAbertas;
+    const restantes = ev.capacidade ? `${ev.restantes} vaga(s)` : 'sem limite de vagas';
+    card.innerHTML = `
+      <h1>${esc(ev.nome)}</h1>
+      <p class="sub">${esc(ev.descricao || 'Inscrição no evento')}</p>
+      <div class="meta">
+        <div><b>Quando:</b> ${esc(dataFmt(ev.inicio))}${ev.fim ? ' até ' + esc(dataFmt(ev.fim)) : ''}</div>
+        <div><b>Local:</b> ${esc(ev.local || 'a definir')}</div>
+        <div><b>Vagas:</b> ${esc(restantes)}${ev.espera ? ' · ' + ev.espera + ' na espera' : ''}</div>
+        <div><b>Valor:</b> ${ev.valor > 0 ? 'R$ ' + Number(ev.valor).toFixed(2).replace('.', ',') + ' (pagar na recepção)' : 'gratuito'}</div>
+      </div>
+      ${aberto ? `
+        <form id="form">
+          <label>Nome completo</label>
+          <input id="nome" required maxlength="120" placeholder="Seu nome">
+          <label>Contato (telefone ou e-mail)</label>
+          <input id="contato" maxlength="120" placeholder="(11) 90000-0000">
+          <label>Documento (opcional)</label>
+          <input id="documento" maxlength="60" placeholder="RG/CPF">
+          <button type="submit" id="enviar">Confirmar inscrição</button>
+          <div class="erro" id="erro"></div>
+        </form>` : '<p class="erro">Inscrições encerradas para este evento.</p>'}
+      <p class="foot">Participantes não precisam ser alunos da academia.</p>`;
+    if (aberto) document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('enviar');
+      const erro = document.getElementById('erro');
+      erro.textContent = '';
+      btn.disabled = true; btn.textContent = 'Enviando…';
+      try {
+        const resp = await fetch('/api/public/eventos/' + encodeURIComponent(token) + '/participantes', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nome: document.getElementById('nome').value.trim(),
+            contato: document.getElementById('contato').value.trim(),
+            documento: document.getElementById('documento').value.trim(),
+          }),
+        });
+        const out = await resp.json();
+        if (!resp.ok) throw new Error(out.error || 'Não foi possível inscrever');
+        const qr = desenharQr(out.codigo);
+        card.innerHTML = `
+          <div class="ok">
+            <h1>Inscrição confirmada</h1>
+            <p class="sub">${esc(out.evento)} · ${esc(dataFmt(out.inicio))}</p>
+            <span class="badge ${out.status === 'ESPERA' ? 'espera' : ''}">${out.status === 'ESPERA' ? 'LISTA DE ESPERA' : 'INSCRITO'}</span>
+            <p class="sub" style="margin-top:14px">Guarde este código para o check-in:</p>
+            <div class="codigo">${esc(out.codigo)}</div>
+            ${qr ? '' : ''}
+            <p class="foot">${esc(out.mensagem || '')}</p>
+          </div>`;
+        if (qr) card.appendChild(qr);
+      } catch (err) {
+        erro.textContent = err.message;
+        btn.disabled = false; btn.textContent = 'Confirmar inscrição';
+      }
+    });
+  } catch (e) {
+    card.innerHTML = `<h1>Evento indisponível</h1><p class="sub">${esc(e.message)}</p>`;
+  }
+}
+carregar();
+</script>
+</body>
+</html>

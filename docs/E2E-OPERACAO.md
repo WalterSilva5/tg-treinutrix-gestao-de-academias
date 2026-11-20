@@ -11,8 +11,11 @@ Execução manual no navegador interno em **2026-11-20**, com a API em
 - [x] **Sistema → Catracas**: lista, botões Testar/Editar/Excluir, campo de
   detecção e formulário de cadastro presentes.
 - [x] **Sistema → Importar cadastros**: input CSV/JSON, prévia e confirmação.
-- [x] **Eventos**: criar evento, inscrever externo, abrir detalhe, check-in e
-  lista atualizada; export CSV/PDF respondeu 200.
+- [x] **Eventos**: criar/editar/cancelar/duplicar e repetir (semanal/mensal).
+- [x] **Eventos**: inscrever externo, lista de espera, check-in por código,
+  pagamento manual e importação CSV de participantes.
+- [x] **Eventos**: link público `/e/<token>` com QR, sem login.
+- [x] **Eventos**: relatório por período em CSV/PDF.
 - [x] **Sorteios**: criar sorteio de evento, abrir roleta, girar e ver ganhador;
   resultado exibido e lista atualizada.
 - [x] Aba **Sistema → Banco** mostrando `sqlite`.

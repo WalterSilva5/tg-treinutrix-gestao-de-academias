@@ -9,8 +9,8 @@ programáveis e desabilitáveis**. Tudo local, no SQLite, sem serviço externo.
 
 ## 1. Eventos
 
-Campos: nome, descrição, local, início, fim, capacidade (opcional), aceita
-visitantes, inscrições abertas e ativo.
+Campos: nome, descrição, local, início, fim, capacidade (opcional), valor,
+aceita visitantes, lista de espera, inscrições abertas e ativo.
 
 Participante pode ser:
 
@@ -20,10 +20,35 @@ Participante pode ser:
 | `VISITANTE` | cadastro de visitante já existente | não |
 | `EXTERNO` | nome + contato/documento, sem cadastro | **não** |
 
-- Capacidade conta apenas inscrições não canceladas.
-- Check-in muda o status para `PRESENTE`; cancelar mantém o histórico.
-- Remover a inscrição apaga só a inscrição (não afeta o cadastro da pessoa).
-- Excluir o evento remove as inscrições junto (gerência).
+- Capacidade conta apenas inscrições `INSCRITO`/`PRESENTE`; ao lotar, novos
+  entram como `ESPERA` e são promovidos automaticamente quando abre vaga.
+- Check-in por botão ou por **código curto** (o participante recebe um código
+  de 6 caracteres, com QR, na inscrição pública).
+- Cancelar mantém o histórico; remover apaga a inscrição e promove a espera.
+- Editar, duplicar, repetir (semanal/mensal) e cancelar (desmarcar “ativo”) pelo
+  painel. Excluir é só gerência.
+- Valor opcional (R$): o pagamento é registrado manualmente na recepção
+  (`Pago`/`Desfazer`), sem gateway.
+
+## 1.1 Inscrição pública (link + QR)
+
+- Cada evento tem um `publicToken`; o botão **Link/QR** mostra
+  `http://IP:3001/e/<token>` e o QR para divulgar.
+- A página `/e/<token>` é pública (sem login): mostra data, local, vagas e
+  valor, e inscreve visitantes/externos.
+- Limite por IP (`PUBLIC_MAX_HITS`/`PUBLIC_WINDOW_MS`) e bloqueio quando as
+  inscrições estão fechadas ou o evento foi cancelado.
+- **Gerar novo link** invalida o anterior.
+- Participante externo pode ser promovido a aluno/visitante depois
+  (`Virar aluno`), criando cadastro, regra e sync com a catraca.
+
+## 1.2 Relatórios de eventos
+
+- `GET /api/relatorios/eventos?inicio=&fim=` (JSON), `.csv` e `.pdf`.
+- Colunas: evento, início, local, capacidade, inscritos, presentes, espera,
+  receita e situação.
+- Exportação individual do evento continua em `.../export.csv|pdf`.
+
 
 ## 2. Sorteios
 
@@ -85,9 +110,14 @@ Cada sorteio tem:
 | GET/POST | `/api/eventos` | equipe |
 | GET/PATCH | `/api/eventos/:id` | equipe |
 | DELETE | `/api/eventos/:id` | gerência |
-| POST | `/api/eventos/:id/participantes` | equipe |
+| POST | `/api/eventos/:id/duplicar` · `/recorrencia` · `/token` | equipe/gerência |
+| POST | `/api/eventos/:id/participantes` · `/participantes/import` | equipe |
 | PATCH/DELETE | `/api/eventos/:id/participantes/:pid` | equipe |
+| POST | `/api/eventos/:id/participantes/:pid/promover` | equipe |
+| POST | `/api/eventos/:id/checkin` | equipe |
 | GET | `/api/eventos/:id/export.csv` · `.pdf` | equipe |
+| GET | `/api/relatorios/eventos[.csv|.pdf]` | equipe |
+| GET/POST | `/api/public/eventos/:token` · `/participantes` | público (link) |
 | GET | `/api/sorteios` | equipe |
 | POST | `/api/sorteios` | gerência |
 | GET/PATCH/DELETE | `/api/sorteios/:id` | GET equipe; alterar gerência |
@@ -98,8 +128,10 @@ Cada sorteio tem:
 
 ## 5. Interface
 
-- **Eventos:** lista, criação, detalhe com inscrição de aluno ou externo,
-  check-in, cancelamento e botões CSV/PDF.
+- **Eventos:** lista, criação/edição, duplicar/repetir, link público com QR,
+  inscrição de aluno ou externo, importação CSV, check-in por código,
+  pagamento manual, cancelamento e exportação CSV/PDF.
+- **Relatório por período:** totais de inscritos, presentes, espera e receita.
 - **Sorteios:** lista com elegíveis e status, criação com público/pesos/datas,
   habilitar/desabilitar, roleta animada, reiniciar, entregar e excluir.
 - Recepção vê **Eventos**; **Sorteios** é exclusivo da gerência.

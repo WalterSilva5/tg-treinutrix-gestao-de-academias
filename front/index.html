@@ -449,23 +449,45 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
           <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarEventos()">Atualizar</button></div></div>
         <div class="list" id="listaEventos"></div>
         <details id="eventoForm">
-          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin:12px 0 10px">Novo evento</summary>
+          <summary id="eventoFormTitulo" style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin:12px 0 10px">Novo evento</summary>
           <div class="form-grid">
             <input id="evNome" placeholder="Nome do evento">
             <input id="evLocal" placeholder="Local">
             <input id="evInicio" type="datetime-local" title="Início">
             <input id="evFim" type="datetime-local" title="Fim (opcional)">
             <input id="evCapacidade" type="number" min="0" placeholder="Capacidade (vazio = sem limite)">
+            <input id="evValor" type="number" min="0" step="0.01" placeholder="Valor (0 = grátis)">
             <label class="help" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="evVisitantes" checked> Aceita visitantes/externos</label>
+            <label class="help" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="evListaEspera" checked> Lista de espera quando lotar</label>
+            <label class="help" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="evInscricoes" checked> Inscrições abertas</label>
+            <label class="help" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="evAtivo" checked> Evento ativo (desmarque para cancelar)</label>
             <textarea id="evDescricao" placeholder="Descrição/regras" rows="2"></textarea>
-            <div class="form-actions"><button class="btn sm" onclick="criarEvento()">Criar evento</button></div>
+            <div class="form-actions">
+              <button class="btn sm" id="evSalvar" onclick="salvarEvento()">Criar evento</button>
+              <button class="btn ghost sm" id="evCancelarEdicao" onclick="cancelarEdicaoEvento()" style="display:none">Cancelar edição</button>
+            </div>
           </div>
         </details>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Relatório por período</h2><p class="sub">Todos os eventos, com inscritos, presentes, espera e receita</p></div></div>
+        <div class="form-actions">
+          <input id="relInicio" type="date" title="Início">
+          <input id="relFim" type="date" title="Fim">
+          <button class="btn ghost sm" onclick="baixarRelatorioEventos('csv')">CSV</button>
+          <button class="btn ghost sm" onclick="baixarRelatorioEventos('pdf')">PDF</button>
+        </div>
+        <div id="relResumo" class="help"></div>
       </div>
 
       <div class="card hidden" id="eventoDetalhe">
         <div class="card-head"><div><h2 id="evDetNome">Evento</h2><p class="sub" id="evDetMeta"></p></div>
           <div class="card-head-actions">
+            <button class="btn ghost sm" onclick="abrirLinkEvento()">Link/QR</button>
+            <button class="btn ghost sm" onclick="editarEventoAtual()">Editar</button>
+            <button class="btn ghost sm" onclick="duplicarEventoAtual()">Duplicar</button>
+            <button class="btn ghost sm" onclick="repetirEventoAtual()">Repetir</button>
             <button class="btn ghost sm" onclick="baixarExportEvento('csv')">CSV</button>
             <button class="btn ghost sm" onclick="baixarExportEvento('pdf')">PDF</button>
             <button class="btn ghost sm" onclick="fecharEvento()">Fechar</button>
@@ -478,7 +500,13 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
           <div class="form-actions"><button class="btn sm" onclick="adicionarParticipante()">Inscrever</button></div>
         </div>
         <p class="help">Aluno: informe a matrícula/id. Visitante ou externo: deixe o aluno vazio e preencha o nome — não precisa ser aluno da academia.</p>
-        <div class="table-wrap"><table><thead><tr><th>Participante</th><th>Tipo</th><th>Status</th><th></th></tr></thead><tbody id="participantes"></tbody></table></div>
+        <div class="form-actions" style="margin:10px 0">
+          <input id="chkCodigo" placeholder="Código de check-in" maxlength="10" style="max-width:180px">
+          <button class="btn ghost sm" onclick="checkinCodigo()">Check-in por código</button>
+          <input type="file" id="parArquivo" accept=".csv,text/csv" onchange="importarParticipantesEvento()">
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Participante</th><th>Tipo</th><th>Status</th><th>Código/Pago</th><th></th></tr></thead><tbody id="participantes"></tbody></table></div>
+        <div id="parImportResultado" class="help"></div>
       </div>
     </section>
 
@@ -612,6 +640,21 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
       <a class="tnx" href="https://treinutrix.com" target="_blank" rel="noopener"><span class="dotmark"></span><b>Treinutrix</b> — Sua musculação mais inteligente</a>
     </footer>
   </main>
+</div>
+
+<!-- MODAL: LINK PÚBLICO DO EVENTO -->
+<div id="eventoLinkModal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:440px" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2>Link de inscrição</h2><button class="btn ghost sm" onclick="fecharLinkEvento()">Fechar</button></div>
+    <p class="help" id="eventoLinkUrl" style="word-break:break-all"></p>
+    <div class="qr-box" style="text-align:center"><canvas id="eventoLinkQr" width="240" height="240"></canvas></div>
+    <div class="form-actions" style="justify-content:center">
+      <button class="btn ghost sm" onclick="copiarLinkEvento()">Copiar link</button>
+      <button class="btn ghost sm" onclick="baixarQrEvento()">Baixar QR</button>
+      <button class="btn ghost sm" onclick="rotacionarTokenEvento()">Gerar novo link</button>
+    </div>
+    <p class="help">Quem abrir o link se inscreve sem login. O link antigo deixa de funcionar ao gerar outro.</p>
+  </div>
 </div>
 
 <!-- MODAL: ROLETA DO SORTEIO -->
@@ -1222,6 +1265,7 @@ const IMP_ALIAS = {
   enrollid: 'enrollid', cartao: 'enrollid', validadefim: 'validadeFim',
   validade: 'validadeFim', vencimento: 'validadeFim', treinutrix: 'treinutrix',
   ativo: 'ativo', status: 'ativo', senha: 'senha',
+  contato: 'contato', telefone: 'contato', email: 'contato', documento: 'documento', cpf: 'documento',
 };
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
@@ -1552,11 +1596,20 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharShar
 
 // ---------- eventos (agenda) ----------
 let eventoAtual = null;
+let eventoEditando = null;
+let eventoLinkAtual = null;
 
 function dataHoraCurta(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+function paraInputDataHora(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 async function carregarEventos() {
@@ -1566,17 +1619,33 @@ async function carregarEventos() {
     window.__pessoasObj = Object.fromEntries(pessoas.map(p => [p.id, p]));
     window.__pessoas = Object.fromEntries(pessoas.map(p => [p.id, p.nome]));
     $('listaEventos').innerHTML = eventos.map(e => `
-      <div class="list-item"><div><div class="t">${esc(e.nome)}</div>
-      <div class="d">${esc(dataHoraCurta(e.inicio))}${e.local ? ' · ' + esc(e.local) : ''} · ${e.participantes} inscrito(s) · ${e.presentes} presente(s)</div></div>
+      <div class="list-item"><div><div class="t">${esc(e.nome)}
+        ${e.ativo === false ? '<span class="badge neutral">cancelado</span>' : e.inscricoesAbertas === false ? '<span class="badge warn">inscrições fechadas</span>' : '<span class="badge ok dot">aberto</span>'}</div>
+      <div class="d">${esc(dataHoraCurta(e.inicio))}${e.local ? ' · ' + esc(e.local) : ''} · ${e.participantes} inscrito(s) · ${e.presentes} presente(s)${e.capacidade ? ' · limite ' + e.capacidade : ''}${e.valor > 0 ? ' · R$ ' + Number(e.valor).toFixed(2) : ''}</div></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn ghost sm" onclick="abrirEvento('${esc(e.id)}')">Participantes</button>
+        <button class="btn ghost sm" onclick="editarEvento('${esc(e.id)}')">Editar</button>
+        <button class="btn ghost sm" onclick="duplicarEvento('${esc(e.id)}')">Duplicar</button>
         ${sess.perfil === 'gerencia' ? `<button class="btn danger sm" onclick="excluirEvento('${esc(e.id)}')">Excluir</button>` : ''}
       </div></div>`).join('') || '<div class="empty">Nenhum evento cadastrado.</div>';
     $('sorEvento').innerHTML = eventos.map(e => `<option value="${esc(e.id)}">${esc(e.nome)}</option>`).join('');
   } catch (e) { toast('Falha ao carregar eventos', e.message, 'err'); }
 }
 
-async function criarEvento() {
+function limparFormEvento() {
+  eventoEditando = null;
+  ['evNome', 'evLocal', 'evInicio', 'evFim', 'evCapacidade', 'evValor', 'evDescricao'].forEach(id => { $(id).value = ''; });
+  $('evVisitantes').checked = true;
+  $('evListaEspera').checked = true;
+  $('evInscricoes').checked = true;
+  $('evAtivo').checked = true;
+  $('evSalvar').textContent = 'Criar evento';
+  $('evCancelarEdicao').style.display = 'none';
+  $('eventoFormTitulo').textContent = 'Novo evento';
+}
+function cancelarEdicaoEvento() { limparFormEvento(); }
+
+async function salvarEvento() {
   const nome = $('evNome').value.trim();
   if (!nome) return toast('Nome obrigatório', 'Informe o nome do evento', 'err');
   if (!$('evInicio').value) return toast('Data obrigatória', 'Informe o início do evento', 'err');
@@ -1586,19 +1655,69 @@ async function criarEvento() {
     inicio: new Date($('evInicio').value).toISOString(),
     fim: $('evFim').value ? new Date($('evFim').value).toISOString() : null,
     capacidade: $('evCapacidade').value ? Number($('evCapacidade').value) : null,
+    valor: $('evValor').value ? Number($('evValor').value) : 0,
     permiteVisitantes: $('evVisitantes').checked,
+    listaEspera: $('evListaEspera').checked,
+    inscricoesAbertas: $('evInscricoes').checked,
     descricao: $('evDescricao').value.trim(),
-    inscricoesAbertas: true,
-    ativo: true,
+    ativo: $('evAtivo').checked,
   };
   try {
-    const e = await jpost('/api/eventos', body);
-    toast('Evento criado', e.nome);
-    $('evNome').value = ''; $('evLocal').value = ''; $('evInicio').value = ''; $('evFim').value = '';
-    $('evCapacidade').value = ''; $('evDescricao').value = '';
+    const e = eventoEditando
+      ? await jpatch(`/api/eventos/${encodeURIComponent(eventoEditando)}`, body)
+      : await jpost('/api/eventos', body);
+    toast(eventoEditando ? 'Evento atualizado' : 'Evento criado', e.nome);
+    limparFormEvento();
     await carregarEventos();
     abrirEvento(e.id);
-  } catch (err) { toast('Falha ao criar evento', err.message, 'err'); }
+  } catch (err) { toast('Falha ao salvar evento', err.message, 'err'); }
+}
+
+async function editarEvento(id) {
+  try {
+    const e = await jget(`/api/eventos/${encodeURIComponent(id)}`);
+    eventoEditando = e.id;
+    $('evNome').value = e.nome || '';
+    $('evLocal').value = e.local || '';
+    $('evInicio').value = paraInputDataHora(e.inicio);
+    $('evFim').value = paraInputDataHora(e.fim);
+    $('evCapacidade').value = e.capacidade || '';
+    $('evValor').value = e.valor || '';
+    $('evVisitantes').checked = e.permiteVisitantes !== false;
+    $('evListaEspera').checked = e.listaEspera !== false;
+    $('evInscricoes').checked = e.inscricoesAbertas !== false;
+    $('evAtivo').checked = e.ativo !== false;
+    $('evDescricao').value = e.descricao || '';
+    $('evSalvar').textContent = 'Salvar alterações';
+    $('evCancelarEdicao').style.display = '';
+    $('eventoFormTitulo').textContent = `Editar: ${e.nome}`;
+    $('eventoForm').open = true;
+    $('eventoForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (err) { toast('Falha ao editar', err.message, 'err'); }
+}
+function editarEventoAtual() { if (eventoAtual) editarEvento(eventoAtual.id); }
+
+async function duplicarEvento(id) {
+  try {
+    const e = await jpost(`/api/eventos/${encodeURIComponent(id)}/duplicar`, {});
+    toast('Evento duplicado', e.nome);
+    carregarEventos();
+  } catch (err) { toast('Falha ao duplicar', err.message, 'err'); }
+}
+function duplicarEventoAtual() { if (eventoAtual) duplicarEvento(eventoAtual.id); }
+
+async function repetirEventoAtual() {
+  if (!eventoAtual) return;
+  const tipo = (prompt('Repetir SEMANAL ou MENSAL?', 'SEMANAL') || '').trim().toUpperCase();
+  if (!tipo) return;
+  if (!['SEMANAL', 'MENSAL'].includes(tipo)) return toast('Tipo inválido', 'Use SEMANAL ou MENSAL', 'err');
+  const vezes = Number(prompt('Quantas ocorrências criar? (1 a 52)', '4'));
+  if (!Number.isInteger(vezes) || vezes < 1 || vezes > 52) return toast('Quantidade inválida', 'Use de 1 a 52', 'err');
+  try {
+    const r = await jpost(`/api/eventos/${encodeURIComponent(eventoAtual.id)}/recorrencia`, { tipo, vezes });
+    toast('Eventos criados', `${r.criados.length} ocorrência(s) ${tipo.toLowerCase()}`);
+    carregarEventos();
+  } catch (e) { toast('Falha ao repetir', e.message, 'err'); }
 }
 
 async function excluirEvento(id) {
@@ -1616,7 +1735,7 @@ async function abrirEvento(id) {
     const e = await jget(`/api/eventos/${encodeURIComponent(id)}`);
     eventoAtual = e;
     $('evDetNome').textContent = e.nome;
-    $('evDetMeta').textContent = `${dataHoraCurta(e.inicio)}${e.local ? ' · ' + e.local : ''} · ${e.participantes.length} inscrito(s)${e.capacidade ? ' · limite ' + e.capacidade : ''}`;
+    $('evDetMeta').textContent = `${dataHoraCurta(e.inicio)}${e.local ? ' · ' + e.local : ''} · ${e.participantes.length} inscrito(s)${e.capacidade ? ' · limite ' + e.capacidade : ''}${e.valor > 0 ? ' · R$ ' + Number(e.valor).toFixed(2) : ''}${e.ativo === false ? ' · CANCELADO' : ''}`;
     renderParticipantes(e.participantes);
     $('eventoDetalhe').classList.remove('hidden');
     $('eventoDetalhe').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1624,17 +1743,24 @@ async function abrirEvento(id) {
 }
 
 function renderParticipantes(lista) {
+  const valor = Number(eventoAtual?.valor || 0);
   $('participantes').innerHTML = lista.map(p => `
     <tr>
       <td><b>${esc(p.nome)}</b><div class="muted">${esc(p.matricula || '')}${p.contato ? ' · ' + esc(p.contato) : ''}</div></td>
       <td><span class="badge ${p.tipo === 'ALUNO' ? 'primary' : 'info'}">${esc(p.tipo)}</span></td>
-      <td>${p.status === 'PRESENTE' ? '<span class="badge ok dot">presente</span>' : p.status === 'CANCELADO' ? '<span class="badge neutral">cancelado</span>' : '<span class="badge warn">inscrito</span>'}</td>
+      <td>${p.status === 'PRESENTE' ? '<span class="badge ok dot">presente</span>'
+        : p.status === 'ESPERA' ? '<span class="badge warn">espera</span>'
+          : p.status === 'CANCELADO' ? '<span class="badge neutral">cancelado</span>'
+            : '<span class="badge neutral">inscrito</span>'}</td>
+      <td class="mono">${esc(p.codigo || '—')}${valor > 0 ? (p.pago ? ' <span class="badge ok">pago</span>' : ' <span class="badge warn">a pagar</span>') : ''}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="btn ghost sm" onclick="marcarPresenca('${esc(p.id)}', ${p.status !== 'PRESENTE'})">${p.status === 'PRESENTE' ? 'Desfazer' : 'Check-in'}</button>
+        ${valor > 0 ? `<button class="btn ghost sm" onclick="marcarPago('${esc(p.id)}', ${!p.pago})">${p.pago ? 'Desfazer pago' : 'Pago'}</button>` : ''}
+        ${!p.personId ? `<button class="btn ghost sm" onclick="promoverParticipante('${esc(p.id)}')">Virar aluno</button>` : ''}
         <button class="btn ghost sm" onclick="cancelarParticipante('${esc(p.id)}')">Cancelar</button>
         <button class="btn danger sm" onclick="removerParticipante('${esc(p.id)}')">Remover</button>
       </td>
-    </tr>`).join('') || '<tr><td colspan="4"><div class="empty">Ninguém inscrito ainda.</div></td></tr>';
+    </tr>`).join('') || '<tr><td colspan="5"><div class="empty">Ninguém inscrito ainda.</div></td></tr>';
 }
 
 async function adicionarParticipante() {
@@ -1681,6 +1807,59 @@ async function removerParticipante(pid) {
     carregarEventos();
   } catch (e) { toast('Falha ao remover', e.message, 'err'); }
 }
+
+async function marcarPago(pid, pago) {
+  try {
+    await jpatch(`/api/eventos/${encodeURIComponent(eventoAtual.id)}/participantes/${encodeURIComponent(pid)}`,
+      { pago, por: sess.nome || 'operador' });
+    toast(pago ? 'Pagamento registrado' : 'Pagamento desfeito', '');
+    abrirEvento(eventoAtual.id);
+  } catch (e) { toast('Falha no pagamento', e.message, 'err'); }
+}
+
+async function promoverParticipante(pid) {
+  const tipo = (prompt('Cadastrar como ALUNO ou VISITANTE?', 'ALUNO') || '').trim().toUpperCase();
+  if (!tipo) return;
+  if (!['ALUNO', 'VISITANTE'].includes(tipo)) return toast('Tipo inválido', 'Use ALUNO ou VISITANTE', 'err');
+  try {
+    const r = await jpost(`/api/eventos/${encodeURIComponent(eventoAtual.id)}/participantes/${encodeURIComponent(pid)}/promover`, { tipo });
+    toast('Cadastro criado', `${r.pessoa.nome} · matrícula ${r.pessoa.matricula}`);
+    carregarEventos();
+    abrirEvento(eventoAtual.id);
+  } catch (e) { toast('Falha ao cadastrar', e.message, 'err'); }
+}
+
+async function checkinCodigo() {
+  if (!eventoAtual) return;
+  const codigo = $('chkCodigo').value.trim();
+  if (!codigo) return;
+  try {
+    const p = await jpost(`/api/eventos/${encodeURIComponent(eventoAtual.id)}/checkin`, { codigo });
+    toast('Check-in confirmado', p.nome);
+    $('chkCodigo').value = '';
+    abrirEvento(eventoAtual.id);
+  } catch (e) { toast('Código não encontrado', e.message, 'err'); }
+}
+
+async function importarParticipantesEvento() {
+  if (!eventoAtual) return;
+  const arquivo = $('parArquivo').files[0];
+  if (!arquivo) return;
+  try {
+    const linhas = csvParaPessoas(await arquivo.text());
+    if (!linhas.length) return toast('CSV vazio', 'Use as colunas nome e matricula/contato', 'err');
+    const pessoas = linhas.map((l) => ({
+      nome: l.nome, matricula: l.matricula, contato: l.contato, documento: l.documento,
+    }));
+    const r = await jpost(`/api/eventos/${encodeURIComponent(eventoAtual.id)}/participantes/import`, { pessoas });
+    $('parImportResultado').textContent = `${r.total} linha(s): ${r.criados} inscrito(s), ${r.espera} na espera, ${r.erros} erro(s).`;
+    toast('Importação concluída', `${r.criados} inscrito(s) · ${r.espera} espera`, r.erros ? 'warn' : 'ok');
+    abrirEvento(eventoAtual.id);
+    carregarEventos();
+  } catch (e) { toast('Falha na importação', e.message, 'err'); }
+  finally { $('parArquivo').value = ''; }
+}
+
 function fecharEvento() { eventoAtual = null; $('eventoDetalhe').classList.add('hidden'); }
 
 async function baixarExportEvento(formato) {
@@ -1694,6 +1873,85 @@ async function baixarExportEvento(formato) {
     const a = document.createElement('a'); a.href = url; a.download = nome; a.click();
     URL.revokeObjectURL(url);
   } catch (e) { toast('Falha ao exportar', e.message, 'err'); }
+}
+
+// Link público + QR do evento.
+function desenharQrEm(canvasId, texto) {
+  try {
+    const qr = QR.qrMatrix(texto);
+    const quiet = 4;
+    const scale = Math.max(3, Math.floor(260 / (qr.size + quiet * 2)));
+    const dim = (qr.size + quiet * 2) * scale;
+    const canvas = $(canvasId);
+    canvas.width = dim; canvas.height = dim;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, dim, dim);
+    ctx.fillStyle = '#1c1917';
+    for (let r = 0; r < qr.size; r++) for (let c = 0; c < qr.size; c++) {
+      if (qr.modules[r][c]) ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
+    }
+  } catch (e) { toast('Falha no QR', e.message, 'err'); }
+}
+function linkPublicoEvento(ev) {
+  return `${location.origin}/e/${ev.publicToken}`;
+}
+function abrirLinkEvento() {
+  if (!eventoAtual) return;
+  if (!eventoAtual.publicToken) return toast('Token ausente', 'Gere um novo link', 'err');
+  eventoLinkAtual = eventoAtual;
+  const url = linkPublicoEvento(eventoAtual);
+  $('eventoLinkUrl').textContent = url;
+  $('eventoLinkUrl').dataset.url = url;
+  desenharQrEm('eventoLinkQr', url);
+  $('eventoLinkModal').classList.remove('hidden');
+}
+function fecharLinkEvento() { $('eventoLinkModal').classList.add('hidden'); }
+async function copiarLinkEvento() {
+  const url = $('eventoLinkUrl').dataset.url || $('eventoLinkUrl').textContent;
+  try {
+    if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(url);
+    else {
+      const ta = document.createElement('textarea');
+      ta.value = url; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    toast('Link copiado', url);
+  } catch (e) { toast('Não foi possível copiar', 'Selecione manualmente', 'err'); }
+}
+function baixarQrEvento() {
+  const a = document.createElement('a');
+  a.href = $('eventoLinkQr').toDataURL('image/png');
+  a.download = 'qrcode-evento.png';
+  a.click();
+}
+async function rotacionarTokenEvento() {
+  if (!eventoLinkAtual) return;
+  if (!confirm('Gerar um novo link? O link atual deixa de funcionar.')) return;
+  try {
+    const r = await jpost(`/api/eventos/${encodeURIComponent(eventoLinkAtual.id)}/token`, {});
+    eventoLinkAtual.publicToken = r.publicToken;
+    if (eventoAtual && eventoAtual.id === eventoLinkAtual.id) eventoAtual.publicToken = r.publicToken;
+    abrirLinkEvento();
+    toast('Novo link gerado', '');
+  } catch (e) { toast('Falha ao gerar link', e.message, 'err'); }
+}
+
+async function baixarRelatorioEventos(formato) {
+  const qs = new URLSearchParams();
+  if ($('relInicio').value) qs.set('inicio', $('relInicio').value);
+  if ($('relFim').value) qs.set('fim', $('relFim').value);
+  const sufixo = qs.toString() ? `?${qs}` : '';
+  try {
+    const resumo = await jget(`/api/relatorios/eventos${sufixo}`);
+    $('relResumo').textContent = `${resumo.total} evento(s) no período.`;
+    const r = await req(`/api/relatorios/eventos.${formato}${sufixo}`);
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `relatorio-eventos.${formato}`; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast('Falha no relatório', e.message, 'err'); }
 }
 
 // ---------- sorteios ----------

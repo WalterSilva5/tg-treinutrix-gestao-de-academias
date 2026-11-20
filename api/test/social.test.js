@@ -3,8 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   elegiveis, sortear, normalizarEvento, normalizarSorteio, novaInscricao, pessoaEmDia,
+  promoverEspera, gerarRecorrencias, eventoPorToken, novoEvento,
 } from '../src/social.js';
-import { eventoParaCsv, eventoParaPdf } from '../src/report.js';
+import { eventoParaCsv, eventoParaPdf, eventosParaCsv, eventosParaPdf } from '../src/report.js';
 
 const agora = new Date('2026-11-20T12:00:00-03:00');
 const futuro = '2027-12-31';
@@ -169,4 +170,73 @@ test('PDF pagina listas grandes', () => {
   const paginas = Number((/\/Count (\d+)/.exec(texto) || [])[1]);
   assert.ok(paginas >= 2);
   assert.match(texto, /Pagina 1 de [2-9]/);
+});
+
+
+test('lista de espera promove o pr?ximo quando abre vaga', () => {
+  const store = lojaBase();
+  store.socialEvents.push({ id: 'ev1', nome: 'Aula', ativo: true, inscricoesAbertas: true, permiteVisitantes: true, listaEspera: true, capacidade: 1, inicio: '2026-12-01T19:00:00.000Z' });
+  store.eventParticipants = [];
+  const a = novaInscricao(store, 'ev1', { nome: 'Primeiro' });
+  store.eventParticipants.push(a);
+  const b = novaInscricao(store, 'ev1', { nome: 'Segundo' });
+  store.eventParticipants.push(b);
+  assert.equal(a.status, 'INSCRITO');
+  assert.equal(b.status, 'ESPERA');
+  a.status = 'CANCELADO';
+  const promovido = promoverEspera(store, 'ev1');
+  assert.equal(promovido.nome, 'Segundo');
+  assert.equal(promovido.status, 'INSCRITO');
+});
+
+test('recorr?ncia semanal e mensal gera datas e tokens novos', () => {
+  const base = {
+    id: 'evo1', nome: 'Aula', inicio: '2026-11-02T19:00:00.000Z', fim: '2026-11-02T20:00:00.000Z',
+    local: 'Sala', capacidade: 10, permiteVisitantes: true, listaEspera: true,
+    inscricoesAbertas: true, ativo: true, publicToken: 'abc',
+  };
+  const semanal = gerarRecorrencias(base, { tipo: 'SEMANAL', vezes: 2 });
+  assert.equal(semanal.length, 2);
+  assert.equal(semanal[0].inicio, '2026-11-09T19:00:00.000Z');
+  assert.equal(semanal[1].inicio, '2026-11-16T19:00:00.000Z');
+  assert.notEqual(semanal[0].publicToken, base.publicToken);
+  assert.equal(semanal[0].serieId, 'evo1');
+
+  const mensal = gerarRecorrencias(base, { tipo: 'MENSAL', vezes: 1 });
+  assert.equal(mensal[0].inicio.slice(0, 7), '2026-12');
+  assert.throws(() => gerarRecorrencias(base, { tipo: 'DIARIA', vezes: 1 }), /SEMANAL/);
+});
+
+test('novo evento cria token p?blico e c?digo de inscri??o ?nico', () => {
+  const ev = novoEvento({ nome: 'Teste', inicio: '2026-12-01T19:00' });
+  assert.match(ev.publicToken, /^[0-9a-f]{16}$/);
+  const store = lojaBase();
+  store.socialEvents.push({ ...ev, capacidade: 10, permiteVisitantes: true, listaEspera: true, inscricoesAbertas: true, ativo: true });
+  const a = novaInscricao(store, ev.id, { nome: 'A' });
+  const b = novaInscricao(store, ev.id, { nome: 'B' });
+  assert.match(a.codigo, /^[0-9A-F]{6}$/);
+  assert.notEqual(a.codigo, b.codigo);
+  assert.equal(eventoPorToken(store, ev.publicToken).id, ev.id);
+  assert.equal(eventoPorToken(store, 'naoexiste'), null);
+});
+
+test('evento aceita valor e lista de espera configur?veis', () => {
+  const ev = normalizarEvento({ nome: 'Pago', inicio: '2026-12-01T19:00', valor: 35.5, listaEspera: false });
+  assert.equal(ev.valor, 35.5);
+  assert.equal(ev.listaEspera, false);
+});
+
+test('relat?rio de eventos exporta CSV e PDF', () => {
+  const eventos = [
+    { nome: 'Aula A', inicio: '2026-12-01T19:00:00.000Z', local: 'Sala 1', capacidade: 10, inscritos: 8, presentes: 6, espera: 2, receita: 120, ativo: true, inscricoesAbertas: true },
+    { nome: 'Aula B', inicio: '2026-12-02T19:00:00.000Z', local: 'Sala 2', capacidade: 20, inscritos: 5, presentes: 4, espera: 0, receita: 0, ativo: false },
+  ];
+  const csv = eventosParaCsv(eventos);
+  assert.match(csv, /Evento;In.cio;Local/);
+  assert.match(csv, /Aula A/);
+  assert.match(csv, /120,00/);
+  const pdf = eventosParaPdf(eventos, { inicio: '2026-12-01', fim: '2026-12-31' });
+  assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.4');
+  assert.match(pdf.toString('latin1'), /Relat.rio de eventos/);
+  assert.match(pdf.toString('latin1'), /Aula A/);
 });

@@ -14,7 +14,7 @@ export const PUBLICOS = {
   TODOS: 'Todas as pessoas ativas',
 };
 
-export const STATUS_PARTICIPANTE = ['INSCRITO', 'PRESENTE', 'CANCELADO'];
+export const STATUS_PARTICIPANTE = ['INSCRITO', 'ESPERA', 'PRESENTE', 'CANCELADO'];
 export const STATUS_SORTEIO = ['ATIVA', 'PAUSADA', 'SORTEADA'];
 
 function inteiro(valor, min, max, padrao) {
@@ -54,7 +54,9 @@ export function normalizarEvento(b, base = {}) {
     inicio: inicio.toISOString(),
     fim: fim ? fim.toISOString() : null,
     capacidade: b.capacidade !== undefined ? inteiro(b.capacidade, 0, 100000, 0) || null : (base.capacidade ?? null),
+    valor: b.valor !== undefined ? Math.max(0, Math.round(Number(b.valor) * 100) / 100) : (base.valor || 0),
     permiteVisitantes: b.permiteVisitantes !== undefined ? b.permiteVisitantes !== false : (base.permiteVisitantes !== false),
+    listaEspera: b.listaEspera !== undefined ? b.listaEspera !== false : (base.listaEspera !== false),
     inscricoesAbertas: b.inscricoesAbertas !== undefined ? b.inscricoesAbertas !== false : (base.inscricoesAbertas !== false),
     ativo: b.ativo !== undefined ? b.ativo !== false : (base.ativo !== false),
   };
@@ -185,11 +187,23 @@ export function sortear(store, sorteio, { agora = new Date(), randomInt = crypto
 }
 
 export function novoEvento(b) {
+  const evento = normalizarEvento(b);
   return {
     id: nextId('evo'),
-    ...normalizarEvento(b),
+    ...evento,
+    publicToken: crypto.randomBytes(8).toString('hex'),
+    serieId: null,
     criadoEm: new Date().toISOString(),
   };
+}
+
+function novoCodigo(store, eventId) {
+  for (let i = 0; i < 50; i += 1) {
+    const codigo = crypto.randomBytes(3).toString('hex').toUpperCase();
+    const existe = store.eventParticipants.some((p) => p.eventId === eventId && p.codigo === codigo);
+    if (!existe) return codigo;
+  }
+  return `${Date.now().toString(36).toUpperCase().slice(-4)}${crypto.randomInt(10, 99)}`;
 }
 
 export function novaInscricao(store, eventId, b) {
@@ -215,8 +229,14 @@ export function novaInscricao(store, eventId, b) {
   });
   if (jaInscrito) throw new Error('participante já inscrito neste evento');
 
-  const ativos = store.eventParticipants.filter((p) => p.eventId === eventId && p.status !== 'CANCELADO').length;
-  if (evento.capacidade && ativos >= evento.capacidade) throw new Error('capacidade do evento esgotada');
+  const ativos = store.eventParticipants.filter(
+    (p) => p.eventId === eventId && (p.status === 'INSCRITO' || p.status === 'PRESENTE'),
+  ).length;
+  const lotado = Boolean(evento.capacidade && ativos >= evento.capacidade);
+  if (lotado && evento.listaEspera === false) throw new Error('capacidade do evento esgotada');
+  const status = lotado ? 'ESPERA'
+    : (b.status && STATUS_PARTICIPANTE.includes(String(b.status).toUpperCase())
+      ? String(b.status).toUpperCase() : 'INSCRITO');
 
   return {
     id: nextId('par'),
@@ -227,9 +247,69 @@ export function novaInscricao(store, eventId, b) {
     matricula: pessoa ? pessoa.matricula : null,
     documento,
     contato,
-    status: b.status && STATUS_PARTICIPANTE.includes(String(b.status).toUpperCase())
-      ? String(b.status).toUpperCase() : 'INSCRITO',
+    codigo: novoCodigo(store, eventId),
+    status,
+    pago: false,
+    valorPago: 0,
     checkinAt: null,
     criadoEm: new Date().toISOString(),
   };
+}
+
+// Cancela/remove alguém e chama o primeiro da lista de espera.
+export function promoverEspera(store, eventId) {
+  const evento = store.socialEvents.find((e) => e.id === eventId);
+  if (!evento) return null;
+  const ativos = store.eventParticipants.filter(
+    (p) => p.eventId === eventId && (p.status === 'INSCRITO' || p.status === 'PRESENTE'),
+  ).length;
+  if (evento.capacidade && ativos >= evento.capacidade) return null;
+  const proximo = store.eventParticipants.find((p) => p.eventId === eventId && p.status === 'ESPERA');
+  if (!proximo) return null;
+  proximo.status = 'INSCRITO';
+  proximo.promovidoEm = new Date().toISOString();
+  return proximo;
+}
+
+// Cria as próximas ocorrências de um evento (sem participantes).
+export function gerarRecorrencias(evento, { tipo = 'SEMANAL', vezes = 1 } = {}) {
+  const total = Math.max(0, Math.min(52, Number(vezes) || 0));
+  const modo = String(tipo).toUpperCase();
+  if (!['SEMANAL', 'MENSAL'].includes(modo)) throw new Error('recorrência deve ser SEMANAL ou MENSAL');
+  if (total === 0) return [];
+  const serie = evento.serieId || evento.id;
+  const criados = [];
+  for (let n = 1; n <= total; n += 1) {
+    const inicio = new Date(evento.inicio);
+    const fim = evento.fim ? new Date(evento.fim) : null;
+    if (modo === 'SEMANAL') {
+      inicio.setDate(inicio.getDate() + 7 * n);
+      if (fim) fim.setDate(fim.getDate() + 7 * n);
+    } else {
+      const dia = inicio.getDate();
+      inicio.setDate(1); inicio.setMonth(inicio.getMonth() + n); inicio.setDate(Math.min(dia, new Date(inicio.getFullYear(), inicio.getMonth() + 1, 0).getDate()));
+      if (fim) {
+        const diaFim = fim.getDate();
+        fim.setDate(1); fim.setMonth(fim.getMonth() + n); fim.setDate(Math.min(diaFim, new Date(fim.getFullYear(), fim.getMonth() + 1, 0).getDate()));
+      }
+    }
+    criados.push({
+      ...evento,
+      id: nextId('evo'),
+      nome: evento.nome,
+      inicio: inicio.toISOString(),
+      fim: fim ? fim.toISOString() : null,
+      publicToken: crypto.randomBytes(8).toString('hex'),
+      serieId: serie,
+      criadoEm: new Date().toISOString(),
+      atualizadoEm: null,
+    });
+  }
+  return criados;
+}
+
+export function eventoPorToken(store, token) {
+  const t = String(token || '').trim();
+  if (!t) return null;
+  return store.socialEvents.find((e) => e.publicToken === t) || null;
 }

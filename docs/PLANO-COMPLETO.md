@@ -25,7 +25,7 @@ aceite. Este documento substitui a leitura solta de `PROXIMOS-PASSOS` e
 | 9 | SQLite por padrão, sem Docker | ✅ feito | manutenção/compactação e teste de restore em máquina limpa |
 | 10 | Importar cadastros sem biometria | 🟡 parcial | XLSX não (zero-dep), fotos, upsert, histórico, rollback |
 | 11 | Scripts `.bat`/`.sh` para restaurar admin | ✅ feito | teste do modo offline e serviço |
-| 12 | Sorteios/premiações + eventos + PDF/CSV | 🟡 parcial | edição na UI, auditoria, relatórios, inscrição pública |
+| 12 | Sorteios/premiações + eventos + PDF/CSV | ✅ eventos; 🟡 sorteios | auditoria/edição de sorteios (Fase 3) |
 | 13 | Este plano | ✅ feito | executar as fases abaixo |
 
 Legenda: ✅ pronto · 🟡 parcial · ⛔ bloqueado por hardware/terceiros.
@@ -158,15 +158,21 @@ IP no roteador — depende da máquina/rede da academia.
 **Aceite:** reiniciar o PC e abrir o painel pelo celular sem comando manual;
 backup restaurado em pasta limpa.
 
-### Fase 2 — Completar eventos (2–3 dias)
+### Fase 2 — Completar eventos (2–3 dias) — ✅ concluída em 2026-11-20
 
 1. Editar/cancelar/duplicar na UI.
 2. Inscrição pública (link/QR) e check-in por QR.
 3. Lista de espera e importação de participantes.
 4. Relatório de todos os eventos.
 
+**Entregue:** edição/cancelamento/duplicação/recorrência, página pública
+`/e/<token>` com QR, lista de espera com promoção automática, check-in por
+código, importação CSV de participantes, promoção de externo a aluno, valor e
+pagamento manual, relatório por período (JSON/CSV/PDF) e testes.
+Documentação em `docs/SORTEIOS-E-EVENTOS.md`.
+
 **Aceite:** criar evento, divulgar link, externo se inscrever sem login, check-in
-por QR, exportar CSV/PDF do período.
+por QR, exportar CSV/PDF do período. ✅
 
 ### Fase 3 — Completar sorteios (2–3 dias)
 
