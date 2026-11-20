@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel Catraca Fit 4 (demo sem hardware)</title>
+<style>
+body{font-family:system-ui;margin:24px;background:#111;color:#eee}
+.card{background:#1e1e1e;border:1px solid #333;border-radius:8px;padding:16px;margin-bottom:16px}
+button{background:#1DB954;border:0;color:#fff;padding:8px 14px;border-radius:6px;cursor:pointer;margin-right:8px}
+pre{background:#000;padding:12px;border-radius:6px;max-height:300px;overflow:auto}
+input{background:#222;border:1px solid #444;color:#eee;padding:6px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>Painel Catraca Fit 4 — modo simulado</h1>
+<div class="card">
+  <h3>Dispositivos</h3>
+  <div id="devices">carregando...</div>
+  <button onclick="heartbeat()">Enviar heartbeat</button>
+</div>
+<div class="card">
+  <h3>Simular identificação facial</h3>
+  <input id="person" value="per_demo_01">
+  <input id="score" value="0.95" size="5">
+  <button onclick="identify()">Identificar</button>
+  <button onclick="release()">Liberar manual</button>
+</div>
+<div class="card">
+  <h3>Eventos</h3>
+  <button onclick="load()">Atualizar</button>
+  <pre id="events"></pre>
+</div>
+<script>
+const API='http://localhost:3001', EDGE='http://localhost:3002';
+async function heartbeat(){
+  await fetch(`${API}/api/devices/dev_fit4_01/heartbeat`,{method:'POST'});
+  loadDevices();
+}
+async function loadDevices(){
+  const d=await (await fetch(`${API}/api/devices`)).json();
+  document.getElementById('devices').textContent=JSON.stringify(d,null,2);
+}
+async function load(){
+  const e=await (await fetch(`${API}/api/events`)).json();
+  document.getElementById('events').textContent=JSON.stringify(e,null,2);
+}
+async function identify(){
+  const person_id=document.getElementById('person').value;
+  const score=Number(document.getElementById('score').value);
+  const r=await (await fetch(`${EDGE}/sim/identify`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({person_id,score})})).json();
+  alert(JSON.stringify(r.decisao));
+  load();
+}
+async function release(){
+  const r=await (await fetch(`${API}/api/release`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:'dev_fit4_01',motivo:'MANUAL_OPERADOR'})})).json();
+  alert(JSON.stringify(r));
+  load();
+}
+loadDevices(); load();
+</script>
+</body>
+</html>

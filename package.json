@@ -1,0 +1,15 @@
+{
+  "name": "wsi-topdata-catraca-painel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Painel de acesso Topdata Fit 4 - scaffold sem hardware",
+  "scripts": {
+    "test": "node --test api/test/",
+    "api": "node api/src/server.js",
+    "edge": "node edge-catraca/src/edge.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,57 @@
+Business Source License 1.1
+
+Licensor: Walter Silva
+Licensed Work: wsi-topdata-catraca-painel
+Change Date: 2030-11-20
+Change License: Apache License, Version 2.0
+
+Terms
+
+The Licensor hereby grants you the right to copy, modify, create derivative
+works, redistribute, and make non-production use of the Licensed Work. The
+Licensor may make an Additional Use Grant, above, permitting production use
+of the Licensed Work.
+
+"Production use" means use of the Licensed Work in any form (including a
+derivative work) in a production environment, including live environments,
+environments processing real end-user data or traffic, or any environment
+used in connection with a commercial service offered to third parties. It
+does not include development, testing, evaluation, demonstration, personal,
+or academic use.
+
+"Additional Use Grant" — You may use the Licensed Work for development,
+testing, evaluation, demonstration, personal, and academic purposes,
+including deployment in non-production environments. Any production use,
+including use to control real turnstiles or process real access data for
+third parties, requires a separate commercial license from the Licensor.
+
+You must include a copy of, or reference to, this license with each copy of
+the Licensed Work you distribute.
+
+You may not use the Licensed Work in a manner that circumvents this
+license, including by offering the Licensed Work as a hosted service to
+third parties without a commercial license.
+
+Change License — On the Change Date, or the fourth anniversary of the first
+publicly available distribution of a specific version of the Licensed Work,
+whichever comes first, the Licensor hereby grants you rights under the terms
+of the Change License, and the rights granted in this paragraph supersede
+the restrictions in this license for that version.
+
+Notices — You must give any other recipients of the Licensed Work a copy of
+this license. You must cause any modified files to carry prominent notices
+stating that you changed the files. You must retain all copyright, patent,
+trademark, and attribution notices excluding those notices that do not
+pertain to any part of the Licensed Work.
+
+No warranty — The Licensed Work is provided "as is", without warranty of
+any kind, express or implied, including but not limited to the warranties of
+merchantability, fitness for a particular purpose, and noninfringement. In
+no event shall the Licensor be liable for any claim, damages, or other
+liability arising from the use of the Licensed Work.
+
+Trademarks — Topdata, TopAcesso, EasyInner, and Fit 4 are trademarks of
+their respective owners. This project is not affiliated with or endorsed by
+Topdata. EasyInner.dll and the facial SDKs are proprietary to Topdata and
+are NOT included in this repository; you must obtain them from the Topdata
+Integrators Portal under their own terms.
