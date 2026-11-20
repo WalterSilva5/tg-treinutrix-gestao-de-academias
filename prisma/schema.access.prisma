@@ -6,6 +6,7 @@ model AccessPerson {
   nome       String
   matricula  String    @unique
   tipo       String    @default("ALUNO") // ALUNO | PERSONAL | VISITANTE
+  treinutrix String?   // link ou @usuário do perfil na Treinutrix
   cpf        String?
   ativo      Boolean   @default(true)
   fotoUrl    String?

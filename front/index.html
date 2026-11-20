@@ -75,7 +75,7 @@ th,td{text-align:left;padding:6px;border-bottom:1px solid #2a2a2a}
       <input id="edgeUrl" size="22" title="URL do edge"><button onclick="identify()">Identificar</button>
       <button onclick="release()">Liberar manual</button></div></div>
     <div class="card"><h3>Cadastrar pessoa</h3>
-      <div class="row"><input id="visNome" placeholder="Nome"><select id="visTipo"><option>ALUNO</option><option>VISITANTE</option><option>PERSONAL</option></select><button onclick="cadastrarPessoa()">Cadastrar</button></div>
+      <div class="row"><input id="visNome" placeholder="Nome"><select id="visTipo"><option>ALUNO</option><option>VISITANTE</option><option>PERSONAL</option></select><input id="visTreinutrix" placeholder="Treinutrix (link ou @usuário)" size="26"><button onclick="cadastrarPessoa()">Cadastrar</button></div>
       <span style="color:#666;font-size:12px">Visitante ganha validade de 1 dia; aluno/personal sem vencimento inicial.</span></div>
     <div class="card"><h3>Fila de sincronização</h3><pre id="sync">—</pre></div>
     <div class="card"><h3>Eventos</h3><div class="row"><button onclick="load()">Atualizar</button>
@@ -143,7 +143,7 @@ async function carregarAluno() {
   const persons = await jget('/api/persons');
   const p = persons.find(x => x.id === sess.matricula || x.matricula === sess.matricula);
   $('plano').innerHTML = p
-    ? `<b>${p.nome}</b> · matrícula ${p.matricula}<br>Ativo: ${p.ativo ? 'sim' : 'NÃO'} · Validade: ${p.validadeIni || '—'} → ${p.validadeFim || '—'}`
+    ? `<b>${p.nome}</b> · matrícula ${p.matricula}<br>Ativo: ${p.ativo ? 'sim' : 'NÃO'} · Validade: ${p.validadeIni || '—'} → ${p.validadeFim || '—'}<br>Treinutrix: ${treinutrixLink(p.treinutrix)}`
     : 'Matrícula não encontrada.';
   const evs = (await jget('/api/events')).filter(e => e.personId === (p && (p.id)) || e.personId === sess.matricula);
   $('freqStats').innerHTML = `<div class="stat"><b>${evs.filter(e => e.decisao === 'ALLOW').length}</b>entradas</div>
@@ -180,10 +180,23 @@ async function release() {
 async function cadastrarPessoa() {
   const nome = $('visNome').value.trim(); if (!nome) return alert('Informe o nome.');
   const tipo = $('visTipo').value;
+  const treinutrix = $('visTreinutrix').value.trim() || null;
   const fim = tipo === 'VISITANTE' ? new Date(Date.now() + 864e5).toISOString() : null;
-  const p = await jpost('/api/persons', { nome, tipo, ativo: true, validadeFim: fim });
+  const p = await jpost('/api/persons', { nome, tipo, treinutrix, ativo: true, validadeFim: fim });
   alert(`${tipo} ${p.matricula} cadastrado.` + (fim ? ' Válido até ' + fim : ''));
-  $('visNome').value = '';
+  $('visNome').value = ''; $('visTreinutrix').value = '';
+}
+function treinutrixLink(t) {
+  if (!t) return '<span style="color:#666">sem vínculo</span>';
+  const url = t.startsWith('http') ? t : 'https://treinutrix.com/' + t.replace(/^@/, '');
+  const label = t.startsWith('http') ? 'abrir perfil' : t;
+  return `<a href="${url}" target="_blank" rel="noopener" style="color:#1DB954">${label} ↗</a>`;
+}
+async function vincularTreinutrix(id, atual) {
+  const v = prompt('Perfil Treinutrix (link ou @usuário, vazio remove):', atual || '');
+  if (v === null) return;
+  await jpatch(`/api/persons/${encodeURIComponent(id)}`, { treinutrix: v.trim() || null });
+  carregarSistema();
 }
 function csv() {
   const rows = [['timestamp', 'device', 'person', 'direcao', 'metodo', 'decisao', 'motivo']];
@@ -212,8 +225,8 @@ async function loadPessoas(inad) {
   const list = await jget('/api/persons');
   const vencidas = new Set((inad || []).map(p => p.id));
   $('pessoas').innerHTML = list.map(p => `<div class="row" style="justify-content:space-between">
-    <span style="font-size:14px">${p.ativo ? '●' : '○'} [${p.tipo || 'ALUNO'}] <b>${p.nome}</b> · ${p.matricula}${p.validadeFim ? ' · até ' + p.validadeFim.slice(0, 10) : ''}${vencidas.has(p.id) ? ' · <b style="color:#e88">EM ATRASO</b>' : ''}${!p.ativo ? ' · <span style="color:#888">inativo</span>' : ''}</span>
-    <button class="ghost" onclick="toggleAtivo('${p.id}', ${p.ativo ? 'false' : 'true'})">${p.ativo ? 'Inativar' : 'Reativar'}</button>
+    <span style="font-size:14px">${p.ativo ? '●' : '○'} [${p.tipo || 'ALUNO'}] <b>${p.nome}</b> · ${p.matricula}${p.validadeFim ? ' · até ' + p.validadeFim.slice(0, 10) : ''}${vencidas.has(p.id) ? ' · <b style="color:#e88">EM ATRASO</b>' : ''}${!p.ativo ? ' · <span style="color:#888">inativo</span>' : ''}<br><span style="font-size:12px;color:#888">Treinutrix: ${treinutrixLink(p.treinutrix)}</span></span>
+    <span><button class="ghost" onclick="vincularTreinutrix('${p.id}', '${(p.treinutrix || '').replace(/'/g, '')}')">Vincular</button><button class="ghost" onclick="toggleAtivo('${p.id}', ${p.ativo ? 'false' : 'true'})">${p.ativo ? 'Inativar' : 'Reativar'}</button></span>
   </div>`).join('') || 'Nenhuma pessoa.';
 }
 async function toggleAtivo(id, ativo) {

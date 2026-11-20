@@ -70,7 +70,8 @@ const server = http.createServer(async (req, res) => {
     const b = await readBody(req);
     const id = b.id || nextId('per');
     const tipo = TIPOS_PESSOA.includes(b.tipo) ? b.tipo : 'ALUNO';
-    const person = { id, nome: b.nome || 'Sem nome', matricula: b.matricula || id, tipo, ativo: b.ativo !== false, validadeIni: b.validadeIni || null, validadeFim: b.validadeFim || null };
+    const treinutrix = typeof b.treinutrix === 'string' && b.treinutrix.trim() ? b.treinutrix.trim() : null;
+    const person = { id, nome: b.nome || 'Sem nome', matricula: b.matricula || id, tipo, treinutrix, ativo: b.ativo !== false, validadeIni: b.validadeIni || null, validadeFim: b.validadeFim || null };
     store.persons.set(id, person);
     for (const d of store.devices.values()) {
       store.syncQueue.push({ id: nextId('sync'), personId: id, deviceId: d.id, operacao: 'UPSERT', status: 'PENDING', tentativas: 0 });
@@ -87,6 +88,7 @@ const server = http.createServer(async (req, res) => {
     if (typeof b.ativo === 'boolean') p.ativo = b.ativo;
     if (b.nome !== undefined) p.nome = b.nome;
     if (TIPOS_PESSOA.includes(b.tipo)) p.tipo = b.tipo;
+    if (b.treinutrix !== undefined) p.treinutrix = typeof b.treinutrix === 'string' && b.treinutrix.trim() ? b.treinutrix.trim() : null;
     if (b.validadeIni !== undefined) p.validadeIni = b.validadeIni;
     if (b.validadeFim !== undefined) p.validadeFim = b.validadeFim;
     for (const d of store.devices.values()) {
