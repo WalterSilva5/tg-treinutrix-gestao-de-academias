@@ -3,143 +3,471 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#1DB954">
-<title>Painel Catraca Fit 4</title>
+<meta name="theme-color" content="#f97316">
+<title>Catraca · Gestão de Acesso</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+:root{
+  --primary:#f97316; --primary-hover:#ea580c; --primary-active:#c2410c;
+  --primary-text:#9a3412; --primary-soft:rgba(249,115,22,.1); --primary-border:rgba(249,115,22,.32);
+  --accent:#14b8a6; --accent-hover:#0d9488; --accent-soft:rgba(20,184,166,.1);
+  --canvas:#fafaf9; --surface:#fff; --surface-hover:#f5f5f4; --sunken:#f5f5f4;
+  --ink:#1c1917; --ink-2:#57534e; --ink-3:#78716c;
+  --line:#e7e5e4; --line-strong:#d6d3d1;
+  --success:#22c55e; --success-soft:rgba(34,197,94,.12);
+  --danger:#ef4444; --danger-text:#991b1b; --danger-soft:rgba(239,68,68,.12);
+  --warning:#f59e0b; --warning-text:#92400e; --warning-soft:rgba(245,158,11,.12);
+  --info:#0ea5e9; --info-soft:rgba(14,165,233,.12);
+  --shadow-sm:0 1px 2px rgba(28,25,23,.06);
+  --shadow-md:0 4px 12px rgba(28,25,23,.08);
+  --radius:16px; --radius-btn:10px;
+}
 *{box-sizing:border-box}
-body{font-family:system-ui,system-ui,sans-serif;margin:0;background:#111;color:#eee}
-.banner{display:block;text-align:center;background:linear-gradient(90deg,#0a7a3d,#1DB954);color:#fff;font-weight:700;font-size:18px;padding:14px 16px;text-decoration:none}
-.banner small{display:block;font-weight:400;font-size:13px;opacity:.9}
-.footer{margin:24px 0 8px;text-align:center}
-.footer a{display:inline-block;background:#1a1a1a;border:1px solid #2a2a2a;color:#ccc;font-size:13px;padding:10px 18px;border-radius:999px;text-decoration:none}
-.footer a b{color:#1DB954}
-.wrap{padding:16px;max-width:960px;margin:0 auto}
-.card{background:#1e1e1e;border:1px solid #333;border-radius:8px;padding:16px;margin-bottom:16px}
-button{background:#1DB954;border:0;color:#fff;padding:10px 16px;border-radius:6px;cursor:pointer;margin:4px 8px 4px 0;font-size:15px}
-button.ghost{background:#333}
-input,select{background:#222;border:1px solid #444;color:#eee;padding:9px;border-radius:4px;font-size:15px;margin:4px 8px 4px 0;max-width:100%}
-pre{background:#000;padding:12px;border-radius:6px;max-height:320px;overflow:auto;font-size:12px}
-.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
-.stat{background:#222;border:1px solid #333;border-radius:8px;padding:12px;text-align:center}
-.stat b{display:block;font-size:24px;color:#1DB954}
-.tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
-.tabs button{background:#222}
-.tabs button.on{background:#1DB954}
-.menu{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;position:sticky;top:0;background:#111;padding:8px 0;z-index:5}
-.menu button{background:#222;border:1px solid #333}
-.menu button.on{background:#1DB954;border-color:#1DB954}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px}
+html,body{margin:0;padding:0}
+body{background:var(--canvas);color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
 .hidden{display:none!important}
-.topbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-.topbar span{color:#aaa;font-size:14px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{text-align:left;padding:6px;border-bottom:1px solid #2a2a2a}
-@media (max-width:600px){h1{font-size:20px}.banner{font-size:15px}}
+
+/* ---------- LOGIN ---------- */
+#login-screen{min-height:100vh;display:grid;place-items:center;padding:24px;background:
+  radial-gradient(1200px 600px at 15% -10%, rgba(249,115,22,.10), transparent 60%),
+  radial-gradient(900px 500px at 100% 110%, rgba(20,184,166,.10), transparent 60%), var(--canvas)}
+.login-card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:32px;box-shadow:var(--shadow-md)}
+.login-brand{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.login-card h1{font-size:22px;margin:16px 0 4px;letter-spacing:-.02em}
+.login-card p.sub{color:var(--ink-3);margin:0 0 24px;font-size:13px}
+.field{display:block;margin-bottom:14px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+.hint{color:var(--ink-3);font-size:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.login-foot{text-align:center;margin-top:20px;font-size:12px;color:var(--ink-3)}
+.login-foot a{color:var(--primary-text);font-weight:600;text-decoration:none}
+
+/* ---------- MARCA ---------- */
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit}
+.brand-mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#fb923c,#ea580c);display:grid;place-items:center;box-shadow:0 6px 16px rgba(249,115,22,.28);flex:none}
+.brand-mark svg{width:20px;height:20px;stroke:#fff}
+.brand-text{line-height:1.15}
+.brand-text b{display:block;font-size:15px;letter-spacing:-.01em}
+.brand-text span{display:block;font-size:11px;color:var(--ink-3);font-weight:500}
+
+/* ---------- SHELL ---------- */
+.app{display:grid;grid-template-columns:252px 1fr;min-height:100vh}
+.sidebar{background:var(--surface);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:22px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav-label{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;padding:0 12px;margin-bottom:6px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;background:transparent;border:0;border-radius:10px;padding:10px 12px;font:inherit;font-weight:500;color:var(--ink-2);cursor:pointer;text-align:left;transition:background .15s,color .15s}
+.nav button:hover{background:var(--surface-hover);color:var(--ink)}
+.nav button.on{background:var(--primary-soft);color:var(--primary-text);font-weight:600}
+.nav button .ico{width:18px;text-align:center;opacity:.85}
+.sidebar-foot{margin-top:auto;border-top:1px solid var(--line);padding-top:14px}
+.user-chip{display:flex;align-items:center;gap:10px;padding:8px;border-radius:12px}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--primary-soft);color:var(--primary-text);display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+.user-chip .who{line-height:1.2;min-width:0}
+.user-chip .who b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-chip .who span{display:block;font-size:11px;color:var(--ink-3);text-transform:capitalize}
+
+.main{padding:26px 30px 40px;min-width:0}
+.topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.page-head h1{margin:0;font-size:24px;letter-spacing:-.02em;font-weight:700}
+.page-head p{margin:4px 0 0;color:var(--ink-3);font-size:13px}
+.topbar-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---------- COMPONENTES ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px;margin-bottom:18px;min-width:0}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.card-head h2{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.card-head .sub{font-size:12px;color:var(--ink-3);margin:2px 0 0}
+.card-head-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+button{font:inherit}
+.btn{background:var(--primary);color:#fff;border:1px solid var(--primary);border-radius:var(--radius-btn);padding:9px 16px;font-weight:600;font-size:13px;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s}
+.btn:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+.btn:active{background:var(--primary-active)}
+.btn.ghost{background:var(--surface);color:var(--ink-2);border-color:var(--line-strong);font-weight:500}
+.btn.ghost:hover{background:var(--surface-hover);color:var(--ink)}
+.btn.danger{background:#fff;color:var(--danger-text);border-color:rgba(239,68,68,.35)}
+.btn.danger:hover{background:var(--danger-soft)}
+.btn.sm{padding:6px 11px;font-size:12px;border-radius:8px}
+.btn-icon{background:transparent;border:1px solid var(--line);border-radius:8px;width:32px;height:32px;cursor:pointer;color:var(--ink-2)}
+.btn-icon:hover{background:var(--surface-hover)}
+
+input,select{width:100%;min-width:0;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--radius-btn);padding:9px 12px;font:inherit;font-size:13px;color:var(--ink);outline:none;transition:border-color .15s,box-shadow .15s}
+input::placeholder{color:#a8a29e}
+input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+select{cursor:pointer}
+
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;min-width:0}
+.form-grid>*{min-width:0}
+.form-grid .full{grid-column:1/-1}
+.form-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.help{color:var(--ink-3);font-size:12px;margin-top:10px}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(124px,1fr));gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 14px 12px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden}
+.kpi::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--kpi-color,var(--primary))}
+.kpi .v{font-size:24px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.kpi .l{font-size:11px;color:var(--ink-3);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.kpi.ok{--kpi-color:var(--success)}
+.kpi.warn{--kpi-color:var(--warning)}
+.kpi.bad{--kpi-color:var(--danger)}
+.kpi.info{--kpi-color:var(--info)}
+.kpi.accent{--kpi-color:var(--accent)}
+
+table{width:100%;border-collapse:collapse}
+thead th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);padding:0 10px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+tbody td{padding:11px 10px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:#fcfcfb}
+.table-wrap{overflow-x:auto;margin:0 -4px;max-width:100%;-webkit-overflow-scrolling:touch}
+.mono{font-variant-numeric:tabular-nums}
+.muted{color:var(--ink-3);font-size:12px}
+
+.badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:600;line-height:1.6;white-space:nowrap}
+.badge.dot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.badge.ok{background:var(--success-soft);color:#15803d}
+.badge.bad{background:var(--danger-soft);color:var(--danger-text)}
+.badge.warn{background:var(--warning-soft);color:var(--warning-text)}
+.badge.info{background:var(--info-soft);color:#0369a1}
+.badge.neutral{background:var(--surface-hover);color:var(--ink-2)}
+.badge.accent{background:var(--accent-soft);color:#0f766e}
+.badge.primary{background:var(--primary-soft);color:var(--primary-text)}
+
+.empty{color:var(--ink-3);font-size:13px;padding:18px 4px;text-align:center;border:1px dashed var(--line-strong);border-radius:12px}
+.list{display:flex;flex-direction:column;gap:8px}
+.list-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fcfcfb;flex-wrap:wrap}
+.list-item .t{font-weight:600;font-size:13px}
+.list-item .d{color:var(--ink-3);font-size:12px;margin-top:2px}
+.avatar-inline{width:30px;height:30px;border-radius:50%;background:var(--surface-hover);display:grid;place-items:center;font-weight:600;font-size:12px;color:var(--ink-2);flex:none}
+.stack{display:flex;align-items:center;gap:10px;min-width:0}
+
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.info-item{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fcfcfb}
+.info-item .k{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:700;margin-bottom:4px}
+.info-item .v{font-size:13px;font-weight:500;word-break:break-word}
+.ip-hero{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--primary-soft);border:1px solid var(--primary-border);border-radius:12px;padding:14px 16px;margin-bottom:14px;flex-wrap:wrap}
+.ip-hero .url{font-size:16px;font-weight:700;color:var(--primary-text);font-variant-numeric:tabular-nums}
+.ip-hero .hint{color:var(--primary-text);opacity:.8;font-size:12px;margin:2px 0 0}
+
+pre{background:var(--sunken);border:1px solid var(--line);border-radius:12px;padding:14px;margin:0;font-size:12px;line-height:1.6;overflow:auto;max-height:340px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--ink-2)}
+.footer{margin-top:26px;padding-top:18px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
+.footer .fine{color:var(--ink-3);font-size:12px}
+.tnx{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;max-width:100%;text-decoration:none;font-size:12px;font-weight:600;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 14px;transition:border-color .15s,color .15s}
+.tnx:hover{border-color:var(--primary-border);color:var(--primary-text)}
+.tnx b{color:var(--primary-text)}
+.tnx .dotmark{width:8px;height:8px;border-radius:50%;background:var(--primary)}
+
+.grid2{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:start}
+.grid2>*{min-width:0}
+@media(max-width:1050px){.grid2{grid-template-columns:1fr}}
+
+@media(max-width:600px){
+  .hide-sm{display:none!important}
+  .sidebar-foot > div:last-child{width:100%;justify-content:flex-end}
+  .sidebar-foot .btn.sm{padding:6px 12px}
+  .card-head-actions{width:100%}
+}
+@media(max-width:900px){
+  .app{grid-template-columns:1fr}
+  .sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:10px 12px;gap:10px}
+  .brand-mark{width:30px;height:30px;border-radius:8px}
+  .brand-mark svg{width:17px;height:17px}
+  .brand-text b{font-size:14px}
+  .brand-text span{font-size:10px}
+  .sidebar-foot{margin-top:0;border-top:0;padding-top:0;display:flex;justify-content:flex-end;align-items:center;gap:8px}
+  .sidebar-foot .user-chip{display:none}
+  .sidebar-foot > div:last-child{margin-top:0!important;flex:none}
+  .nav{flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:2px}
+  .nav-label{display:none}
+  .nav button{white-space:nowrap;width:auto;padding:8px 12px;font-size:13px}
+  .nav button .ico{display:none}
+  .main{padding:16px 14px 28px}
+  .page-head h1{font-size:20px}
+  .page-head p{font-size:12px}
+  .topbar{margin-bottom:14px}
+  .kpi .v{font-size:21px}
+  .card{padding:16px;border-radius:14px}
+  .footer{justify-content:center;text-align:center}
+  .footer .fine{order:2;width:100%}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
 
-<!-- LOGIN -->
-<div id="login" class="card">
-  <h2>Entrar</h2>
-  <div class="row">
-    <input id="login" placeholder="Login (aluno: matrícula)" autocomplete="username">
-    <input id="senha" type="password" placeholder="Senha (aluno: matrícula no 1º acesso)" autocomplete="current-password">
-    <button onclick="entrar()">Entrar</button>
-  </div>
-  <p style="color:#888;font-size:13px">Operador padrão: <b>admin / admin123</b> — troque após instalar (Sistema → Usuários, ou botão Trocar senha).</p>
-</div>
-
-<!-- APP -->
-<div id="app" class="hidden">
-  <div class="topbar">
-    <span id="quem"></span>
-    <span><button class="ghost" onclick="trocarSenha()">Trocar senha</button><button class="ghost" onclick="sair()">Sair</button></span>
-  </div>
-  <nav class="menu" id="tabs" aria-label="Menu"></nav>
-
-  <!-- INÍCIO (painel de gerenciamento) -->
-  <div id="v-inicio" class="hidden">
-    <div class="card"><h3>Visão geral — <span id="ovDia"></span></h3><div class="kpis" id="ovKpis"></div>
-      <div class="row"><button onclick="mostrarNav('oper')">Operação</button><button id="btnSistema" class="ghost" onclick="mostrarNav('sistema')">Sistema e backup</button><button class="ghost" onclick="avaliarNotif();carregarInicio()">Verificar notificações</button></div></div>
-    <div class="card"><h3>Pendências</h3><div id="ovPend">—</div></div>
-    <div class="card"><h3>Últimas entradas</h3><pre id="ovEntradas">—</pre></div>
-  </div>
-
-  <!-- ALUNO -->
-  <div id="v-aluno" class="hidden">
-    <div class="card"><h3>Meu plano</h3><div id="plano">—</div></div>
-    <div class="card"><h3>Minha frequência</h3><div class="grid" id="freqStats"></div><pre id="freqList"></pre></div>
-  </div>
-
-  <!-- OPERAÇÃO (recepção + gerência) -->
-  <div id="v-oper" class="hidden">
-    <div class="card"><h3>Dispositivos</h3><div id="devices">—</div>
-      <div class="row"><button onclick="heartbeat()">Enviar heartbeat</button></div></div>
-    <div class="card"><h3>Simular identificação facial</h3>
-      <div class="row"><input id="person" value="per_demo_01"><input id="score" value="0.95" size="5">
-      <input id="edgeUrl" size="22" title="URL do edge"><button onclick="identify()">Identificar</button>
-      <button onclick="release()">Liberar manual</button></div></div>
-    <div class="card"><h3>Cadastrar pessoa</h3>
-      <div class="row"><input id="visNome" placeholder="Nome"><select id="visTipo"><option>ALUNO</option><option>VISITANTE</option><option>PERSONAL</option></select><input id="visTreinutrix" placeholder="Treinutrix (link ou @usuário)" size="26"><button onclick="cadastrarPessoa()">Cadastrar</button></div>
-      <span style="color:#666;font-size:12px">Visitante ganha validade de 1 dia; aluno/personal sem vencimento inicial.</span></div>
-    <div class="card"><h3>Fila de sincronização</h3><pre id="sync">—</pre></div>
-    <div class="card"><h3>Eventos</h3><div class="row"><button onclick="load()">Atualizar</button>
-      <button class="ghost" onclick="csv()">Exportar CSV</button></div><div id="resumo" class="grid"></div><pre id="events"></pre></div>
-  </div>
-
-  <!-- SISTEMA (gerência) -->
-  <div id="v-sistema" class="hidden">
-    <div class="card"><h3>Servidor local</h3><div id="sysinfo">—</div>
-      <div class="row"><button onclick="carregarSistema()">Atualizar</button></div></div>
-    <div class="card"><h3>Pessoas <span id="inadBadge" style="color:#e88"></span></h3>
-      <div id="pessoas">—</div></div>
-    <div class="card"><h3>Operadores</h3>
-      <div class="row"><input id="usrNome" placeholder="Nome"><input id="usrLogin" placeholder="Login"><input id="usrSenha" type="password" placeholder="Senha"><select id="usrPerfil"><option>recepcao</option><option>gerencia</option></select><button onclick="criarUsuario()">Criar</button></div>
-      <div id="usuarios">—</div></div>
-    <div class="card"><h3>Backup</h3>
-      <div class="row"><button onclick="backupAgora()">Fazer backup agora</button><span id="lastBackup" style="color:#888"></span></div>
-      <div id="backups">—</div></div>
-    <div class="card"><h3>Notificações <span id="ntfBadge"></span></h3>
-      <div class="row"><input id="respNome" placeholder="Seu nome (baixa)"><button class="ghost" onclick="avaliarNotif()">Verificar agora</button></div>
-      <div id="notifs">—</div></div>
+<!-- ============ LOGIN ============ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="4" height="12" rx="1"/><rect x="17" y="6" width="4" height="12" rx="1"/><path d="M7 12h10"/></svg>
+      </div>
+      <div class="brand-text"><b>Catraca</b><span>Gestão de acesso</span></div>
+    </div>
+    <h1>Entrar na plataforma</h1>
+    <p class="sub">Use seu login de operador ou a matrícula de aluno.</p>
+    <form onsubmit="event.preventDefault();entrar()">
+      <label class="field"><span>Login</span>
+        <input id="login" placeholder="admin ou matrícula" autocomplete="username">
+      </label>
+      <label class="field"><span>Senha</span>
+        <input id="senha" type="password" placeholder="Sua senha" autocomplete="current-password">
+      </label>
+      <button class="btn" type="submit" style="width:100%;padding:11px">Entrar</button>
+    </form>
+    <div class="hint">Primeiro acesso do operador: <b>admin</b> / <b>admin123</b>. Aluno: matrícula e senha inicial igual à matrícula.</div>
+    <div class="login-foot"><a href="https://treinutrix.com" target="_blank" rel="noopener">Treinutrix</a> · Sua musculação mais inteligente</div>
   </div>
 </div>
 
+<!-- ============ APP ============ -->
+<div id="app" class="app hidden">
+  <aside class="sidebar">
+    <a class="brand" href="#" onclick="mostrarNav('inicio');return false">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="4" height="12" rx="1"/><rect x="17" y="6" width="4" height="12" rx="1"/><path d="M7 12h10"/></svg>
+      </div>
+      <div class="brand-text"><b>Catraca</b><span>Gestão de acesso</span></div>
+    </a>
+    <nav class="nav" id="tabs" aria-label="Menu principal"></nav>
+    <div class="sidebar-foot">
+      <div class="user-chip">
+        <div class="avatar" id="avatar">?</div>
+        <div class="who"><b id="quemNome">—</b><span id="quemPerfil">—</span></div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn ghost sm" style="flex:1" onclick="trocarSenha()">Senha</button>
+        <button class="btn ghost sm" style="flex:1" onclick="sair()">Sair</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="page-head"><h1 id="pageTitle">Início</h1><p id="pageSub">Visão geral da academia</p></div>
+      <div class="topbar-actions" id="topActions"></div>
+    </header>
+
+    <!-- INÍCIO -->
+    <section id="v-inicio" class="hidden">
+      <div class="kpis" id="ovKpis" style="margin-bottom:18px"></div>
+      <div class="grid2">
+        <div>
+          <div class="card">
+            <div class="card-head"><div><h2>Últimas entradas</h2><p class="sub">Movimentação de hoje</p></div>
+              <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarInicio()">Atualizar</button></div></div>
+            <div class="table-wrap"><table><thead><tr><th>Hora</th><th>Pessoa</th><th>Método</th><th>Status</th></tr></thead><tbody id="ovEntradas"></tbody></table></div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="card-head"><div><h2>Pendências</h2><p class="sub">O que precisa de atenção</p></div></div>
+            <div class="list" id="ovPend"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h2>Dispositivos</h2><p class="sub">Status da catraca</p></div></div>
+            <div class="list" id="ovDevices"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ALUNO -->
+    <section id="v-aluno" class="hidden">
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><div><h2>Meu plano</h2><p class="sub">Situação do seu cadastro</p></div></div>
+          <div id="plano"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><h2>Minha frequência</h2><p class="sub">Últimos acessos</p></div></div>
+          <div class="kpis" id="freqStats" style="margin-bottom:14px"></div>
+          <div class="table-wrap"><table><thead><tr><th>Data</th><th>Status</th><th>Motivo</th></tr></thead><tbody id="freqList"></tbody></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OPERAÇÃO -->
+    <section id="v-oper" class="hidden">
+      <div class="grid2">
+        <div>
+          <div class="card">
+            <div class="card-head"><div><h2>Cadastrar pessoa</h2><p class="sub">Aluno, personal trainer ou visitante</p></div></div>
+            <div class="form-grid">
+              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Nome</span><input id="visNome" placeholder="Nome completo"></label>
+              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Tipo</span><select id="visTipo"><option>ALUNO</option><option>PERSONAL</option><option>VISITANTE</option></select></label>
+              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Treinutrix</span><input id="visTreinutrix" placeholder="@usuario ou link"></label>
+              <div class="form-actions"><button class="btn" onclick="cadastrarPessoa()">Cadastrar</button></div>
+            </div>
+            <p class="help">Visitante recebe validade de 1 dia. Aluno e personal entram sem vencimento inicial.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div><h2>Eventos de acesso</h2><p class="sub">Registro do dia e histórico recente</p></div>
+              <div class="card-head-actions"><button class="btn ghost sm" onclick="load()">Atualizar</button><button class="btn ghost sm" onclick="csv()">Exportar CSV</button></div></div>
+            <div class="kpis" id="resumo" style="margin-bottom:14px"></div>
+            <div class="table-wrap"><table><thead><tr><th>Hora</th><th>Pessoa</th><th>Método</th><th>Status</th><th class="hide-sm">Motivo</th></tr></thead><tbody id="events"></tbody></table></div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="card-head"><div><h2>Liberação manual</h2><p class="sub">Simulação e operação assistida</p></div></div>
+            <div class="form-grid">
+              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Pessoa (ID)</span><input id="person" value="per_personal_01"></label>
+              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Score</span><input id="score" value="0.95"></label>
+              <div class="form-actions"><button class="btn" onclick="identify()">Identificar</button><button class="btn ghost" onclick="release()">Liberar</button></div>
+            </div>
+            <label class="field" style="margin:14px 0 0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">URL do edge</span><input id="edgeUrl" placeholder="http://IP:3002"></label>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div><h2>Catracas</h2><p class="sub">Conexão com o equipamento</p></div>
+              <div class="card-head-actions"><button class="btn ghost sm" onclick="heartbeat()">Testar</button></div></div>
+            <div class="list" id="devices"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div><h2>Fila de sincronização</h2><p class="sub">Cadastros pendentes no leitor</p></div></div>
+            <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Operação</th><th>Status</th></tr></thead><tbody id="sync"></tbody></table></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SISTEMA -->
+    <section id="v-sistema" class="hidden">
+      <div class="card">
+        <div class="card-head"><div><h2>Servidor local</h2><p class="sub">Endereço para acesso no celular</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarSistema()">Atualizar</button></div></div>
+        <div id="sysinfo"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Backup</h2><p class="sub">Snapshots dos dados locais</p></div>
+          <div class="card-head-actions"><button class="btn sm" onclick="backupAgora()">Fazer backup agora</button></div></div>
+        <p class="muted" id="lastBackup" style="margin:0 0 12px"></p>
+        <div class="table-wrap"><table><thead><tr><th>Arquivo</th><th>Tamanho</th><th></th></tr></thead><tbody id="backups"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Pessoas</h2><p class="sub">Alunos, personais e visitantes</p></div><span id="inadBadge"></span></div>
+        <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Tipo</th><th>Validade</th><th>Situação</th><th></th></tr></thead><tbody id="pessoas"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Operadores</h2><p class="sub">Quem acessa o painel</p></div></div>
+        <div class="form-grid" style="margin-bottom:14px">
+          <input id="usrNome" placeholder="Nome">
+          <input id="usrLogin" placeholder="Login">
+          <input id="usrSenha" type="password" placeholder="Senha">
+          <select id="usrPerfil"><option value="recepcao">Recepção</option><option value="gerencia">Gerência</option></select>
+          <div class="form-actions"><button class="btn" onclick="criarUsuario()">Criar operador</button></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Login</th><th>Perfil</th></tr></thead><tbody id="usuarios"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Notificações</h2><p class="sub">Lembretes que exigem confirmação manual</p></div><span id="ntfBadge"></span></div>
+        <div class="form-actions" style="margin-bottom:14px">
+          <input id="respNome" placeholder="Seu nome na baixa" style="max-width:240px">
+          <button class="btn ghost sm" onclick="avaliarNotif()">Verificar agora</button>
+        </div>
+        <div class="list" id="notifs"></div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span class="fine">Catraca · gestão de acesso local · Topdata Fit 4</span>
+      <a class="tnx" href="https://treinutrix.com" target="_blank" rel="noopener"><span class="dotmark"></span><b>Treinutrix</b> — Sua musculação mais inteligente</a>
+    </footer>
+  </main>
 </div>
+
 <script>
-const API = ''; // mesma origem: a API serve este painelconst $ = (id) => document.getElementById(id);
+const API = ''; // mesma origem: a API serve este painel
+const $ = (id) => document.getElementById(id);
 let sess = JSON.parse(localStorage.getItem('pwa_session') || 'null');
 
+const PAGINAS = {
+  inicio: ['Início', 'Visão geral da academia'],
+  oper: ['Operação', 'Acessos, cadastros e equipamentos'],
+  sistema: ['Sistema', 'Servidor, backup e pessoas'],
+  aluno: ['Meu acesso', 'Seu plano e frequência'],
+};
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function hora(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+function dataCurta(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR');
+}
+function iniciais(nome) {
+  const p = String(nome || '?').trim().split(/\s+/);
+  return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
+}
+function badgeDecisao(d) {
+  return d === 'ALLOW'
+    ? '<span class="badge ok dot">liberado</span>'
+    : '<span class="badge bad dot">negado</span>';
+}
+function badgeTipo(t) {
+  const cls = t === 'PERSONAL' ? 'accent' : t === 'VISITANTE' ? 'info' : 'primary';
+  return `<span class="badge ${cls}">${esc(t || 'ALUNO')}</span>`;
+}
+function nomePorId(id) {
+  return (window.__pessoas || {})[id] || id || '—';
+}
+
+async function req(p, opts = {}) {
+  const r = await fetch(API + p, { ...opts, headers: { 'Content-Type': 'application/json', ...(sess && sess.token ? { Authorization: 'Bearer ' + sess.token } : {}), ...((opts && opts.headers) || {}) } });
+  if (r.status === 401 && sess) { sair(); throw new Error('sessão expirada — entre de novo'); }
+  return r;
+}
+async function jget(p) { return (await req(p)).json(); }
+async function jpost(p, b) { const r = await req(p, { method: 'POST', body: JSON.stringify(b) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; }
+async function jpatch(p, b) { const r = await req(p, { method: 'PATCH', body: JSON.stringify(b) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; }
+
+// ---------- sessão ----------
 function entraUI() {
-  $('login').classList.toggle('hidden', !!sess);
+  $('login-screen').classList.toggle('hidden', !!sess);
   $('app').classList.toggle('hidden', !sess);
   if (!sess) return;
-  $('quem').textContent = `${sess.perfil} · ${sess.nome || ''}`;
+  $('quemNome').textContent = sess.nome || sess.perfil;
+  $('quemPerfil').textContent = sess.perfil;
+  $('avatar').textContent = iniciais(sess.nome || sess.perfil);
   const tabs = $('tabs'); tabs.innerHTML = '';
   const abas = sess.perfil === 'aluno' ? [['aluno', 'Meu acesso']]
     : sess.perfil === 'gerencia' ? [['inicio', 'Início'], ['oper', 'Operação'], ['sistema', 'Sistema']]
     : [['inicio', 'Início'], ['oper', 'Operação']];
+  const icones = { inicio: '◧', oper: '⇄', sistema: '⚙', aluno: '◎' };
   abas.forEach(([id, label], i) => {
     const b = document.createElement('button');
-    b.textContent = label; b.dataset.v = id; if (i === 0) b.classList.add('on');
+    b.innerHTML = `<span class="ico">${icones[id] || '•'}</span><span>${label}</span>`;
+    b.dataset.v = id; if (i === 0) b.classList.add('on');
     b.onclick = () => mostrarNav(id);
     tabs.appendChild(b);
   });
   mostrar(abas[0][0]);
-  if (sess.perfil === 'aluno') carregarAluno(); else carregarOper();
 }
 function mostrar(id) {
   for (const v of ['aluno', 'oper', 'sistema', 'inicio']) {
-    $('v-' + v).classList.toggle('hidden', id !== v);
+    const el = $('v-' + v); if (el) el.classList.toggle('hidden', id !== v);
   }
+  const pg = PAGINAS[id] || PAGINAS.inicio;
+  $('pageTitle').textContent = pg[0];
+  $('pageSub').textContent = pg[1];
   if (id === 'sistema') carregarSistema();
   if (id === 'inicio') carregarInicio();
   if (id === 'oper' && sess && sess.perfil !== 'aluno') carregarOper();
+  if (id === 'aluno') carregarAluno();
 }
 function mostrarNav(id) {
   mostrar(id);
@@ -154,81 +482,130 @@ async function entrar() {
     entraUI();
   } catch (e) { alert('API fora do ar.'); }
 }
+function sair() { sess = null; localStorage.removeItem('pwa_session'); entraUI(); }
 async function trocarSenha() {
   const atual = prompt('Senha atual:'); if (atual === null) return;
   const nova = prompt('Nova senha (mín. 4):'); if (!nova) return;
   try { await jpost('/api/auth/change-password', { atual, nova }); alert('Senha atualizada.'); }
   catch (e) { alert('Erro: ' + e.message); }
 }
-function sair() { sess = null; localStorage.removeItem('pwa_session'); entraUI(); }
 
-async function req(p, opts = {}) {
-  const r = await fetch(API + p, { ...opts, headers: { 'Content-Type': 'application/json', ...(sess && sess.token ? { Authorization: 'Bearer ' + sess.token } : {}), ...((opts && opts.headers) || {}) } });
-  if (r.status === 401 && sess) { sair(); throw new Error('sessão expirada — entre de novo'); }
-  return r;
-}
-async function jget(p) { return (await req(p)).json(); }
-async function jpost(p, b) { const r = await req(p, { method: 'POST', body: JSON.stringify(b) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; }
-const edgeBase = () => ($('edgeUrl').value || `http://${location.hostname}:3002`);
-
-// ---- início (painel de gerenciamento) ----
+// ---------- início ----------
 async function carregarInicio() {
-  const o = await jget('/api/overview');
-  $('ovDia').textContent = o.dia;
-  $('btnSistema').style.display = sess.perfil === 'gerencia' ? '' : 'none';
+  const [o, persons] = await Promise.all([jget('/api/overview'), jget('/api/persons')]);
+  window.__pessoas = Object.fromEntries(persons.map(p => [p.id, p.nome]));
   const k = o.kpis;
-  $('ovKpis').innerHTML = `<div class="stat"><b>${k.eventosHoje}</b>eventos hoje</div>
-    <div class="stat"><b>${k.liberados}</b>liberados</div>
-    <div class="stat"><b>${k.negados}</b>negados</div>
-    <div class="stat"><b>${k.presentes}</b>presentes</div>
-    <div class="stat"><b>${k.inadimplentes}</b>inadimplentes</div>
-    <div class="stat"><b>${k.syncPendente}</b>sync pendente</div>`;
+  $('ovKpis').innerHTML = `
+    <div class="kpi info"><div class="v">${k.eventosHoje}</div><div class="l">Eventos hoje</div></div>
+    <div class="kpi ok"><div class="v">${k.liberados}</div><div class="l">Liberados</div></div>
+    <div class="kpi bad"><div class="v">${k.negados}</div><div class="l">Negados</div></div>
+    <div class="kpi accent"><div class="v">${k.presentes}</div><div class="l">Presentes</div></div>
+    <div class="kpi warn"><div class="v">${k.inadimplentes}</div><div class="l">Inadimplentes</div></div>
+    <div class="kpi"><div class="v">${k.syncPendente}</div><div class="l">Sync pendente</div></div>`;
+
+  const entradas = o.ultimasEntradas || [];
+  $('ovEntradas').innerHTML = entradas.length ? entradas.map(e => `
+    <tr>
+      <td class="mono muted">${hora(e.timestamp)}</td>
+      <td><div class="stack"><div class="avatar-inline">${iniciais(nomePorId(e.personId))}</div><div><b>${esc(nomePorId(e.personId))}</b><div class="muted">${esc(e.personId || '')}</div></div></div></td>
+      <td><span class="badge neutral">${esc(e.metodo)}</span></td>
+      <td>${badgeDecisao(e.decisao)}</td>
+    </tr>`).join('') : '<tr><td colspan="4"><div class="empty">Nenhuma movimentação hoje.</div></td></tr>';
+
   const pend = [];
-  o.notifPendentes.forEach(n => pend.push(`<b>[${n.tipo}]</b> ${n.titulo}`));
-  o.inadimplentes.slice(0, 5).forEach(p => pend.push(`EM ATRASO: ${p.nome} (${p.matricula})`));
-  if (!o.lastBackupAt) pend.push('Nunca fez backup — Sistema → Backup.');
-  $('ovPend').innerHTML = pend.length ? '<br>'.concat(pend.join('<br>')) : 'Nada pendente. Em dia.';
-  $('ovEntradas').textContent = JSON.stringify(o.ultimasEntradas, null, 1);
+  (o.notifPendentes || []).forEach(n => pend.push(`
+    <div class="list-item"><div><div class="t">${esc(n.titulo)}</div><div class="d">${esc(n.detalhe || '')}</div></div>
+    <span class="badge warn">${esc(n.tipo)}</span></div>`));
+  (o.inadimplentes || []).slice(0, 5).forEach(p => pend.push(`
+    <div class="list-item"><div><div class="t">${esc(p.nome)}</div><div class="d">Matrícula ${esc(p.matricula)} · venceu ${dataCurta(p.validadeFim)}</div></div>
+    <span class="badge bad dot">em atraso</span></div>`));
+  if (!o.lastBackupAt && !(o.notifPendentes || []).some(n => n.tipo === 'BACKUP')) pend.push(`
+    <div class="list-item"><div><div class="t">Backup nunca realizado</div><div class="d">Recomendado fazer backup diário em Sistema.</div></div>
+    <span class="badge warn">backup</span></div>`);
+  $('ovPend').innerHTML = pend.length ? pend.join('') : '<div class="empty">Nada pendente. Tudo em dia.</div>';
+
+  $('ovDevices').innerHTML = (o.devices || []).map(d => `
+    <div class="list-item"><div><div class="t">${esc(d.nome)}</div><div class="d">${esc(d.ip)}:${esc(d.porta)}</div></div>
+    ${d.online ? '<span class="badge ok dot">online</span>' : '<span class="badge bad dot">offline</span>'}</div>`).join('') || '<div class="empty">Nenhum dispositivo.</div>';
 }
 
-// ---- aluno ----
+// ---------- aluno ----------
 async function carregarAluno() {
   const persons = await jget('/api/persons');
+  window.__pessoas = Object.fromEntries(persons.map(p => [p.id, p.nome]));
   const p = persons.find(x => x.id === sess.sub);
-  $('plano').innerHTML = p
-    ? `<b>${p.nome}</b> · matrícula ${p.matricula}<br>Ativo: ${p.ativo ? 'sim' : 'NÃO'} · Validade: ${p.validadeIni || '—'} → ${p.validadeFim || '—'}<br>Treinutrix: ${treinutrixLink(p.treinutrix)}`
-    : 'Matrícula não encontrada.';
+  if (!p) { $('plano').innerHTML = '<div class="empty">Matrícula não encontrada.</div>'; return; }
+  const vencido = p.validadeFim && new Date(p.validadeFim) < new Date();
+  $('plano').innerHTML = `
+    <div class="stack" style="margin-bottom:14px">
+      <div class="avatar" style="width:48px;height:48px;font-size:16px">${iniciais(p.nome)}</div>
+      <div><div style="font-size:17px;font-weight:700">${esc(p.nome)}</div><div class="muted">Matrícula ${esc(p.matricula)}</div></div>
+    </div>
+    <div class="info-grid">
+      <div class="info-item"><div class="k">Situação</div><div class="v">${vencido ? '<span class="badge bad dot">vencido</span>' : '<span class="badge ok dot">ativo</span>'}</div></div>
+      <div class="info-item"><div class="k">Tipo</div><div class="v">${badgeTipo(p.tipo)}</div></div>
+      <div class="info-item"><div class="k">Validade</div><div class="v">${p.validadeFim ? dataCurta(p.validadeFim) : 'sem vencimento'}</div></div>
+      <div class="info-item"><div class="k">Treinutrix</div><div class="v">${treinutrixLink(p.treinutrix)}</div></div>
+    </div>`;
   const evs = (await jget('/api/events')).filter(e => e.personId === sess.sub);
-  $('freqStats').innerHTML = `<div class="stat"><b>${evs.filter(e => e.decisao === 'ALLOW').length}</b>entradas</div>
-    <div class="stat"><b>${evs.filter(e => e.decisao === 'DENY').length}</b>negados</div>`;
-  $('freqList').textContent = JSON.stringify(evs.slice(-10).reverse(), null, 1);
+  $('freqStats').innerHTML = `
+    <div class="kpi ok"><div class="v">${evs.filter(e => e.decisao === 'ALLOW').length}</div><div class="l">Entradas</div></div>
+    <div class="kpi bad"><div class="v">${evs.filter(e => e.decisao === 'DENY').length}</div><div class="l">Negados</div></div>`;
+  $('freqList').innerHTML = evs.slice(-10).reverse().map(e => `
+    <tr><td class="mono muted">${dataCurta(e.timestamp)} ${hora(e.timestamp)}</td><td>${badgeDecisao(e.decisao)}</td><td class="muted">${esc(e.motivo || '')}</td></tr>`).join('')
+    || '<tr><td colspan="3"><div class="empty">Nenhum acesso registrado.</div></td></tr>';
 }
 
-// ---- operação ----
+// ---------- operação ----------
 async function carregarOper() {
   $('edgeUrl').value = `http://${location.hostname}:3002`;
   await loadDevices(); await load(); await loadSync();
 }
 async function heartbeat() { await jpost('/api/devices/dev_fit4_01/heartbeat', {}); await loadDevices(); }
-async function loadDevices() { $('devices').textContent = JSON.stringify(await jget('/api/devices'), null, 1); }
-async function loadSync() { try { $('sync').textContent = JSON.stringify(await jget('/api/sync'), null, 1); } catch (e) { $('sync').textContent = 'indisponível'; } }
+async function loadDevices() {
+  const list = await jget('/api/devices');
+  $('devices').innerHTML = list.map(d => `
+    <div class="list-item"><div><div class="t">${esc(d.nome)}</div><div class="d">${esc(d.ip)}:${esc(d.porta)} · ${esc(d.tipo)}</div></div>
+    ${d.online ? '<span class="badge ok dot">online</span>' : '<span class="badge bad dot">offline</span>'}</div>`).join('') || '<div class="empty">Nenhum dispositivo.</div>';
+}
+async function loadSync() {
+  try {
+    const list = await jget('/api/sync');
+    $('sync').innerHTML = list.slice(0, 20).map(s => `
+      <tr><td>${esc(nomePorId(s.personId))}</td><td><span class="badge neutral">${esc(s.operacao)}</span></td>
+      <td>${s.status === 'PENDING' ? '<span class="badge warn">pendente</span>' : s.status === 'SENT' ? '<span class="badge ok">enviado</span>' : '<span class="badge bad">erro</span>'}</td></tr>`).join('')
+      || '<tr><td colspan="3"><div class="empty">Fila vazia.</div></td></tr>';
+  } catch (e) { $('sync').innerHTML = '<tr><td colspan="3"><div class="empty">indisponível</div></td></tr>'; }
+}
 let lastEvents = [];
 async function load() {
-  lastEvents = await jget('/api/events');
+  const [events, persons] = await Promise.all([jget('/api/events'), jget('/api/persons')]);
+  window.__pessoas = Object.fromEntries(persons.map(p => [p.id, p.nome]));
+  lastEvents = events;
   const hoje = new Date().toISOString().slice(0, 10);
-  const h = lastEvents.filter(e => e.timestamp.slice(0, 10) === hoje);
-  $('resumo').innerHTML = `<div class="stat"><b>${h.length}</b>eventos hoje</div>
-    <div class="stat"><b>${h.filter(e => e.decisao === 'ALLOW').length}</b>liberados</div>
-    <div class="stat"><b>${h.filter(e => e.decisao === 'DENY').length}</b>negados</div>`;
-  $('events').textContent = JSON.stringify(lastEvents, null, 1);
+  const h = events.filter(e => e.timestamp.slice(0, 10) === hoje);
+  $('resumo').innerHTML = `
+    <div class="kpi info"><div class="v">${h.length}</div><div class="l">Hoje</div></div>
+    <div class="kpi ok"><div class="v">${h.filter(e => e.decisao === 'ALLOW').length}</div><div class="l">Liberados</div></div>
+    <div class="kpi bad"><div class="v">${h.filter(e => e.decisao === 'DENY').length}</div><div class="l">Negados</div></div>`;
+  $('events').innerHTML = events.slice(0, 60).map(e => `
+    <tr>
+      <td class="mono muted">${hora(e.timestamp)}</td>
+      <td><b>${esc(nomePorId(e.personId))}</b></td>
+      <td><span class="badge neutral">${esc(e.metodo)}</span></td>
+      <td>${badgeDecisao(e.decisao)}</td>
+      <td class="muted hide-sm">${esc(e.motivo || '')}</td>
+    </tr>`).join('') || '<tr><td colspan="5"><div class="empty">Nenhum evento.</div></td></tr>';
 }
+const edgeBase = () => ($('edgeUrl').value || `http://${location.hostname}:3002`);
 async function identify() {
   const r = await (await fetch(`${edgeBase()}/sim/identify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ person_id: $('person').value, score: Number($('score').value) }) })).json();
-  alert(JSON.stringify(r.decisao)); load();
+  alert(r.decisao ? `Acesso ${r.decisao.allow ? 'liberado' : 'negado'} — ${r.decisao.motivo}` : 'Falha na simulação.');
+  load();
 }
 async function release() {
   const r = await jpost('/api/release', { device_id: 'dev_fit4_01', person_id: $('person').value || null, motivo: 'MANUAL_OPERADOR' });
-  alert(JSON.stringify(r)); load();
+  alert(r.display_msg || 'Liberado pelo operador.'); load();
 }
 async function cadastrarPessoa() {
   const nome = $('visNome').value.trim(); if (!nome) return alert('Informe o nome.');
@@ -236,20 +613,9 @@ async function cadastrarPessoa() {
   const treinutrix = $('visTreinutrix').value.trim() || null;
   const fim = tipo === 'VISITANTE' ? new Date(Date.now() + 864e5).toISOString() : null;
   const p = await jpost('/api/persons', { nome, tipo, treinutrix, ativo: true, validadeFim: fim });
-  alert(`${tipo} ${p.matricula} cadastrado.` + (fim ? ' Válido até ' + fim : ''));
+  alert(`${tipo} cadastrado: matrícula ${p.matricula}.` + (fim ? ' Válido até ' + dataCurta(fim) : ''));
   $('visNome').value = ''; $('visTreinutrix').value = '';
-}
-function treinutrixLink(t) {
-  if (!t) return '<span style="color:#666">sem vínculo</span>';
-  const url = t.startsWith('http') ? t : 'https://treinutrix.com/' + t.replace(/^@/, '');
-  const label = t.startsWith('http') ? 'abrir perfil' : t;
-  return `<a href="${url}" target="_blank" rel="noopener" style="color:#1DB954">${label} ↗</a>`;
-}
-async function vincularTreinutrix(id, atual) {
-  const v = prompt('Perfil Treinutrix (link ou @usuário, vazio remove):', atual || '');
-  if (v === null) return;
-  await jpatch(`/api/persons/${encodeURIComponent(id)}`, { treinutrix: v.trim() || null });
-  carregarSistema();
+  load();
 }
 function csv() {
   const rows = [['timestamp', 'device', 'person', 'direcao', 'metodo', 'decisao', 'motivo']];
@@ -258,72 +624,113 @@ function csv() {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = 'presenca.csv'; a.click();
 }
+function treinutrixLink(t) {
+  if (!t) return '<span class="muted">sem vínculo</span>';
+  const url = t.startsWith('http') ? t : 'https://treinutrix.com/' + t.replace(/^@/, '');
+  return `<a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--primary-text);font-weight:600;text-decoration:none">${esc(t)}</a>`;
+}
 
-// ---- sistema (gerência) ----
+// ---------- sistema ----------
 async function carregarSistema() {
   const s = await jget('/api/system');
-  const ips = s.ips.map(i => `${i.iface}: ${i.address}`).join('<br>') || 'nenhum IP externo (só localhost)';
-  $('sysinfo').innerHTML = `Acesse pelo celular na mesma rede: <b>http://${(s.ips[0] && s.ips[0].address) || location.hostname}:${location.port}</b><br>
-    IPs locais:<br>${ips}<br>
-    Máquina: ${s.hostname} · ${s.platform}/${s.arch} · Node ${s.node}<br>
-    Uptime: ${s.uptimeMin} min · RAM: ${s.memMB} MB<br>
-    Pessoas: ${s.counts.persons} · Dispositivos: ${s.counts.devices} · Eventos: ${s.counts.events} · Sync pendente: ${s.counts.syncPending}`;
-  $('lastBackup').textContent = 'Último backup: ' + (s.lastBackupAt || 'nunca');
-  $('inadBadge').textContent = s.counts.inadimplentes ? `(${s.counts.inadimplentes} em atraso — inativos excluídos)` : '';
+  const ip = (s.ips && s.ips[0] && s.ips[0].address) || location.hostname;
+  const url = `http://${ip}:${location.port || 3001}`;
+  $('sysinfo').innerHTML = `
+    <div class="ip-hero">
+      <div><div class="url">${esc(url)}</div><div class="hint">Abra este endereço no celular conectado ao mesmo Wi-Fi.</div></div>
+      <button class="btn ghost sm" onclick="navigator.clipboard&&navigator.clipboard.writeText('${esc(url)}')">Copiar</button>
+    </div>
+    <div class="info-grid">
+      <div class="info-item"><div class="k">Máquina</div><div class="v">${esc(s.hostname)}</div></div>
+      <div class="info-item"><div class="k">Sistema</div><div class="v">${esc(s.platform)} / ${esc(s.arch)}</div></div>
+      <div class="info-item"><div class="k">Node</div><div class="v">${esc(s.node)}</div></div>
+      <div class="info-item"><div class="k">Uptime</div><div class="v">${esc(s.uptimeMin)} min</div></div>
+      <div class="info-item"><div class="k">Memória</div><div class="v">${esc(s.memMB)} MB</div></div>
+      <div class="info-item"><div class="k">Pessoas</div><div class="v">${esc(s.counts.persons)}</div></div>
+      <div class="info-item"><div class="k">Dispositivos</div><div class="v">${esc(s.counts.devices)}</div></div>
+      <div class="info-item"><div class="k">Eventos</div><div class="v">${esc(s.counts.events)}</div></div>
+      <div class="info-item"><div class="k">Inadimplentes</div><div class="v">${esc(s.counts.inadimplentes || 0)}</div></div>
+    </div>
+    <div class="help">IPs locais: ${(s.ips || []).map(i => esc(i.iface) + ' ' + esc(i.address)).join(' · ') || 'nenhum'}</div>`;
+  $('lastBackup').textContent = s.lastBackupAt ? 'Último backup: ' + new Date(s.lastBackupAt).toLocaleString('pt-BR') : 'Nenhum backup realizado ainda.';
+  $('inadBadge').innerHTML = s.counts.inadimplentes ? `<span class="badge bad dot">${s.counts.inadimplentes} em atraso</span>` : '<span class="badge ok dot">sem atrasos</span>';
   await loadPessoas(s.inadimplentes || []);
   await loadUsuarios();
   await loadBackups(); await loadNotifications();
 }
-async function loadUsuarios() {
-  try {
-    const list = await jget('/api/users');
-    $('usuarios').innerHTML = list.map(u => `<div class="row"><span style="font-size:14px">● <b>${u.nome}</b> · ${u.login} · ${u.perfil}</span></div>`).join('') || 'Nenhum operador.';
-  } catch (e) { $('usuarios').textContent = 'sem permissão'; }
-}
-async function criarUsuario() {
-  const nome = $('usrNome').value.trim(), login = $('usrLogin').value.trim(), senha = $('usrSenha').value, perfil = $('usrPerfil').value;
-  if (!login || !senha) return alert('Login e senha obrigatórios.');
-  const u = await jpost('/api/users', { nome, login, senha, perfil });
-  alert('Operador ' + u.login + ' criado.');
-  $('usrNome').value = ''; $('usrLogin').value = ''; $('usrSenha').value = '';
-  loadUsuarios();
-}
-async function jpatch(p, b) { const r = await req(p, { method: 'PATCH', body: JSON.stringify(b) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; }
-async function loadPessoas(inad) {  const list = await jget('/api/persons');
+async function loadPessoas(inad) {
+  const list = await jget('/api/persons');
+  window.__pessoas = Object.fromEntries(list.map(p => [p.id, p.nome]));
   const vencidas = new Set((inad || []).map(p => p.id));
-  $('pessoas').innerHTML = list.map(p => `<div class="row" style="justify-content:space-between">
-    <span style="font-size:14px">${p.ativo ? '●' : '○'} [${p.tipo || 'ALUNO'}] <b>${p.nome}</b> · ${p.matricula}${p.validadeFim ? ' · até ' + p.validadeFim.slice(0, 10) : ''}${vencidas.has(p.id) ? ' · <b style="color:#e88">EM ATRASO</b>' : ''}${!p.ativo ? ' · <span style="color:#888">inativo</span>' : ''}<br><span style="font-size:12px;color:#888">Treinutrix: ${treinutrixLink(p.treinutrix)}</span></span>
-    <span><button class="ghost" onclick="vincularTreinutrix('${p.id}', '${(p.treinutrix || '').replace(/'/g, '')}')">Vincular</button><button class="ghost" onclick="toggleAtivo('${p.id}', ${p.ativo ? 'false' : 'true'})">${p.ativo ? 'Inativar' : 'Reativar'}</button></span>
-  </div>`).join('') || 'Nenhuma pessoa.';
+  $('pessoas').innerHTML = list.map(p => `
+    <tr>
+      <td><div class="stack"><div class="avatar-inline">${iniciais(p.nome)}</div><div><b>${esc(p.nome)}</b><div class="muted">${esc(p.matricula)} · Treinutrix: ${treinutrixLink(p.treinutrix)}</div></div></div></td>
+      <td>${badgeTipo(p.tipo)}</td>
+      <td class="mono muted">${p.validadeFim ? dataCurta(p.validadeFim) : '—'}</td>
+      <td>${!p.ativo ? '<span class="badge neutral dot">inativo</span>' : vencidas.has(p.id) ? '<span class="badge bad dot">em atraso</span>' : '<span class="badge ok dot">ativo</span>'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn ghost sm" onclick="vincularTreinutrix('${esc(p.id)}', '${esc((p.treinutrix || '').replace(/'/g, ''))}')">Vincular</button>
+        <button class="btn ${p.ativo ? 'danger' : 'ghost'} sm" onclick="toggleAtivo('${esc(p.id)}', ${p.ativo ? 'false' : 'true'})">${p.ativo ? 'Inativar' : 'Reativar'}</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="5"><div class="empty">Nenhuma pessoa cadastrada.</div></td></tr>';
 }
 async function toggleAtivo(id, ativo) {
   await jpatch(`/api/persons/${encodeURIComponent(id)}`, { ativo });
   carregarSistema();
 }
+async function vincularTreinutrix(id, atual) {
+  const v = prompt('Perfil Treinutrix (link ou @usuario, vazio remove):', atual || '');
+  if (v === null) return;
+  await jpatch(`/api/persons/${encodeURIComponent(id)}`, { treinutrix: v.trim() || null });
+  carregarSistema();
+}
+async function loadUsuarios() {
+  try {
+    const list = await jget('/api/users');
+    $('usuarios').innerHTML = list.map(u => `
+      <tr><td><div class="stack"><div class="avatar-inline">${iniciais(u.nome)}</div><b>${esc(u.nome)}</b></div></td>
+      <td class="mono">${esc(u.login)}</td><td><span class="badge ${u.perfil === 'gerencia' ? 'primary' : 'neutral'}">${esc(u.perfil)}</span></td></tr>`).join('')
+      || '<tr><td colspan="3"><div class="empty">Nenhum operador.</div></td></tr>';
+  } catch (e) { $('usuarios').innerHTML = '<tr><td colspan="3"><div class="empty">sem permissão</div></td></tr>'; }
+}
+async function criarUsuario() {
+  const nome = $('usrNome').value.trim(), login = $('usrLogin').value.trim(), senha = $('usrSenha').value, perfil = $('usrPerfil').value;
+  if (!login || !senha) return alert('Login e senha obrigatórios.');
+  try {
+    const u = await jpost('/api/users', { nome, login, senha, perfil });
+    alert('Operador ' + u.login + ' criado.');
+    $('usrNome').value = ''; $('usrLogin').value = ''; $('usrSenha').value = '';
+    loadUsuarios();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
 async function loadBackups() {
   const list = await jget('/api/backup');
-  $('backups').innerHTML = list.map(b => `<div class="row"><span style="font-size:13px">${b.file} (${Math.round(b.size / 1024)} KB)</span><button class="ghost" onclick="restoreBackup('${b.file}')">Restaurar</button></div>`).join('') || 'Nenhum backup.';
+  $('backups').innerHTML = list.map(b => `
+    <tr><td class="mono">${esc(b.file)}</td><td class="muted">${Math.round(b.size / 1024)} KB</td>
+    <td style="text-align:right"><button class="btn ghost sm" onclick="restoreBackup('${esc(b.file)}')">Restaurar</button></td></tr>`).join('')
+    || '<tr><td colspan="3"><div class="empty">Nenhum backup.</div></td></tr>';
 }
 async function backupAgora() {
   const r = await jpost('/api/backup', {});
-  alert('Backup: ' + r.file);
+  alert('Backup criado: ' + r.file);
   carregarSistema();
 }
 async function restoreBackup(file) {
-  if (!confirm('Restaurar ' + file + '? Dados atuais serão substituídos.')) return;
+  if (!confirm('Restaurar ' + file + '? Os dados atuais serão substituídos.')) return;
   const r = await jpost('/api/backup/restore', { file });
-  alert('Restaurado de ' + r.at);
+  alert('Restaurado de ' + new Date(r.at).toLocaleString('pt-BR'));
   carregarSistema();
 }
 async function loadNotifications() {
   const list = await jget('/api/notifications');
   const pend = list.filter(n => !n.resolvida);
-  $('ntfBadge').textContent = pend.length ? `(${pend.length} pendentes)` : '(em dia)';
-  $('notifs').innerHTML = list.slice(0, 20).map(n => `<div class="card" style="margin-bottom:8px">
-    <b>[${n.tipo}] ${n.titulo}</b><br><span style="color:#aaa">${n.detalhe}</span><br>
-    <span style="color:#666;font-size:12px">${n.createdAt}${n.resolvida ? ` · resolvida por ${n.resolvidaPor} em ${n.resolvidaEm}` : ''}</span>
-    ${n.resolvida ? '' : `<div class="row"><button onclick="ackNotif('${n.id}')">Marcar resolvida</button></div>`}
-  </div>`).join('') || 'Nenhuma notificação.';
+  $('ntfBadge').innerHTML = pend.length ? `<span class="badge warn dot">${pend.length} pendentes</span>` : '<span class="badge ok dot">em dia</span>';
+  $('notifs').innerHTML = list.slice(0, 20).map(n => `
+    <div class="list-item">
+      <div><div class="t">${esc(n.titulo)}</div><div class="d">${esc(n.detalhe || '')} · ${new Date(n.createdAt).toLocaleString('pt-BR')}</div>
+      ${n.resolvida ? `<div class="d">resolvida por ${esc(n.resolvidaPor)} em ${new Date(n.resolvidaEm).toLocaleString('pt-BR')}</div>` : ''}</div>
+      ${n.resolvida ? '<span class="badge ok dot">resolvida</span>' : `<button class="btn sm" onclick="ackNotif('${esc(n.id)}')">Marcar resolvida</button>`}
+    </div>`).join('') || '<div class="empty">Nenhuma notificação.</div>';
 }
 async function ackNotif(id) {
   const por = $('respNome').value.trim() || 'gerente';
@@ -334,14 +741,13 @@ async function avaliarNotif() {
   await jpost('/api/notifications/evaluate', {});
   loadNotifications();
 }
-setInterval(() => { if (sess && sess.perfil === 'gerencia' && !$('v-sistema').classList.contains('hidden')) loadNotifications(); }, 60000);
+
+// ---------- boot ----------
 entraUI();
 window.addEventListener('unhandledrejection', e => alert('Erro: ' + ((e.reason && e.reason.message) || e.reason)));
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 </script>
-</div>
-<footer class="footer"><a href="https://treinutrix.com" target="_blank" rel="noopener"><b>Treinutrix</b> — Sua musculação mais inteligente · treinutrix.com</a></footer>
 </body>
 </html>

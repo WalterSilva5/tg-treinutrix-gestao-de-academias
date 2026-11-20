@@ -1,6 +1,7 @@
-// Service worker mínimo: shell offline, API sempre da rede.
-const CACHE = 'painel-v1';
-const SHELL = ['/', '/manifest.webmanifest', '/icon.svg'];
+// Service worker: HTML sempre da rede (network-first) para o painel refletir
+// atualizações; apenas ícones/manifest usam cache. API nunca é cacheada.
+const CACHE = 'painel-v4';
+const SHELL = ['/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -15,12 +16,27 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
+  const req = e.request;
+  const url = new URL(req.url);
+  if (url.origin !== location.origin) return;
   if (url.pathname.startsWith('/api/')) return; // API: sempre rede
+
+  const isNavigation = req.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html');
+  if (isNavigation) {
+    e.respondWith(
+      fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put('/', copy));
+        return res;
+      }).catch(() => caches.match('/'))
+    );
+    return;
+  }
+
   e.respondWith(
-    caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
+    caches.match(req).then((hit) => hit || fetch(req).then((res) => {
       const copy = res.clone();
-      caches.open(CACHE).then((c) => c.put(e.request, copy));
+      caches.open(CACHE).then((c) => c.put(req, copy));
       return res;
     }).catch(() => caches.match('/')))
   );
