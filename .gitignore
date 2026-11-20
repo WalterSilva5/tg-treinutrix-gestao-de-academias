@@ -5,3 +5,4 @@ dist/
 .DS_Store
 backups/*.json
 data/photos/
+data/auth.secret

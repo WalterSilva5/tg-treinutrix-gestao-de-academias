@@ -61,10 +61,14 @@ Variáveis de ambiente:
 
 ## No Windows com catraca
 
-1. Ler `edge-catraca/dotnet-adapter/README.md`.
-2. Implementar `EasyInnerReal` + `FacialReal` em C# conforme SDK do Portal de Integradores Topdata.
-3. Ligar com `USE_REAL_HARDWARE=1`, manter o mesmo contrato de `simulators.js`.
-4. Seguir `docs/TESTE-COM-CATRACA.md` (a criar na bancada).
+1. Ler `docs/HANDOFF-WINDOWS.md` (estado atual e backlog priorizado).
+2. Rodar `scripts\iniciar-painel.cmd` e depois `scripts\verificar.cmd`.
+3. Implementar `EasyInnerReal` + servidor WebSocket do facial em C#, conforme
+   `edge-catraca/dotnet-adapter/README.md` e `docs/SDK-*-MAPEAMENTO.md`.
+4. Ligar o driver real no edge, mantendo o mesmo contrato de `simulators.js`.
+5. Seguir o roteiro de bancada em `docs/CONTRATOS-HARDWARE.md`.
+
+Agentes de IA: ler `AGENTS.md` antes de alterar o código.
 
 ## SDK oficial
 
