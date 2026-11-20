@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSetUserinfo, buildDeleteUser, buildAccessAnswer, parseReaderMessage } from '../src/facial-ws.js';
+import { buildSetUserinfo, buildDeleteUser, buildAccessAnswer, parseReaderMessage } from '../../edge-catraca/src/facial-ws.js';
 
 test('setuserinfo com foto usa backupnum 50', () => {
   const p = buildSetUserinfo({ enrollid: 123, name: 'Ana', fotoBase64: 'abc' });
