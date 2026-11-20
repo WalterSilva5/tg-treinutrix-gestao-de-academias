@@ -25,7 +25,7 @@ aceite. Este documento substitui a leitura solta de `PROXIMOS-PASSOS` e
 | 9 | SQLite por padrão, sem Docker | ✅ feito | manutenção/compactação e teste de restore em máquina limpa |
 | 10 | Importar cadastros sem biometria | 🟡 parcial | XLSX não (zero-dep), fotos, upsert, histórico, rollback |
 | 11 | Scripts `.bat`/`.sh` para restaurar admin | ✅ feito | teste do modo offline e serviço |
-| 12 | Sorteios/premiações + eventos + PDF/CSV | ✅ eventos; 🟡 sorteios | auditoria/edição de sorteios (Fase 3) |
+| 12 | Sorteios/premiações + eventos + PDF/CSV | ✅ feito | — |
 | 13 | Este plano | ✅ feito | executar as fases abaixo |
 
 Legenda: ✅ pronto · 🟡 parcial · ⛔ bloqueado por hardware/terceiros.
@@ -174,15 +174,20 @@ Documentação em `docs/SORTEIOS-E-EVENTOS.md`.
 **Aceite:** criar evento, divulgar link, externo se inscrever sem login, check-in
 por QR, exportar CSV/PDF do período. ✅
 
-### Fase 3 — Completar sorteios (2–3 dias)
+### Fase 3 — Completar sorteios (2–3 dias) — ✅ concluída em 2026-11-20
 
 1. Editar na UI + prévia de elegíveis.
 2. Auditoria `raffle_draws` e múltiplos ganhadores.
 3. Trava de concorrência e confirmação do agendamento.
 4. Exportação do resultado e tela pública.
 
+**Entregue:** edição completa, prévia de elegíveis, múltiplos ganhadores com
+estoque, exclusão de pessoa, histórico imutável em `raffleDraws`, trava de
+sorteio simultâneo, agendamento confirmado, resultado CSV/PDF e tela pública
+`/s/<token>` para TV.
+
 **Aceite:** sortear duas vezes sem apagar histórico; duas abas não sorteiam em
-duplicidade; resultado exportável.
+duplicidade; resultado exportável. ✅
 
 ### Fase 4 — Importação robusta (1–2 dias)
 

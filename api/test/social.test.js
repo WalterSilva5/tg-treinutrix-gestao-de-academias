@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   elegiveis, sortear, normalizarEvento, normalizarSorteio, novaInscricao, pessoaEmDia,
-  promoverEspera, gerarRecorrencias, eventoPorToken, novoEvento,
+  promoverEspera, gerarRecorrencias, eventoPorToken, novoEvento, sortearVarios,
 } from '../src/social.js';
 import { eventoParaCsv, eventoParaPdf, eventosParaCsv, eventosParaPdf } from '../src/report.js';
 
@@ -239,4 +239,17 @@ test('relat?rio de eventos exporta CSV e PDF', () => {
   assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.4');
   assert.match(pdf.toString('latin1'), /Relat.rio de eventos/);
   assert.match(pdf.toString('latin1'), /Aula A/);
+});
+
+
+test('multiplos ganhadores sem repetir, exclusao e estoque', () => {
+  const store = lojaBase();
+  const s = sorteio({ publico: 'TODOS', entradasBase: 1, ganhadoresQtd: 3 });
+  const out = sortearVarios(store, s, { agora, randomInt: () => 0 });
+  assert.equal(out.vencedores.length, 3);
+  assert.equal(new Set(out.vencedores.map((v) => v.nome)).size, 3);
+  assert.equal(sortearVarios(store, { ...s, excluidos: ['a1'] }, { agora, randomInt: () => 0 })
+    .vencedores.some((v) => v.personId === 'a1'), false);
+  assert.equal(sortearVarios(store, { ...s, estoquePremios: 1, ganhadoresQtd: 3 }, { agora, randomInt: () => 0 })
+    .vencedores.length, 1);
 });

@@ -62,6 +62,8 @@ Base de padrões: `wsi-invest-ai` (`back/src/modules/admin` overview,
 | `GET/POST /api/public/eventos/:token` | inscrição pública sem login |
 | `GET /api/relatorios/eventos[.csv|.pdf]` | relatório de eventos por período |
 | `GET/POST /api/sorteios` · `.../elegiveis` · `.../sortear` | sorteios programáveis e roleta |
+| `GET /api/sorteios/:id/historico` · `.../resultado.csv|pdf` | auditoria e exportação do resultado |
+| `GET /api/public/sorteios/:token` | tela pública do sorteio |
 | `GET /api/device-catalog` · `POST/PATCH/DELETE /api/devices` | catálogo e cadastro de catracas |
 | `POST /api/devices/:id/test` · `POST /api/devices/discover` | teste TCP e detecção na rede |
 | `POST /api/persons/import` | importação em lote (prévia/confirmação) |

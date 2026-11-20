@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sorteio ao vivo</title>
+<style>
+  :root { --primary:#f97316; --ink:#1c1917; --muted:#78716c; --line:#292524; --bg:#0c0a09; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px; color:#fafaf9;
+    font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:radial-gradient(circle at 50% 0%, #292524 0%, var(--bg) 70%); }
+  main { width:100%; max-width:900px; text-align:center; }
+  h1 { font-size:clamp(28px, 5vw, 56px); margin:0 0 8px; letter-spacing:-.03em; }
+  .prize { color:var(--primary); font-size:clamp(16px, 2.4vw, 24px); font-weight:700; margin-bottom:26px; }
+  .card { background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:28px; padding:38px 24px; }
+  .wait { font-size:clamp(18px, 3vw, 30px); color:#d6d3d1; }
+  .count { margin-top:18px; color:var(--muted); font-size:16px; }
+  .winners { display:grid; gap:14px; margin-top:8px; }
+  .winner { background:linear-gradient(135deg, rgba(249,115,22,.2), rgba(20,184,166,.12));
+    border:1px solid rgba(249,115,22,.5); border-radius:18px; padding:18px; }
+  .winner .n { font-size:clamp(24px, 4vw, 44px); font-weight:800; letter-spacing:-.02em; }
+  .winner .m { color:var(--muted); font-size:14px; margin-top:4px; }
+  .badge { display:inline-block; padding:6px 14px; border-radius:999px; background:var(--primary); color:#fff;
+    font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; margin-bottom:16px; }
+  .foot { margin-top:22px; color:#57534e; font-size:12px; }
+</style>
+</head>
+<body>
+<main id="app">
+  <div class="badge">Sorteio ao vivo</div>
+  <h1 id="nome">Carregando…</h1>
+  <div class="prize" id="premio"></div>
+  <div class="card" id="corpo"><div class="wait">Aguardando o sorteio…</div></div>
+  <div class="foot">Atualiza automaticamente · Treinutrix</div>
+</main>
+<script>
+const token = (location.pathname.match(/^\/s\/([A-Za-z0-9]+)/) || [])[1] || '';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function render(d) {
+  $('nome').textContent = d.nome || 'Sorteio';
+  $('premio').textContent = d.premio ? 'Prêmio: ' + d.premio : '';
+  if (d.status === 'SORTEADA' && d.vencedores && d.vencedores.length) {
+    $('corpo').innerHTML = `<div class="winners">${d.vencedores.map((v) => `
+      <div class="winner"><div class="n">${esc(v.nome)}</div>
+      <div class="m">${v.matricula ? 'Matrícula ' + esc(v.matricula) : 'Participante'} · ${d.sorteadoEm ? new Date(d.sorteadoEm).toLocaleString('pt-BR') : ''}</div></div>`).join('')}</div>`;
+  } else {
+    $('corpo').innerHTML = `<div class="wait">Aguardando o sorteio…</div>
+      <div class="count">${d.elegiveisQtd || 0} participante(s) elegível(is)</div>`;
+  }
+}
+
+async function atualizar() {
+  if (!token) { $('nome').textContent = 'Link inválido'; return; }
+  try {
+    const r = await fetch('/api/public/sorteios/' + encodeURIComponent(token));
+    if (!r.ok) throw new Error('Sorteio indisponível');
+    render(await r.json());
+  } catch (e) {
+    $('nome').textContent = 'Sorteio indisponível';
+    $('premio').textContent = '';
+    $('corpo').innerHTML = `<div class="wait">${esc(e.message)}</div>`;
+  }
+}
+atualizar();
+setInterval(atualizar, 5000);
+</script>
+</body>
+</html>

@@ -90,6 +90,15 @@ export function normalizarSorteio(b, base = {}) {
     bonusEmDia: inteiro(b.bonusEmDia, 0, 20, base.bonusEmDia ?? 0),
     bonusEvento: inteiro(b.bonusEvento, 0, 20, base.bonusEvento ?? 0),
     exigirEmDia: b.exigirEmDia !== undefined ? b.exigirEmDia !== false : (base.exigirEmDia === true),
+    ganhadoresQtd: inteiro(b.ganhadoresQtd, 1, 50, base.ganhadoresQtd ?? 1),
+    estoquePremios: b.estoquePremios !== undefined && b.estoquePremios !== null && b.estoquePremios !== ''
+      ? inteiro(b.estoquePremios, 0, 1000, 0) : (base.estoquePremios ?? null),
+    excluidos: Array.isArray(b.excluidos)
+      ? [...new Set(b.excluidos.map((x) => String(x)).filter(Boolean))].slice(0, 500)
+      : (base.excluidos || []),
+    agendamentoConfirmado: b.agendamentoConfirmado !== undefined
+      ? b.agendamentoConfirmado === true
+      : (base.agendamentoConfirmado === true),
   };
 }
 
@@ -98,6 +107,7 @@ export function elegiveis(store, sorteio, agora = new Date()) {
   const base = Math.max(1, Number(sorteio.entradasBase) || 1);
   const bonusEmDia = Math.max(0, Number(sorteio.bonusEmDia) || 0);
   const bonusEvento = Math.max(0, Number(sorteio.bonusEvento) || 0);
+  const excluidos = new Set((sorteio.excluidos || []).map(String));
   const participantes = [];
   const vistos = new Set();
 
@@ -122,6 +132,7 @@ export function elegiveis(store, sorteio, agora = new Date()) {
   if (sorteio.publico === 'EVENTO') {
     for (const p of store.eventParticipants) {
       if (p.eventId !== sorteio.eventId || p.status === 'CANCELADO') continue;
+      if (excluidos.has(String(p.id)) || (p.personId && excluidos.has(String(p.personId)))) continue;
       const pessoa = p.personId ? store.persons.get(p.personId) : null;
       adicionar({
         chave: `evt:${p.id}`, nome: p.nome, matricula: pessoa ? pessoa.matricula : null,
@@ -132,6 +143,7 @@ export function elegiveis(store, sorteio, agora = new Date()) {
   } else {
     for (const p of store.persons.values()) {
       if (p.ativo === false) continue;
+      if (excluidos.has(String(p.id))) continue;
       const tipo = p.tipo || 'ALUNO';
       if (sorteio.publico === 'ALUNOS' || sorteio.publico === 'ALUNOS_EM_DIA' || sorteio.publico === 'MATRICULAS') {
         if (tipo !== 'ALUNO') continue;
@@ -162,28 +174,49 @@ export function elegiveis(store, sorteio, agora = new Date()) {
   return { participantes, totalEntradas };
 }
 
-// Sorteia com peso. `randomInt(max)` é injetável para testes determinísticos.
-export function sortear(store, sorteio, { agora = new Date(), randomInt = crypto.randomInt } = {}) {
+// Sorteia com peso, sem repetir vencedor. `randomInt(max)` é injetável.
+export function sortearVarios(store, sorteio, { quantidade = sorteio.ganhadoresQtd || 1, agora = new Date(), randomInt = crypto.randomInt } = {}) {
   const { participantes, totalEntradas } = elegiveis(store, sorteio, agora);
   if (participantes.length === 0 || totalEntradas <= 0) {
     throw new Error('sem participantes elegíveis para este sorteio');
   }
-  let alvo = randomInt(totalEntradas);
-  let escolhido = participantes[participantes.length - 1];
-  for (const p of participantes) {
-    if (alvo < p.entradas) { escolhido = p; break; }
-    alvo -= p.entradas;
+  const estoque = sorteio.estoquePremios;
+  const limiteEstoque = estoque !== null && estoque !== undefined && estoque !== ''
+    && Number.isInteger(Number(estoque)) && Number(estoque) >= 0
+    ? Number(estoque) : null;
+  const qtd = Math.max(1, Math.min(
+    Number(quantidade) || 1,
+    participantes.length,
+    limiteEstoque === null ? 50 : Math.max(1, limiteEstoque),
+  ));
+  const restantes = participantes.map((p) => ({ ...p }));
+  const vencedores = [];
+  for (let n = 0; n < qtd; n += 1) {
+    const total = restantes.reduce((s, p) => s + p.entradas, 0);
+    if (total <= 0) break;
+    let alvo = randomInt(total);
+    let idx = restantes.length - 1;
+    for (let i = 0; i < restantes.length; i += 1) {
+      if (alvo < restantes[i].entradas) { idx = i; break; }
+      alvo -= restantes[i].entradas;
+    }
+    const escolhido = restantes.splice(idx, 1)[0];
+    vencedores.push({
+      nome: escolhido.nome,
+      matricula: escolhido.matricula || null,
+      personId: escolhido.personId,
+      participantId: escolhido.participantId,
+      origem: escolhido.origem,
+      entradas: escolhido.entradas,
+      sorteadoEm: agora.toISOString(),
+    });
   }
-  const vencedor = {
-    nome: escolhido.nome,
-    matricula: escolhido.matricula || null,
-    personId: escolhido.personId,
-    participantId: escolhido.participantId,
-    origem: escolhido.origem,
-    entradas: escolhido.entradas,
-    sorteadoEm: agora.toISOString(),
-  };
-  return { vencedor, totalParticipantes: participantes.length, totalEntradas, participantes };
+  return { vencedores, totalParticipantes: participantes.length, totalEntradas, participantes };
+}
+
+export function sortear(store, sorteio, opcoes = {}) {
+  const out = sortearVarios(store, sorteio, { ...opcoes, quantidade: 1 });
+  return { vencedor: out.vencedores[0], ...out };
 }
 
 export function novoEvento(b) {

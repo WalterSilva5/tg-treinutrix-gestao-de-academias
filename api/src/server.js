@@ -25,10 +25,10 @@ import { catalogo, normalizarDevice } from './devices.js';
 import { diasFrequentados, alunosNoDia } from './frequency.js';
 import { descobrirCatracas, probarTcp, redesLocais, normalizarSubnet } from './discovery.js';
 import {
-  normalizarEvento, normalizarSorteio, novoEvento, novaInscricao, elegiveis, sortear,
+  normalizarEvento, normalizarSorteio, novoEvento, novaInscricao, elegiveis, sortear, sortearVarios,
   STATUS_PARTICIPANTE, promoverEspera, gerarRecorrencias, eventoPorToken,
 } from './social.js';
-import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento, eventosParaCsv, eventosParaPdf } from './report.js';
+import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento, eventosParaCsv, eventosParaPdf, sorteioParaCsv, sorteioParaPdf } from './report.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FRONT_DIR = path.join(HERE, '..', '..', 'front');
@@ -68,6 +68,7 @@ const RAFFLE_INTERVAL_MS = Number(process.env.RAFFLE_INTERVAL_MS || 60000);
 let ultimaVarredura = 0;
 let varrendo = false;
 let raffleTimer = null;
+const sorteando = new Set();
 
 // ---------------------------------------------------------------------------
 // bootstrap
@@ -130,8 +131,8 @@ function sortearProgramados(agora = new Date()) {
     const quando = new Date(r.sorteioEm);
     if (Number.isNaN(quando.getTime()) || quando > agora) continue;
     try {
-      realizarSorteio(r, { agora });
-      console.log(`[sorteio] ${r.nome}: ganhador ${r.vencedor.nome}`);
+      realizarSorteio(r, { agora, automatico: true, por: 'automático' });
+      console.log(`[sorteio] ${r.nome}: ${r.vencedores.map((v) => v.nome).join(', ')}`);
     } catch (e) {
       if (r.ultimoErro !== e.message) console.log(`[sorteio] ${r.nome}: ${e.message}`);
       r.ultimoErro = e.message;
@@ -139,27 +140,50 @@ function sortearProgramados(agora = new Date()) {
   }
 }
 
-function realizarSorteio(r, { agora = new Date(), randomInt } = {}) {
-  const out = sortear(store, r, { agora, randomInt });
-  r.vencedor = out.vencedor;
-  r.totalParticipantes = out.totalParticipantes;
-  r.totalEntradas = out.totalEntradas;
-  r.status = 'SORTEADA';
-  r.sorteadoEm = out.vencedor.sorteadoEm;
-  r.ultimoErro = null;
-  store.notifications.push({
-    id: nextId('ntf'),
-    key: `sorteio:${r.id}:${r.sorteadoEm}`,
-    tipo: 'SORTEIO',
-    titulo: `Sorteio realizado: ${r.nome}`,
-    detalhe: `Ganhador: ${r.vencedor.nome}${r.vencedor.matricula ? ` (${r.vencedor.matricula})` : ''} — prêmio: ${r.premio || 'não informado'}.`,
-    createdAt: agora.toISOString(),
-    resolvida: false,
-    resolvidaPor: null,
-    resolvidaEm: null,
-  });
-  markDirty();
-  return out;
+function realizarSorteio(r, { agora = new Date(), randomInt, por = 'operador', automatico = false } = {}) {
+  if (sorteando.has(r.id)) throw new Error('sorteio em andamento');
+  sorteando.add(r.id);
+  try {
+    const out = sortearVarios(store, r, {
+      quantidade: r.ganhadoresQtd || 1, agora, randomInt,
+    });
+    r.vencedores = out.vencedores;
+    r.vencedor = out.vencedores[0] || null;
+    r.totalParticipantes = out.totalParticipantes;
+    r.totalEntradas = out.totalEntradas;
+    r.status = 'SORTEADA';
+    r.sorteadoEm = agora.toISOString();
+    r.ultimoErro = null;
+    const registro = {
+      id: nextId('sdr'),
+      raffleId: r.id,
+      raffleNome: r.nome,
+      premio: r.premio,
+      vencedores: out.vencedores,
+      totalParticipantes: out.totalParticipantes,
+      totalEntradas: out.totalEntradas,
+      sorteadoEm: r.sorteadoEm,
+      automatico,
+      por,
+    };
+    store.raffleDraws.unshift(registro);
+    if (store.raffleDraws.length > 1000) store.raffleDraws.length = 1000;
+    store.notifications.push({
+      id: nextId('ntf'),
+      key: `sorteio:${registro.id}`,
+      tipo: 'SORTEIO',
+      titulo: `Sorteio realizado: ${r.nome}`,
+      detalhe: `Ganhador(es): ${out.vencedores.map((v) => `${v.nome}${v.matricula ? ` (${v.matricula})` : ''}`).join(', ')} - prêmio: ${r.premio || 'não informado'}.`,
+      createdAt: agora.toISOString(),
+      resolvida: false,
+      resolvidaPor: null,
+      resolvidaEm: null,
+    });
+    markDirty();
+    return { ...out, vencedor: out.vencedores[0] || null };
+  } finally {
+    sorteando.delete(r.id);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -558,6 +582,23 @@ async function route(req, res) {
     } catch (e) {
       return send(res, 400, { error: e.message });
     }
+  }
+
+  // Tela pública do sorteio (somente leitura, sem dados sensíveis).
+  const publicSorteioRoute = url.pathname.match(/^\/api\/public\/sorteios\/([^/]+)$/);
+  if (req.method === 'GET' && publicSorteioRoute) {
+    const token = safeDecode(publicSorteioRoute[1]);
+    const sorteio = store.raffles.find((r) => r.publicToken === token);
+    if (!sorteio) return send(res, 404, { error: 'sorteio não encontrado' });
+    let elegiveisQtd = 0;
+    try { elegiveisQtd = elegiveis(store, sorteio).participantes.length; } catch { /* regras incompletas */ }
+    return send(res, 200, {
+      nome: sorteio.nome, premio: sorteio.premio, status: sorteio.status,
+      ativo: sorteio.ativo !== false, sorteadoEm: sorteio.sorteadoEm || null,
+      elegiveisQtd,
+      vencedores: (sorteio.vencedores || (sorteio.vencedor ? [sorteio.vencedor] : []))
+        .map((v) => ({ nome: v.nome, matricula: v.matricula || null })),
+    });
   }
 
   // Demais /api/* exigem token.
@@ -1229,9 +1270,17 @@ async function route(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/sorteios') {
     gerenciaOnly();
     const b = await readBody(req);
+    if (b.sorteioEm && b.agendamentoConfirmado !== true) {
+      return send(res, 400, { error: 'confirme o agendamento (agendamentoConfirmado:true)' });
+    }
     let sorteio;
-    try { sorteio = { id: nextId('sor'), ...normalizarSorteio(b), criadoEm: new Date().toISOString() }; }
-    catch (e) { return send(res, 400, { error: e.message }); }
+    try {
+      sorteio = {
+        id: nextId('sor'), ...normalizarSorteio(b),
+        publicToken: crypto.randomBytes(8).toString('hex'),
+        criadoEm: new Date().toISOString(),
+      };
+    } catch (e) { return send(res, 400, { error: e.message }); }
     if (sorteio.publico === 'EVENTO' && !store.socialEvents.some((e) => e.id === sorteio.eventId)) {
       return send(res, 400, { error: 'evento do sorteio não encontrado' });
     }
@@ -1251,6 +1300,9 @@ async function route(req, res) {
     if (req.method === 'PATCH') {
       gerenciaOnly();
       const b = await readBody(req);
+      if (b.sorteioEm && b.agendamentoConfirmado !== true) {
+        return send(res, 400, { error: 'confirme o agendamento (agendamentoConfirmado:true)' });
+      }
       let atualizado;
       try { atualizado = normalizarSorteio(b, sorteio); } catch (e) { return send(res, 400, { error: e.message }); }
       if (atualizado.publico === 'EVENTO' && !store.socialEvents.some((e) => e.id === atualizado.eventId)) {
@@ -1292,13 +1344,58 @@ async function route(req, res) {
     }
     try {
       if (sorteio.status === 'SORTEADA') {
-        sorteio.vencedor = null; sorteio.sorteadoEm = null; sorteio.status = 'ATIVA';
+        sorteio.vencedor = null;
+        sorteio.vencedores = [];
+        sorteio.sorteadoEm = null;
+        sorteio.status = 'ATIVA';
       }
-      const out = realizarSorteio(sorteio, { agora: new Date() });
+      const out = realizarSorteio(sorteio, { agora: new Date(), por: user.nome || user.sub });
       return send(res, 200, out);
     } catch (e) {
       return send(res, 400, { error: e.message });
     }
+  }
+  const sorteioHistoricoRoute = url.pathname.match(/^\/api\/sorteios\/([^/]+)\/historico$/);
+  if (req.method === 'GET' && sorteioHistoricoRoute) {
+    operadorOnly();
+    const id = safeDecode(sorteioHistoricoRoute[1]);
+    if (!store.raffles.some((r) => r.id === id)) return send(res, 404, { error: 'sorteio_not_found' });
+    return send(res, 200, store.raffleDraws.filter((d) => d.raffleId === id));
+  }
+  const sorteioResultadoRoute = url.pathname.match(/^\/api\/sorteios\/([^/]+)\/resultado\.(csv|pdf)$/);
+  if (req.method === 'GET' && sorteioResultadoRoute) {
+    operadorOnly();
+    const id = safeDecode(sorteioResultadoRoute[1]);
+    const formato = sorteioResultadoRoute[2];
+    const sorteio = id ? store.raffles.find((r) => r.id === id) : null;
+    if (!sorteio) return send(res, 404, { error: 'sorteio_not_found' });
+    if (formato === 'csv') {
+      const corpo = sorteioParaCsv(sorteio);
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="sorteio-${id}.csv"`,
+        ...corsHeaders(),
+      });
+      return res.end(corpo);
+    }
+    const pdf = sorteioParaPdf(sorteio);
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="sorteio-${id}.pdf"`,
+      'Content-Length': pdf.length,
+      ...corsHeaders(),
+    });
+    return res.end(pdf);
+  }
+  const sorteioTokenRoute = url.pathname.match(/^\/api\/sorteios\/([^/]+)\/token$/);
+  if (req.method === 'POST' && sorteioTokenRoute) {
+    gerenciaOnly();
+    const id = safeDecode(sorteioTokenRoute[1]);
+    const sorteio = id ? store.raffles.find((r) => r.id === id) : null;
+    if (!sorteio) return send(res, 404, { error: 'sorteio_not_found' });
+    sorteio.publicToken = crypto.randomBytes(8).toString('hex');
+    markDirty();
+    return send(res, 200, { publicToken: sorteio.publicToken });
   }
   const sorteioResetRoute = url.pathname.match(/^\/api\/sorteios\/([^/]+)\/reset$/);
   if (req.method === 'POST' && sorteioResetRoute) {
@@ -1307,6 +1404,7 @@ async function route(req, res) {
     const sorteio = id ? store.raffles.find((r) => r.id === id) : null;
     if (!sorteio) return send(res, 404, { error: 'sorteio_not_found' });
     sorteio.vencedor = null;
+    sorteio.vencedores = [];
     sorteio.sorteadoEm = null;
     sorteio.totalParticipantes = null;
     sorteio.totalEntradas = null;
@@ -1324,11 +1422,21 @@ async function route(req, res) {
     if (!sorteio) return send(res, 404, { error: 'sorteio_not_found' });
     if (!sorteio.vencedor) return send(res, 409, { error: 'sorteio ainda não realizado' });
     const b = await readBody(req);
-    sorteio.entrega = {
-      entregue: true,
-      por: cleanText(b.por, 80) || 'operador',
-      em: new Date().toISOString(),
-    };
+    const por = cleanText(b.por, 80) || 'operador';
+    const em = new Date().toISOString();
+    const todos = b.todos === true;
+    const indice = Number.isInteger(Number(b.indice)) ? Number(b.indice) : null;
+    if (Array.isArray(sorteio.vencedores) && sorteio.vencedores.length > 0) {
+      sorteio.vencedores.forEach((v, i) => {
+        if (todos || indice === null || i === indice) {
+          v.entrega = { entregue: true, por, em };
+        }
+      });
+      sorteio.entrega = sorteio.vencedores.every((v) => v.entrega && v.entrega.entregue)
+        ? { entregue: true, por, em } : sorteio.entrega || null;
+    } else {
+      sorteio.entrega = { entregue: true, por, em };
+    }
     markDirty();
     return send(res, 200, sorteio);
   }
@@ -1586,6 +1694,17 @@ async function route(req, res) {
   if (req.method === 'GET' && /^\/e\/[A-Za-z0-9]{6,64}\/?$/.test(url.pathname)) {
     try {
       const html = fs.readFileSync(path.join(FRONT_DIR, 'evento.html'));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(html);
+    } catch {
+      return send(res, 404, { error: 'página não encontrada' });
+    }
+  }
+
+  // Página pública da tela do sorteio: /s/<token> (somente leitura).
+  if (req.method === 'GET' && /^\/s\/[A-Za-z0-9]{6,64}\/?$/.test(url.pathname)) {
+    try {
+      const html = fs.readFileSync(path.join(FRONT_DIR, 'sorteio.html'));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end(html);
     } catch {

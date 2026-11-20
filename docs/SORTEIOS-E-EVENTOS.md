@@ -62,6 +62,10 @@ Cada sorteio tem:
 | `bonusEvento` | entradas extras para quem participou do evento escolhido |
 | `inicio` / `fim` | período (usado por “novas matrículas”) |
 | `sorteioEm` | data/hora do sorteio automático (opcional) |
+| `agendamentoConfirmado` | exige confirmação explícita ao agendar |
+| `ganhadoresQtd` | quantidade de ganhadores (1 a 50) |
+| `estoquePremios` | limita o número de ganhadores ao estoque |
+| `excluidos` | ids de pessoas fora do sorteio |
 | `ativo` | habilita/desabilita sem apagar |
 | `status` | `ATIVA`, `PAUSADA` ou `SORTEADA` |
 
@@ -77,21 +81,35 @@ Cada sorteio tem:
 ### Como o ganhador é escolhido
 
 - O servidor calcula a lista elegível no momento do sorteio.
-- Sorteio ponderado com `crypto.randomInt` (não usa `Math.random`).
-- O cliente (roleta) **não decide** nada: a API retorna o ganhador e a animação
-  apenas revela o resultado.
-- Ficam registrados: ganhador, entradas, total de participantes, data e uma
-  notificação `SORTEIO` no painel.
-- “Reiniciar” limpa o ganhador e volta para `ATIVA`; “Entregar” registra quem
-  entregou o prêmio e quando.
+- Sorteio ponderado com `crypto.randomInt` (não usa `Math.random`), **sem repetir**
+  vencedor quando há vários ganhadores.
+- O cliente (roleta) **não decide** nada: a API retorna o(s) ganhador(es) e a
+  animação apenas revela o resultado.
+- Ficam registrados no histórico (`raffleDraws`): ganhador(es), entradas, total
+  de participantes, data, se foi automático e quem operou.
+- “Reiniciar” limpa o resultado atual, mas **não apaga o histórico**;
+  “Entregar” registra quem entregou o prêmio e quando (por ganhador).
+- Exclusões (`excluidos`) tiram a pessoa da lista elegível.
+- Trava em memória impede dois sorteios simultâneos do mesmo sorteio.
+- Um sorteio já realizado só é repetido com `forcar:true` (a UI usa Reiniciar).
 
 ### Programação automática
 
 - `sorteioEm` no passado + `ativo` + `status ATIVA` → o scheduler da API
   (`RAFFLE_INTERVAL_MS`, padrão 60 s) realiza o sorteio sozinho e notifica.
+- Ao informar `sorteioEm`, a API exige `agendamentoConfirmado:true` (a UI mostra
+  um diálogo de confirmação).
 - Sem `sorteioEm`, o sorteio é manual (botão **Roleta**).
 - Desabilitado (`ativo:false`) nunca é sorteado, nem pelo scheduler.
 - Erros (ex.: sem elegíveis) ficam em `ultimoErro` e não travam os demais.
+
+### Tela pública e exportação
+
+- `GET /api/public/sorteios/:token` (sem login) mostra nome, prêmio, status,
+  elegíveis e ganhadores — sem dados sensíveis.
+- Página `/s/<token>` para TV/projetor, atualizando a cada 5 s.
+- `GET /api/sorteios/:id/resultado.csv|pdf` exporta o resultado.
+- `GET /api/sorteios/:id/historico` lista todas as execuções (auditoria).
 
 ## 3. Exportação
 
@@ -121,10 +139,11 @@ Cada sorteio tem:
 | GET | `/api/sorteios` | equipe |
 | POST | `/api/sorteios` | gerência |
 | GET/PATCH/DELETE | `/api/sorteios/:id` | GET equipe; alterar gerência |
-| GET | `/api/sorteios/:id/elegiveis` | equipe |
-| POST | `/api/sorteios/:id/sortear` | gerência |
-| POST | `/api/sorteios/:id/reset` | gerência |
-| POST | `/api/sorteios/:id/entregar` | gerência |
+| GET | `/api/sorteios/:id/elegiveis` · `/historico` | equipe |
+| POST | `/api/sorteios/:id/sortear` · `/reset` · `/entregar` | gerência |
+| GET | `/api/sorteios/:id/resultado.csv` · `.pdf` | equipe |
+| POST | `/api/sorteios/:id/token` | gerência |
+| GET | `/api/public/sorteios/:token` | público (tela) |
 
 ## 5. Interface
 
@@ -132,8 +151,10 @@ Cada sorteio tem:
   inscrição de aluno ou externo, importação CSV, check-in por código,
   pagamento manual, cancelamento e exportação CSV/PDF.
 - **Relatório por período:** totais de inscritos, presentes, espera e receita.
-- **Sorteios:** lista com elegíveis e status, criação com público/pesos/datas,
-  habilitar/desabilitar, roleta animada, reiniciar, entregar e excluir.
+- **Sorteios:** lista com elegíveis/status, criação e **edição** com público,
+  pesos, ganhadores, estoque e datas; prévia de elegíveis, histórico, exclusão
+  de pessoa, link da **tela pública**, roleta animada, exportação CSV/PDF,
+  entrega, reinício e exclusão.
 - Recepção vê **Eventos**; **Sorteios** é exclusivo da gerência.
 
 ## 6. Privacidade e limites

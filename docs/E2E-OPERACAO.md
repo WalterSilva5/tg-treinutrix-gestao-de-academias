@@ -18,6 +18,8 @@ Execução manual no navegador interno em **2026-11-20**, com a API em
 - [x] **Eventos**: relatório por período em CSV/PDF.
 - [x] **Sorteios**: criar sorteio de evento, abrir roleta, girar e ver ganhador;
   resultado exibido e lista atualizada.
+- [x] **Sorteios**: editar, prévia de elegíveis, múltiplos ganhadores, histórico,
+  exclusão de pessoa, exportação e tela pública `/s/<token>`.
 - [x] Aba **Sistema → Banco** mostrando `sqlite`.
 - [x] `/api/health` com `edge.ok=true` e contadores.
 - [x] Reinício do processo da API pelo supervisor: volta em ~3 s.

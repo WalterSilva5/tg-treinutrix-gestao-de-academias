@@ -575,3 +575,70 @@ test('relat?rio de eventos: JSON, CSV e PDF por per?odo', async () => {
   assert.equal(buf.subarray(0, 8).toString(), '%PDF-1.4');
   assert.match(buf.subarray(-20).toString('latin1'), /%%EOF/);
 });
+
+
+test('sorteio: multiplos ganhadores, historico, tela publica e exportacao', async () => {
+  const s = await api('/api/sorteios', {
+    method: 'POST', token: admin,
+    body: { nome: 'Multi ' + run, premio: 'Kit', publico: 'TODOS', ganhadoresQtd: 2, ativo: true },
+  });
+  assert.equal(s.status, 201, s.text);
+  assert.match(s.json.publicToken, /^[0-9a-f]{16}$/);
+  const id = s.json.id;
+
+  const pub = await api('/api/public/sorteios/' + s.json.publicToken, { auth: false });
+  assert.equal(pub.status, 200);
+  assert.equal(pub.json.nome, 'Multi ' + run);
+  assert.equal(pub.json.vencedores.length, 0);
+
+  const draw = await api('/api/sorteios/' + id + '/sortear', { method: 'POST', token: admin, body: {} });
+  assert.equal(draw.status, 200, draw.text);
+  assert.equal(draw.json.vencedores.length, 2);
+  assert.equal(new Set(draw.json.vencedores.map((v) => v.nome)).size, 2);
+
+  const hist = await api('/api/sorteios/' + id + '/historico', { token: admin });
+  assert.equal(hist.status, 200);
+  assert.equal(hist.json.length, 1);
+  assert.equal(hist.json[0].vencedores.length, 2);
+
+  const pub2 = await api('/api/public/sorteios/' + s.json.publicToken, { auth: false });
+  assert.equal(pub2.json.status, 'SORTEADA');
+  assert.equal(pub2.json.vencedores.length, 2);
+
+  const csv = await fetch(base + '/api/sorteios/' + id + '/resultado.csv', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(csv.status, 200);
+  assert.match(await csv.text(), new RegExp('Multi ' + run));
+  const pdf = await fetch(base + '/api/sorteios/' + id + '/resultado.pdf', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(pdf.status, 200);
+  const buf = Buffer.from(await pdf.arrayBuffer());
+  assert.equal(buf.subarray(0, 8).toString(), '%PDF-1.4');
+
+  const reset = await api('/api/sorteios/' + id + '/reset', { method: 'POST', token: admin, body: {} });
+  assert.equal(reset.status, 200);
+  assert.equal(reset.json.vencedor, null);
+  const hist2 = await api('/api/sorteios/' + id + '/historico', { token: admin });
+  assert.equal(hist2.json.length, 1, 'reset nao apaga historico');
+});
+
+test('sorteio exige confirmacao do agendamento e valida exclusao', async () => {
+  const semConf = await api('/api/sorteios', {
+    method: 'POST', token: admin,
+    body: { nome: 'Agenda ' + run, publico: 'TODOS', sorteioEm: '2026-12-20T20:00' },
+  });
+  assert.equal(semConf.status, 400);
+  const comConf = await api('/api/sorteios', {
+    method: 'POST', token: admin,
+    body: { nome: 'Agenda ' + run, publico: 'TODOS', sorteioEm: '2026-12-20T20:00', agendamentoConfirmado: true, ganhadoresQtd: 1 },
+  });
+  assert.equal(comConf.status, 201, comConf.text);
+  assert.equal(comConf.json.agendamentoConfirmado, true);
+
+  const excl = await api('/api/sorteios/' + comConf.json.id, {
+    method: 'PATCH', token: admin,
+    body: { excluidos: ['per_demo_01'] },
+  });
+  assert.equal(excl.status, 200);
+  assert.deepEqual(excl.json.excluidos, ['per_demo_01']);
+  const eleg = await api('/api/sorteios/' + comConf.json.id + '/elegiveis', { token: admin });
+  assert.equal(eleg.json.participantes.some((p) => p.personId === 'per_demo_01'), false);
+});

@@ -529,9 +529,14 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
             <input id="sorEntradas" type="number" value="1" min="1" max="20" title="Entradas por participante">
             <input id="sorBonusDia" type="number" value="0" min="0" max="20" title="Entradas extras para mensalidade em dia">
             <input id="sorBonusEvento" type="number" value="0" min="0" max="20" title="Entradas extras para participante do evento">
+            <input id="sorGanhadores" type="number" value="1" min="1" max="50" title="Quantidade de ganhadores">
+            <input id="sorEstoque" type="number" min="0" max="1000" placeholder="Estoque de prêmios (opcional)">
             <label class="help" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="sorAtivo" checked> Habilitado</label>
             <textarea id="sorDescricao" placeholder="Regras/descrição do sorteio" rows="2"></textarea>
-            <div class="form-actions"><button class="btn sm" onclick="criarSorteio()">Criar sorteio</button></div>
+            <div class="form-actions">
+              <button class="btn sm" id="sorSalvar" onclick="salvarSorteio()">Criar sorteio</button>
+              <button class="btn ghost sm" id="sorCancelarEdicao" onclick="cancelarEdicaoSorteio()" style="display:none">Cancelar edição</button>
+            </div>
           </div>
         </details>
       </div>
@@ -1964,6 +1969,7 @@ const PUBLICOS_UI = [
   ['TODOS', 'Todas as pessoas ativas'],
 ];
 let roleta = { sorteio: null, participantes: [], angulo: 0, girando: false };
+let sorteioEditando = null;
 
 async function carregarSorteios() {
   try {
@@ -1972,19 +1978,29 @@ async function carregarSorteios() {
     }
     await carregarEventos();
     const lista = await jget('/api/sorteios');
+    window.__sorteios = lista;
     $('listaSorteios').innerHTML = lista.map(s => {
       const status = s.status === 'SORTEADA' ? '<span class="badge accent dot">sorteado</span>'
         : !s.ativo ? '<span class="badge neutral dot">desabilitado</span>'
           : '<span class="badge ok dot">ativo</span>';
-      const vencedor = s.vencedor ? `<div class="d">Ganhador: <b>${esc(s.vencedor.nome)}</b>${s.vencedor.matricula ? ' · ' + esc(s.vencedor.matricula) : ''}${s.entrega && s.entrega.entregue ? ' · prêmio entregue' : ''}</div>` : '';
+      const vencedores = (s.vencedores || (s.vencedor ? [s.vencedor] : []));
+      const ganhadores = vencedores.length
+        ? `<div class="d">Ganhador(es): <b>${vencedores.map(v => esc(v.nome)).join(', ')}</b>${s.entrega && s.entrega.entregue ? ' · prêmio entregue' : ''}</div>` : '';
       return `<div class="list-item"><div><div class="t">${esc(s.nome)} ${status}</div>
-        <div class="d">${esc((PUBLICOS_UI.find(p => p[0] === s.publico) || [s.publico, s.publico])[1])} · ${s.elegiveisQtd} elegível(is) · ${s.entradas} entrada(s)${s.sorteioEm ? ' · programado ' + esc(dataHoraCurta(s.sorteioEm)) : ''}</div>
-        ${vencedor}${s.ultimoErro ? `<div class="d">Aviso: ${esc(s.ultimoErro)}</div>` : ''}</div>
+        <div class="d">${esc((PUBLICOS_UI.find(p => p[0] === s.publico) || [s.publico, s.publico])[1])} · ${s.elegiveisQtd} elegível(is) · ${s.entradas} entrada(s) · ${s.ganhadoresQtd || 1} ganhador(es)${s.sorteioEm ? ' · programado ' + esc(dataHoraCurta(s.sorteioEm)) + (s.agendamentoConfirmado ? ' (confirmado)' : '') : ''}</div>
+        ${ganhadores}${s.ultimoErro ? `<div class="d">Aviso: ${esc(s.ultimoErro)}</div>` : ''}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           <button class="btn ghost sm" onclick="abrirRoleta('${esc(s.id)}')">${s.status === 'SORTEADA' ? 'Ver roleta' : 'Roleta'}</button>
+          <button class="btn ghost sm" onclick="previaSorteio('${esc(s.id)}')">Elegíveis</button>
+          <button class="btn ghost sm" onclick="verHistoricoSorteio('${esc(s.id)}')">Histórico</button>
+          <button class="btn ghost sm" onclick="abrirTelaSorteio('${esc(s.id)}')">Tela pública</button>
           ${sess.perfil === 'gerencia' ? `
+            <button class="btn ghost sm" onclick="editarSorteio('${esc(s.id)}')">Editar</button>
+            <button class="btn ghost sm" onclick="excluirParticipanteSorteio('${esc(s.id)}')">Excluir alguém</button>
             <button class="btn ghost sm" onclick="alternarSorteio('${esc(s.id)}', ${!s.ativo})">${s.ativo ? 'Desabilitar' : 'Habilitar'}</button>
             ${s.vencedor ? `<button class="btn ghost sm" onclick="entregarSorteio('${esc(s.id)}')">Entregar</button>` : ''}
+            <button class="btn ghost sm" onclick="exportarResultadoSorteio('${esc(s.id)}', 'csv')">CSV</button>
+            <button class="btn ghost sm" onclick="exportarResultadoSorteio('${esc(s.id)}', 'pdf')">PDF</button>
             <button class="btn ghost sm" onclick="resetSorteio('${esc(s.id)}')">Reiniciar</button>
             <button class="btn danger sm" onclick="excluirSorteio('${esc(s.id)}')">Excluir</button>` : ''}
         </div></div>`;
@@ -1997,9 +2013,29 @@ function atualizarPublicoSorteio() {
   $('sorEvento').style.display = publico === 'EVENTO' ? '' : 'none';
 }
 
-async function criarSorteio() {
+function limparFormSorteio() {
+  sorteioEditando = null;
+  ['sorNome', 'sorPremio', 'sorInicio', 'sorFim', 'sorSorteioEm', 'sorDescricao', 'sorEstoque'].forEach(id => { $(id).value = ''; });
+  $('sorEntradas').value = '1';
+  $('sorBonusDia').value = '0';
+  $('sorBonusEvento').value = '0';
+  $('sorGanhadores').value = '1';
+  $('sorAtivo').checked = true;
+  $('sorSalvar').textContent = 'Criar sorteio';
+  $('sorCancelarEdicao').style.display = 'none';
+  atualizarPublicoSorteio();
+}
+function cancelarEdicaoSorteio() { limparFormSorteio(); }
+
+async function salvarSorteio() {
   const nome = $('sorNome').value.trim();
   if (!nome) return toast('Nome obrigatório', 'Informe o nome do sorteio', 'err');
+  const sorteioEm = $('sorSorteioEm').value ? new Date($('sorSorteioEm').value).toISOString() : null;
+  let agendamentoConfirmado = false;
+  if (sorteioEm) {
+    if (!confirm(`Agendar o sorteio para ${dataHoraCurta(sorteioEm)}? Ele será realizado automaticamente.`)) return;
+    agendamentoConfirmado = true;
+  }
   const body = {
     nome,
     premio: $('sorPremio').value.trim(),
@@ -2007,19 +2043,116 @@ async function criarSorteio() {
     eventId: $('sorPublico').value === 'EVENTO' ? $('sorEvento').value : null,
     inicio: $('sorInicio').value || null,
     fim: $('sorFim').value || null,
-    sorteioEm: $('sorSorteioEm').value ? new Date($('sorSorteioEm').value).toISOString() : null,
+    sorteioEm,
+    agendamentoConfirmado,
     entradasBase: Number($('sorEntradas').value) || 1,
     bonusEmDia: Number($('sorBonusDia').value) || 0,
     bonusEvento: Number($('sorBonusEvento').value) || 0,
+    ganhadoresQtd: Number($('sorGanhadores').value) || 1,
+    estoquePremios: $('sorEstoque').value ? Number($('sorEstoque').value) : null,
     ativo: $('sorAtivo').checked,
     descricao: $('sorDescricao').value.trim(),
   };
   try {
-    const s = await jpost('/api/sorteios', body);
-    toast('Sorteio criado', s.nome);
-    ['sorNome', 'sorPremio', 'sorInicio', 'sorFim', 'sorSorteioEm', 'sorDescricao'].forEach(id => { $(id).value = ''; });
+    const s = sorteioEditando
+      ? await jpatch(`/api/sorteios/${encodeURIComponent(sorteioEditando)}`, body)
+      : await jpost('/api/sorteios', body);
+    toast(sorteioEditando ? 'Sorteio atualizado' : 'Sorteio criado', s.nome);
+    limparFormSorteio();
     carregarSorteios();
-  } catch (e) { toast('Falha ao criar sorteio', e.message, 'err'); }
+  } catch (e) { toast('Falha ao salvar sorteio', e.message, 'err'); }
+}
+
+async function editarSorteio(id) {
+  const s = (window.__sorteios || []).find(x => x.id === id);
+  if (!s) return;
+  sorteioEditando = id;
+  $('sorNome').value = s.nome || '';
+  $('sorPremio').value = s.premio || '';
+  $('sorPublico').value = s.publico || 'ALUNOS_EM_DIA';
+  atualizarPublicoSorteio();
+  if (s.eventId) $('sorEvento').value = s.eventId;
+  $('sorInicio').value = s.inicio ? String(s.inicio).slice(0, 10) : '';
+  $('sorFim').value = s.fim ? String(s.fim).slice(0, 10) : '';
+  $('sorSorteioEm').value = paraInputDataHora(s.sorteioEm);
+  $('sorEntradas').value = s.entradasBase || 1;
+  $('sorBonusDia').value = s.bonusEmDia || 0;
+  $('sorBonusEvento').value = s.bonusEvento || 0;
+  $('sorGanhadores').value = s.ganhadoresQtd || 1;
+  $('sorEstoque').value = s.estoquePremios ?? '';
+  $('sorAtivo').checked = s.ativo !== false;
+  $('sorDescricao').value = s.descricao || '';
+  $('sorSalvar').textContent = 'Salvar alterações';
+  $('sorCancelarEdicao').style.display = '';
+  $('sorteioForm').open = true;
+  $('sorteioForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function previaSorteio(id) {
+  try {
+    const s = (window.__sorteios || []).find(x => x.id === id);
+    const e = await jget(`/api/sorteios/${encodeURIComponent(id)}/elegiveis`);
+    $('sorResNome').textContent = `Elegíveis: ${s ? s.nome : id}`;
+    $('sorResMeta').textContent = `${e.participantes.length} participante(s) · ${e.totalEntradas} entrada(s)`;
+    $('sorResCorpo').innerHTML = `<div class="list">${e.participantes.slice(0, 50).map(p => `
+      <div class="list-item"><div><div class="t">${esc(p.nome)}</div><div class="d">${esc(p.origem)}${p.matricula ? ' · ' + esc(p.matricula) : ''}</div></div>
+      <span class="badge neutral">${p.entradas} entrada(s)</span></div>`).join('') || '<div class="empty">Nenhum elegível.</div>'}</div>`;
+    $('sorteioResultado').classList.remove('hidden');
+    $('sorteioResultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) { toast('Falha na prévia', e.message, 'err'); }
+}
+
+async function verHistoricoSorteio(id) {
+  try {
+    const s = (window.__sorteios || []).find(x => x.id === id);
+    const h = await jget(`/api/sorteios/${encodeURIComponent(id)}/historico`);
+    $('sorResNome').textContent = `Histórico: ${s ? s.nome : id}`;
+    $('sorResMeta').textContent = `${h.length} sorteio(s) registrado(s)`;
+    $('sorResCorpo').innerHTML = `<div class="list">${h.map(d => `
+      <div class="list-item"><div><div class="t">${esc((d.vencedores || []).map(v => v.nome).join(', ') || '—')}</div>
+      <div class="d">${esc(dataHoraCurta(d.sorteadoEm))} · ${d.totalParticipantes} participante(s) · ${d.automatico ? 'automático' : 'manual'} · por ${esc(d.por || '—')}</div></div></div>`).join('') || '<div class="empty">Nenhum sorteio realizado ainda.</div>'}</div>`;
+    $('sorteioResultado').classList.remove('hidden');
+    $('sorteioResultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) { toast('Falha no histórico', e.message, 'err'); }
+}
+
+async function abrirTelaSorteio(id) {
+  const s = (window.__sorteios || []).find(x => x.id === id);
+  if (!s) return;
+  try {
+    if (!s.publicToken) {
+      const r = await jpost(`/api/sorteios/${encodeURIComponent(id)}/token`, {});
+      s.publicToken = r.publicToken;
+    }
+    window.open(`${location.origin}/s/${s.publicToken}`, '_blank', 'noopener');
+  } catch (e) { toast('Falha ao abrir tela', e.message, 'err'); }
+}
+
+async function excluirParticipanteSorteio(id) {
+  const s = (window.__sorteios || []).find(x => x.id === id);
+  if (!s) return;
+  const busca = prompt('Matrícula ou id da pessoa a excluir deste sorteio:');
+  if (!busca) return;
+  const pessoa = PESSOAS_CACHE.find(p => p.matricula === busca.trim() || p.id === busca.trim());
+  if (!pessoa) return toast('Pessoa não encontrada', 'Informe matrícula ou id', 'err');
+  try {
+    const excluidos = [...new Set([...(s.excluidos || []), pessoa.id])];
+    await jpatch(`/api/sorteios/${encodeURIComponent(id)}`, { excluidos });
+    toast('Participante excluído', pessoa.nome);
+    carregarSorteios();
+  } catch (e) { toast('Falha ao excluir', e.message, 'err'); }
+}
+
+async function exportarResultadoSorteio(id, formato) {
+  try {
+    const r = await req(`/api/sorteios/${encodeURIComponent(id)}/resultado.${formato}`);
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `sorteio-${id}.${formato}`; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast('Falha ao exportar', e.message, 'err'); }
 }
 
 async function alternarSorteio(id, ativo) {
@@ -2117,7 +2250,9 @@ async function girarRoleta() {
   $('roletaGirar').disabled = true;
   try {
     const out = await jpost(`/api/sorteios/${encodeURIComponent(roleta.sorteio.id)}/sortear`, {});
-    const v = out.vencedor;
+    const vencedores = out.vencedores || (out.vencedor ? [out.vencedor] : []);
+    if (!vencedores.length) throw new Error('sorteio sem ganhador');
+    const v = vencedores[0];
     let idx = roleta.participantes.findIndex(p => (v.personId && p.personId === v.personId) || (v.participantId && p.participantId === v.participantId) || p.nome === v.nome);
     if (idx < 0) { roleta.participantes.push(v); idx = roleta.participantes.length - 1; }
     const seg = (Math.PI * 2) / roleta.participantes.length;
@@ -2126,27 +2261,33 @@ async function girarRoleta() {
     while (alvo < inicio + Math.PI * 2 * 6) alvo += Math.PI * 2;
     const duracao = 4200;
     const t0 = performance.now();
+    const finalizar = () => {
+      if (!roleta.girando) return;
+      roleta.girando = false;
+      roleta.sorteio.status = 'SORTEADA';
+      $('roletaInfo').innerHTML = `<b>Ganhador(es): ${vencedores.map(x => esc(x.nome)).join(', ')}</b> · ${out.totalParticipantes} participante(s), ${out.totalEntradas} entrada(s)`;
+      $('roletaGirar').disabled = true;
+      $('sorResNome').textContent = `Resultado: ${roleta.sorteio.nome}`;
+      $('sorResMeta').textContent = `${vencedores.length} ganhador(es) · sorteado em ${dataHoraCurta(v.sorteadoEm)}`;
+      $('sorResCorpo').innerHTML = `<div class="list">${vencedores.map(x => `
+        <div class="list-item"><div><div class="t">${esc(x.nome)}</div>
+        <div class="d">${esc(x.matricula || 'sem matrícula')} · ${esc(x.origem)} · ${x.entradas} entrada(s)</div></div>
+        <span class="badge ok dot">ganhador</span></div>`).join('')}</div>
+        <p class="help">Prêmio: ${esc(roleta.sorteio.premio || 'não informado')}</p>`;
+      $('sorteioResultado').classList.remove('hidden');
+      carregarSorteios();
+    };
     const passo = (t) => {
       const k = Math.min(1, (t - t0) / duracao);
       const ease = 1 - Math.pow(1 - k, 3);
       roleta.angulo = inicio + (alvo - inicio) * ease;
       desenharRoleta();
       if (k < 1) requestAnimationFrame(passo);
-      else {
-        roleta.girando = false;
-        $('roletaInfo').innerHTML = `<b>Ganhador: ${esc(v.nome)}</b>${v.matricula ? ' · ' + esc(v.matricula) : ''} · ${out.totalParticipantes} participante(s), ${out.totalEntradas} entrada(s)`;
-        $('roletaGirar').disabled = true;
-        $('sorResNome').textContent = `Resultado: ${roleta.sorteio.nome}`;
-        $('sorResMeta').textContent = `Ganhador sorteado em ${dataHoraCurta(v.sorteadoEm)}`;
-        $('sorResCorpo').innerHTML = `<div class="list-item"><div><div class="t">${esc(v.nome)}</div>
-          <div class="d">${esc(v.matricula || 'sem matrícula')} · ${esc(v.origem)} · ${v.entradas} entrada(s)</div></div>
-          <span class="badge ok dot">ganhador</span></div>
-          <p class="help">Prêmio: ${esc(roleta.sorteio.premio || 'não informado')}</p>`;
-        $('sorteioResultado').classList.remove('hidden');
-        carregarSorteios();
-      }
+      else finalizar();
     };
     requestAnimationFrame(passo);
+    // Garante o resultado mesmo se a aba for minimizada (rAF pausado).
+    setTimeout(finalizar, duracao + 1200);
   } catch (e) {
     roleta.girando = false;
     $('roletaGirar').disabled = false;

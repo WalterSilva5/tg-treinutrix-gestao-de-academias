@@ -216,6 +216,36 @@ function pdfDeLinhas(titulo, subtitulo, linhas, { geradoEm = new Date() } = {}) 
   return montarPdf(paginas);
 }
 
+export function sorteioParaCsv(sorteio) {
+  const vencedores = Array.isArray(sorteio.vencedores) && sorteio.vencedores.length
+    ? sorteio.vencedores : (sorteio.vencedor ? [sorteio.vencedor] : []);
+  const linhas = [
+    ['Sorteio', 'Prêmio', 'Ganhador', 'Matrícula', 'Entradas', 'Sorteado em', 'Entregue', 'Por'],
+    ...vencedores.map((v) => [
+      sorteio.nome, sorteio.premio || '', v.nome, v.matricula || '', v.entradas ?? '',
+      v.sorteadoEm ? new Date(v.sorteadoEm).toLocaleString('pt-BR') : '',
+      v.entrega && v.entrega.entregue ? 'sim' : 'não', v.entrega?.por || '',
+    ]),
+  ];
+  return `\uFEFF${linhas.map((l) => l.map(csvCelula).join(';')).join('\r\n')}\r\n`;
+}
+
+export function sorteioParaPdf(sorteio, { geradoEm = new Date() } = {}) {
+  const vencedores = Array.isArray(sorteio.vencedores) && sorteio.vencedores.length
+    ? sorteio.vencedores : (sorteio.vencedor ? [sorteio.vencedor] : []);
+  const linhas = [
+    `Sorteio: ${sorteio.nome}`,
+    `Prêmio: ${sorteio.premio || 'não informado'}`,
+    `Status: ${sorteio.status}${sorteio.sorteadoEm ? ` em ${new Date(sorteio.sorteadoEm).toLocaleString('pt-BR')}` : ''}`,
+    `Participantes elegíveis: ${sorteio.totalParticipantes ?? '-'} · entradas: ${sorteio.totalEntradas ?? '-'}`,
+    '',
+    'Ganhadores:',
+    ...vencedores.map((v, i) => `${i + 1}. ${v.nome}${v.matricula ? ` (${v.matricula})` : ''}`
+      + ` - ${v.entradas} entrada(s)` + (v.entrega?.entregue ? ' - prêmio entregue' : ' - pendente de entrega')),
+  ];
+  return pdfDeLinhas('Resultado do sorteio', sorteio.nome, linhas, { geradoEm });
+}
+
 export function eventosParaPdf(eventos, { inicio, fim, geradoEm = new Date() } = {}) {
   const de = inicio ? parseDate(inicio) : null;
   const ate = fim ? parseDate(fim, { endOfDay: true }) : null;
