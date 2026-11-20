@@ -20,13 +20,19 @@ Motivos de negação: `PESSOA_NAO_ENCONTRADA, PESSOA_INATIVA, FORA_VALIDADE, SCO
 - `mensagem(texto)` → escreve no display.
 - Implementação simulada em `edge-catraca/src/simulators.js`, real em C# no Windows.
 
-## Origem do evento facial
+## Origem do evento facial (fluxo oficial)
 
-- Facial **integrado ao Inner** (Fit 4 linha Inner): o reconhecimento chega como
-  cartão no polling `ReceberDadosOnLine` — ver `docs/SDK-EASYINNER-MAPEAMENTO.md`.
-- Leitor facial **avulso / linha Easy**: usa o SDK do Leitor Facial via WebSocket
-  (SDK diferente, exemplos C#/.NET no Portal do Integrador). O edge converte para
-  o mesmo `POST /api/identification`.
+Duas SDKs, dois momentos (artigo oficial "Como Funciona o Fluxo..."):
+
+1. **Cadastro (WS, SDK Leitor Facial):** software é o **servidor** WebSocket,
+   leitor conecta em você. Envio `setuserinfo` com foto + `enrollid`
+   (ver `docs/SDK-FACIAL-MAPEAMENTO.md`). `enrollid` = número do cartão.
+2. **Acesso (TCP, SDK EasyInner):** leitor reconhece e envia o `enrollid` à
+   catraca (físico) → polling `ReceberDadosOnLine` entrega o cartão →
+   `POST /api/identification` decide → `LiberarCatraca*` ou negado.
+   Ver `docs/SDK-EASYINNER-MAPEAMENTO.md`.
+
+Na API deste repo, `person_id` = `enrollid` = número do cartão.
 
 ## Fotos
 
