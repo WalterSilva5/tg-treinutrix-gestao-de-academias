@@ -357,10 +357,10 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
       <div class="grid2">
         <div>
           <div class="card">
-            <div class="card-head"><div><h2>Últimos 7 dias</h2><p class="sub">Acessos liberados e negados</p></div>
+            <div class="card-head"><div><h2>Últimos 7 dias</h2><p class="sub">Alunos distintos por dia (frequência)</p></div>
               <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarInicio()">Atualizar</button></div></div>
             <div class="chart" id="ovChart"></div>
-            <div class="legend"><span><i style="background:#f97316"></i>liberados</span><span><i style="background:var(--line-strong)"></i>total</span></div>
+            <div class="legend"><span><i style="background:#f97316"></i>alunos que frequentaram</span></div>
           </div>
           <div class="card">
             <div class="card-head"><div><h2>Últimas entradas</h2><p class="sub">Movimentação de hoje</p></div></div>
@@ -392,9 +392,9 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
           <div id="plano"></div>
         </div>
         <div class="card">
-          <div class="card-head"><div><h2>Minha frequência</h2><p class="sub">Últimos acessos</p></div></div>
+          <div class="card-head"><div><h2>Dias frequentados</h2><p class="sub">Cada dia conta uma vez, mesmo com várias entradas</p></div></div>
           <div class="kpis" id="freqStats" style="margin-bottom:14px"></div>
-          <div class="table-wrap"><table><thead><tr><th>Data</th><th>Status</th><th>Motivo</th></tr></thead><tbody id="freqList"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Data</th><th>Dia</th><th></th></tr></thead><tbody id="freqList"></tbody></table></div>
         </div>
       </div>
     </section>
@@ -725,18 +725,16 @@ async function trocarSenha() {
 function desenharSemana(semana) {
   const el = $('ovChart');
   if (!el) return;
-  const max = Math.max(1, ...semana.map(d => d.total));
+  const max = Math.max(1, ...semana.map(d => d.alunos || 0));
   const dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   el.innerHTML = semana.map(d => {
-    const totalAlt = d.total ? Math.max(8, Math.round((d.total / max) * 100)) : 0;
-    const liberAlt = d.total ? Math.round((d.liberados / d.total) * totalAlt) : 0;
+    const alunos = d.alunos || 0;
+    const alt = alunos ? Math.max(8, Math.round((alunos / max) * 100)) : 0;
     const label = dias[new Date(d.dia + 'T12:00:00').getDay()];
-    return `<div class="col" title="${d.dia}: ${d.liberados} liberados de ${d.total}">
-      <span class="val">${d.total || ''}</span>
+    return `<div class="col" title="${d.dia}: ${alunos} aluno(s) · ${d.liberados} acesso(s)">
+      <span class="val">${alunos || ''}</span>
       <div style="width:100%;display:flex;justify-content:center;align-items:flex-end;height:100%">
-        <div class="bar ${d.total ? '' : 'zero'}" style="height:${totalAlt}%;background:var(--line-strong);position:relative;box-shadow:none">
-          <div style="position:absolute;left:0;right:0;bottom:0;height:${totalAlt ? (liberAlt / totalAlt) * 100 : 0}%;background:linear-gradient(180deg,#fdba74,#f97316);border-radius:7px 7px 3px 3px"></div>
-        </div>
+        <div class="bar ${alunos ? '' : 'zero'}" style="height:${alt}%"></div>
       </div>
       <span class="lbl">${label}</span>
     </div>`;
@@ -748,8 +746,8 @@ async function carregarInicio() {
   window.__pessoas = Object.fromEntries(persons.map(p => [p.id, p.nome]));
   const k = o.kpis;
   $('ovKpis').innerHTML = `
-    <div class="kpi info"><div class="v">${k.eventosHoje}</div><div class="l">Eventos hoje</div></div>
-    <div class="kpi ok"><div class="v">${k.liberados}</div><div class="l">Liberados</div></div>
+    <div class="kpi info"><div class="v">${k.alunosHoje ?? 0}</div><div class="l">Alunos hoje</div></div>
+    <div class="kpi ok"><div class="v">${k.liberados}</div><div class="l">Acessos liberados</div></div>
     <div class="kpi bad"><div class="v">${k.negados}</div><div class="l">Negados</div></div>
     <div class="kpi accent"><div class="v">${k.presentes}</div><div class="l">Presentes</div></div>
     <div class="kpi warn"><div class="v">${k.inadimplentes}</div><div class="l">Inadimplentes</div></div>
@@ -827,13 +825,17 @@ async function carregarAluno() {
     </div>
     ${vencido || inativo ? '<p class="help">Seu acesso está bloqueado. Fale com a recepção para regularizar.</p>' : '<p class="help">Apresente seu rosto no leitor para entrar.</p>'}
     <div class="form-actions" style="margin-top:10px"><button class="btn ghost sm" onclick="trocarFoto('${esc(p.id)}')">Atualizar minha foto</button></div>`;
-  const evs = (await jget('/api/events')).filter(e => e.personId === sess.sub);
+  const freq = await jget('/api/frequency');
   $('freqStats').innerHTML = `
-    <div class="kpi ok"><div class="v">${evs.filter(e => e.decisao === 'ALLOW').length}</div><div class="l">Entradas</div></div>
-    <div class="kpi bad"><div class="v">${evs.filter(e => e.decisao === 'DENY').length}</div><div class="l">Negados</div></div>`;
-  $('freqList').innerHTML = evs.slice(-10).reverse().map(e => `
-    <tr><td class="mono muted">${dataCurta(e.timestamp)} ${hora(e.timestamp)}</td><td>${badgeDecisao(e.decisao)}</td><td class="muted">${esc(motivoHumano(e.motivo))}</td></tr>`).join('')
-    || '<tr><td colspan="3"><div class="empty">Nenhum acesso registrado ainda.</div></td></tr>';
+    <div class="kpi ok"><div class="v">${freq.diasNoMes}</div><div class="l">Dias no mês</div></div>
+    <div class="kpi accent"><div class="v">${freq.ultimos30}</div><div class="l">Últimos 30 dias</div></div>
+    <div class="kpi info"><div class="v">${freq.totalDias}</div><div class="l">Total de dias</div></div>`;
+  const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  const ultimos = (freq.dias || []).slice(-10).reverse();
+  $('freqList').innerHTML = ultimos.map(d => {
+    const data = new Date(d + 'T12:00:00');
+    return `<tr><td class="mono">${data.toLocaleDateString('pt-BR')}</td><td class="muted" style="text-transform:capitalize">${DIAS[data.getDay()]}</td><td style="text-align:right"><span class="badge ok dot">frequentou</span></td></tr>`;
+  }).join('') || '<tr><td colspan="3"><div class="empty">Nenhum dia registrado ainda.</div></td></tr>';
 }
 
 // ---------- operação ----------

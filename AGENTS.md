@@ -46,6 +46,9 @@ scripts\iniciar-painel.cmd
 - Comentários no código explicam comportamento; não citam tarefa/plano.
 - Texto de interface em português; código e nomes técnicos em inglês.
 - Toda regra de negócio fica na API; o edge **nunca** decide acesso.
+- **Frequência é por dias distintos**, não por número de passagens: o aluno pode
+  entrar e sair várias vezes no mesmo dia e isso conta como 1 dia
+  (`api/src/frequency.js`). Eventos continuam registrados para auditoria.
 - Toda mudança de comportamento exige teste em `api/test/`.
 - Front e API andam juntos: campo novo no store → expor na API → exibir no PWA.
 

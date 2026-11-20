@@ -14,6 +14,7 @@ Leia junto com `docs/PROXIMOS-PASSOS.md` (ordem de execução) e `docs/INSTALACA
 | Inadimplência (só aluno, inativos fora) | pronto |
 | Catálogo de catracas/drivers + cadastro de equipamento | pronto |
 | Eventos, presença, gráfico 7 dias, CSV | pronto |
+| Frequência por dias distintos (não por passagens) | pronto |
 | Notificações com baixa manual + scheduler | pronto |
 | Backup JSON + pasta de fotos + restore | pronto |
 | PWA (link + QR), tema claro/escuro, toasts, busca, renovação | pronto |

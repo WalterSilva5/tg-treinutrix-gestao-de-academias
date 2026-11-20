@@ -13,6 +13,7 @@ import { hashPassword, verifyPassword, issueToken, verifyToken, authenticate } f
 import { visiblePersons, visibleEvents, canSeeOperations } from './scope.js';
 import { parsePhoto, validatePhoto, savePhoto, readPhoto, deletePhoto } from './photos.js';
 import { catalogo, normalizarDevice } from './devices.js';
+import { diasFrequentados, alunosNoDia } from './frequency.js';
 
 const FRONT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'front');
 const STATIC_TYPES = {
@@ -286,6 +287,14 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, visibleEvents(store.events, user).slice(-200).reverse());
   }
 
+  // Frequência por dias distintos (não por passagens).
+  if (req.method === 'GET' && url.pathname === '/api/frequency') {
+    const alvo = url.searchParams.get('personId') || (user.perfil === 'aluno' ? user.sub : null);
+    if (!alvo) return send(res, 400, { error: 'informe personId' });
+    if (user.perfil === 'aluno' && alvo !== user.sub) return send(res, 403, { error: 'sem permissão' });
+    return send(res, 200, diasFrequentados(store.events, alvo));
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/sync') {
     if (!operadorOnly()) return;
     return send(res, 200, store.syncQueue.slice(-100).reverse());
@@ -335,7 +344,12 @@ const server = http.createServer(async (req, res) => {
       const d = new Date(); d.setDate(d.getDate() - i);
       const key = d.toISOString().slice(0, 10);
       const evs = store.events.filter((e) => e.timestamp.slice(0, 10) === key);
-      semana.push({ dia: key, total: evs.length, liberados: evs.filter((e) => e.decisao === 'ALLOW').length });
+      semana.push({
+        dia: key,
+        total: evs.length,
+        liberados: evs.filter((e) => e.decisao === 'ALLOW').length,
+        alunos: alunosNoDia(store.events, key),
+      });
     }
     const ultimoPorPessoa = new Map();
     for (const e of store.events) if (e.decisao === 'ALLOW' && e.personId) ultimoPorPessoa.set(e.personId, e);
@@ -350,6 +364,7 @@ const server = http.createServer(async (req, res) => {
         eventosHoje: hoje.length,
         liberados: hoje.filter((e) => e.decisao === 'ALLOW').length,
         negados: hoje.filter((e) => e.decisao === 'DENY').length,
+        alunosHoje: alunosNoDia(store.events, dia),
         presentes: new Set(hoje.filter((e) => e.decisao === 'ALLOW').map((e) => e.personId)).size,
         inadimplentes: inad.length,
         syncPendente: store.syncQueue.filter((s) => s.status === 'PENDING').length,

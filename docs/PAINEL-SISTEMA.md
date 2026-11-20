@@ -55,6 +55,8 @@ e devolve as fotos do snapshot quando a pasta existir.
 - Tema claro padrão com alternância para escuro (botão na barra lateral, persistido).
 - Avisos em toast (não bloqueiam a tela) para cadastro, renovação, backup e erros.
 - Dashboard com KPIs, gráfico dos últimos 7 dias e lista de **presentes agora**.
+- **Frequência por dias distintos**: várias entradas no mesmo dia contam como 1
+  dia (`GET /api/frequency`, `api/src/frequency.js`). Eventos ficam como auditoria.
 - Busca por nome/matrícula/Treinutrix e filtros por tipo/situação na lista de pessoas.
 - Renovação rápida de plano (+30 e +90 dias) direto na linha da pessoa.
 
