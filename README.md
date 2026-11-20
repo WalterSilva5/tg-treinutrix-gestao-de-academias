@@ -32,8 +32,11 @@ node --version            # >= 18
 node --test api/test/     # testes do motor de decisão
 node api/src/server.js    # API em http://localhost:3001
 node edge-catraca/src/edge.js  # edge em http://localhost:3002
-# abrir front/index.html no navegador
+# abrir http://localhost:3001 no navegador (o PWA é servido pela API)
 ```
+
+Instalação na academia (Windows/Linux, IP local, boot automático,
+multi-unidades): ver `docs/INSTALACAO.md` — guia passo a passo para agente de IA.
 
 Variáveis de ambiente:
 
