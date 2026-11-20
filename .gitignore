@@ -5,3 +5,5 @@ dist/
 .DS_Store
 backups/*.json
 data/
+.merge-plans/
+edge-catraca/dotnet-adapter/*.exe

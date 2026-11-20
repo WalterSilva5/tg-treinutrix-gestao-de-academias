@@ -1,14 +1,24 @@
-// Edge de borda. Roda em Linux (simulado) e Windows (real via dotnet-adapter).
+// Edge de borda. Roda em Linux (simulado) e Windows (real).
 // Responsabilidades: heartbeat, sincronizar cadastros com o leitor, receber
 // identificação, consultar a API e liberar a placa.
+//
+// Hardware real (USE_REAL_HARDWARE=1):
+//   - catraca EasyInner -> bridge C# em edge-catraca/dotnet-adapter (TCP NDJSON)
+//   - leitor facial     -> este processo é o servidor WebSocket do leitor
+// Sem hardware, usa os simuladores e expõe /sim/*.
 import http from 'node:http';
 import { SimulatedPlaca, SimulatedFacial } from './simulators.js';
+import { EasyInnerReal } from './easyinner.js';
+import { FacialReal } from './facial-real.js';
 import { buildSetUserinfo, buildDeleteUser, buildSetDevinfo } from './facial-ws.js';
 
 const API_URL = (process.env.API_URL || 'http://localhost:3001').replace(/\/$/, '');
 const EDGE_PORT = Number(process.env.EDGE_PORT || 3002);
 const DEVICE_ID = process.env.DEVICE_ID || 'dev_fit4_01';
+const CARTAO_DEVICE_ID = process.env.CARTAO_DEVICE_ID || DEVICE_ID;
+const FACIAL_DEVICE_ID = process.env.FACIAL_DEVICE_ID || DEVICE_ID;
 const USE_REAL = process.env.USE_REAL_HARDWARE === '1';
+const SYNC_ENABLED = process.env.SYNC_ENABLED !== '0';
 const EDGE_TOKEN = process.env.EDGE_TOKEN || '';
 const SYNC_INTERVAL_MS = Number(process.env.SYNC_INTERVAL_MS || 30000);
 const API_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS || 5000);
@@ -16,8 +26,6 @@ const API_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS || 5000);
 const EDGE_LOGIN = process.env.EDGE_LOGIN || process.env.SEED_ADMIN_LOGIN || 'admin';
 const EDGE_PASSWORD = process.env.EDGE_PASSWORD || process.env.SEED_ADMIN_PASSWORD || 'admin123';
 
-const placa = new SimulatedPlaca(DEVICE_ID);
-const facial = new SimulatedFacial(DEVICE_ID);
 let edgeToken = null;
 let ultimoErro = null;
 
@@ -77,6 +85,38 @@ async function heartbeat() {
 }
 
 // ---------------------------------------------------------------------------
+// hardware: real ou simulado
+// ---------------------------------------------------------------------------
+async function decidir(evt) {
+  try {
+    return await postJson('/api/identification', evt);
+  } catch (e) {
+    // API fora do ar: falha fechada (não abre) e avisa no display.
+    console.error('[edge] decisão indisponível:', e.message);
+    return { allow: false, motivo: 'API_OFFLINE', display_msg: 'Sistema indisponível.' };
+  }
+}
+
+let placa;
+let facial;
+
+if (USE_REAL) {
+  placa = new EasyInnerReal({
+    deviceId: CARTAO_DEVICE_ID,
+    onIdentificacao: (evt) => handleIdentification(evt),
+    onStatus: (st) => console.log(`[edge] catraca ${st.conectado ? 'ok' : 'offline'}`),
+  });
+  facial = new FacialReal({
+    deviceId: FACIAL_DEVICE_ID,
+    // No facial quem mostra a mensagem é o campo `message` da resposta online.
+    onAccess: (evt) => decidir(evt),
+  });
+} else {
+  placa = new SimulatedPlaca(CARTAO_DEVICE_ID);
+  facial = new SimulatedFacial(FACIAL_DEVICE_ID);
+}
+
+// ---------------------------------------------------------------------------
 // sincronização de cadastros com o leitor facial
 // ---------------------------------------------------------------------------
 async function baixarFoto(url) {
@@ -105,8 +145,13 @@ async function sincronizarItem(item) {
 }
 
 async function sincronizarPendentes() {
+  if (!SYNC_ENABLED) return;
+  if (USE_REAL && !facial.conectado) {
+    logErro('leitor facial desconectado, sync adiado');
+    return;
+  }
   try {
-    const list = await getJson(`/api/sync?device_id=${encodeURIComponent(DEVICE_ID)}&status=PENDING&limit=20`);
+    const list = await getJson(`/api/sync?device_id=${encodeURIComponent(FACIAL_DEVICE_ID)}&status=PENDING&limit=20`);
     for (const item of Array.isArray(list) ? list : []) {
       try {
         await sincronizarItem(item);
@@ -124,21 +169,20 @@ async function sincronizarPendentes() {
 // ---------------------------------------------------------------------------
 // decisão de acesso
 // ---------------------------------------------------------------------------
+// Decide e atua na placa (eventos de cartão/simulador). Para o facial real a
+// atuação é a resposta online (`access`), por isso ele chama só `decidir`.
 async function handleIdentification(evt) {
-  let decisao;
-  try {
-    decisao = await postJson('/api/identification', evt);
-  } catch (e) {
-    // API fora do ar: falha fechada (não abre) e avisa no display.
-    console.log('[edge] decisão indisponível:', e.message);
-    decisao = { allow: false, motivo: 'API_OFFLINE', display_msg: 'Sistema indisponível.' };
-  }
+  const decisao = await decidir(evt);
   console.log('[edge] decisão:', decisao.motivo, decisao.allow ? 'ALLOW' : 'DENY');
-  if (decisao.allow) {
-    await placa.mensagem('Acesso liberado');
-    await placa.liberar(evt.direcao || 'IN');
-  } else {
-    await placa.mensagem(decisao.display_msg || 'Acesso negado');
+  try {
+    if (decisao.allow) {
+      await placa.mensagem('Acesso liberado');
+      await placa.liberar(evt.direcao || 'IN');
+    } else {
+      await placa.mensagem(decisao.display_msg || 'Acesso negado');
+    }
+  } catch (e) {
+    console.log('[edge] falha ao atuar na placa:', e.message);
   }
   return decisao;
 }
@@ -172,17 +216,30 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
 
     if (req.method === 'GET' && url.pathname === '/health') {
-      return json(res, 200, { ok: true, device: DEVICE_ID, mode: USE_REAL ? 'REAL' : 'SIMULADO', api: ultimoErro ? 'indisponivel' : 'ok' });
+      return json(res, 200, {
+        ok: true,
+        device: DEVICE_ID,
+        mode: USE_REAL ? 'REAL' : 'SIMULADO',
+        api: ultimoErro ? 'indisponivel' : 'ok',
+        facial: facial.conectado === undefined ? 'simulado' : (facial.conectado ? 'conectado' : 'desconectado'),
+        catraca: placa.conectado === undefined ? 'simulado' : (placa.conectado ? 'conectado' : 'desconectado'),
+      });
     }
 
     // Abre o giro a pedido da API (liberação manual do operador).
     if (req.method === 'POST' && url.pathname === '/open') {
       if (EDGE_TOKEN && req.headers['x-edge-token'] !== EDGE_TOKEN) return json(res, 401, { error: 'não autorizado' });
       const b = await lerJson(req);
-      if (b.device_id && b.device_id !== DEVICE_ID) return json(res, 404, { error: 'device_not_found' });
-      await placa.mensagem('Liberado pela recepção');
-      const out = await placa.liberar(b.direcao === 'OUT' ? 'OUT' : 'IN');
-      return json(res, 200, { ok: true, ...out });
+      if (b.device_id && b.device_id !== DEVICE_ID && b.device_id !== CARTAO_DEVICE_ID) {
+        return json(res, 404, { error: 'device_not_found' });
+      }
+      try {
+        await placa.mensagem('Liberado pela recepção');
+        const out = await placa.liberar(b.direcao === 'OUT' ? 'OUT' : 'IN');
+        return json(res, 200, { ok: true, ...out });
+      } catch (e) {
+        return json(res, 502, { ok: false, error: e.message });
+      }
     }
 
     // Simulador de leitor: só existe sem hardware real.
@@ -201,6 +258,7 @@ const server = http.createServer(async (req, res) => {
         direcao: b.direcao === 'OUT' ? 'OUT' : 'IN',
         mode: Number(b.mode || 8),
       });
+      evt.device_id = FACIAL_DEVICE_ID;
       const decisao = await handleIdentification(evt);
       return json(res, 200, { evento: evt, decisao });
     }
@@ -216,13 +274,33 @@ const server = http.createServer(async (req, res) => {
 // ---------------------------------------------------------------------------
 // boot
 // ---------------------------------------------------------------------------
-if (USE_REAL) console.log('[edge] USE_REAL_HARDWARE=1: implemente EasyInnerReal/FacialReal (dotnet-adapter).');
 await edgeLogin();
 heartbeat();
 setInterval(heartbeat, 15000).unref();
-// Configura o leitor em modo online e sincroniza a fila a cada ciclo.
-facial.enviarComando(buildSetDevinfo({ server_verify: 1 })).catch(() => {});
+
+if (USE_REAL) {
+  placa.start();
+  try {
+    await facial.start();
+  } catch (e) {
+    console.log('[edge] não foi possível abrir o WebSocket facial:', e.message);
+  }
+} else {
+  // Configura o leitor simulado em modo online.
+  facial.enviarComando(buildSetDevinfo({ server_verify: 1 })).catch(() => {});
+}
+
 sincronizarPendentes();
 setInterval(sincronizarPendentes, SYNC_INTERVAL_MS).unref();
 
 server.listen(EDGE_PORT, () => console.log(`Edge em http://localhost:${EDGE_PORT} (device ${DEVICE_ID}, ${USE_REAL ? 'REAL' : 'SIMULADO'})`));
+
+async function encerrar() {
+  console.log('[edge] encerrando...');
+  server.close();
+  try { await facial.stop?.(); } catch {}
+  try { await placa.stop?.(); } catch {}
+  process.exit(0);
+}
+process.on('SIGINT', encerrar);
+process.on('SIGTERM', encerrar);
