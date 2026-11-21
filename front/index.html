@@ -733,7 +733,8 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
       </div>
 
       <div class="card gerencia-only">
-        <div class="card-head"><div><h2>Planos de mensalidade</h2><p class="sub">Principal e complementares, dias por semana e valores</p></div></div>
+        <div class="card-head"><div><h2>Planos de mensalidade</h2><p class="sub">Principal e complementares, dias por semana e valores</p></div>
+          <div class="card-head-actions"><button class="btn sm" onclick="novoPlano()">+ Novo plano</button></div></div>
         <div class="list" id="listaPlanos" style="margin-bottom:10px"></div>
         <details id="planoForm">
           <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:10px">Novo plano</summary>
@@ -1805,12 +1806,22 @@ async function carregarPlanos() {
 
 function limparFormPlano() {
   planoEditando = null;
-  ['planoNome', 'planoValor', 'planoDiasSemana', 'planoDescricao'].forEach((id) => { $(id).value = ''; });
-  $('planoDiasPorSemana').value = '0';
-  $('planoDuracao').value = '1';
-  $('planoVencimento').value = '10';
-  $('planoSalvar').textContent = 'Criar plano';
-  $('planoCancelar').style.display = 'none';
+  ['planoNome', 'planoValor', 'planoDiasSemana', 'planoDescricao'].forEach((id) => { if ($(id)) $(id).value = ''; });
+  if ($('planoDiasPorSemana')) $('planoDiasPorSemana').value = '0';
+  if ($('planoDuracao')) $('planoDuracao').value = '1';
+  if ($('planoVencimento')) $('planoVencimento').value = '10';
+  if ($('planoSalvar')) $('planoSalvar').textContent = 'Criar plano';
+  if ($('planoCancelar')) $('planoCancelar').style.display = 'none';
+}
+
+function novoPlano() {
+  limparFormPlano();
+  const box = $('planoForm');
+  if (box) {
+    box.open = true;
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  if ($('planoNome')) setTimeout(() => $('planoNome').focus(), 250);
 }
 function cancelarEdicaoPlano() { limparFormPlano(); }
 
@@ -1829,6 +1840,7 @@ function editarPlano(id) {
   $('planoSalvar').textContent = 'Salvar alterações';
   $('planoCancelar').style.display = '';
   $('planoForm').open = true;
+  $('planoForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 async function salvarPlano() {
@@ -1853,6 +1865,7 @@ async function salvarPlano() {
       : await jpost('/api/plans', body);
     toast(planoEditando ? 'Plano atualizado' : 'Plano criado', p.nome);
     limparFormPlano();
+    if ($('planoForm')) $('planoForm').open = false;
     carregarPlanos();
   } catch (e) { toast('Falha ao salvar plano', e.message, 'err'); }
 }
