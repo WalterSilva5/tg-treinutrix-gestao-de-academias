@@ -404,6 +404,89 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
       </div>
     </section>
 
+    <!-- ALUNOS -->
+    <section id="v-alunos" class="hidden">
+      <div class="card">
+        <div class="card-head"><div><h2>Alunos e pessoas</h2><p class="sub">Cadastro, plano, validade e situação</p></div>
+          <div class="card-head-actions"><span id="inadBadge"></span><button class="btn ghost sm" onclick="document.getElementById('cardCadastro').scrollIntoView({behavior:'smooth',block:'center'})">Cadastrar</button></div></div>
+        <div class="toolbar">
+          <div class="search"><span class="mag">⌕</span><input id="pessoaBusca" placeholder="Buscar por nome, matrícula ou Treinutrix" oninput="renderPessoas()"></div>
+          <div class="chips" id="pessoaChips">
+            <button class="chip on" data-f="TODOS" onclick="filtrarPessoas('TODOS')">Todos</button>
+            <button class="chip" data-f="ALUNO" onclick="filtrarPessoas('ALUNO')">Alunos</button>
+            <button class="chip" data-f="PERSONAL" onclick="filtrarPessoas('PERSONAL')">Personais</button>
+            <button class="chip" data-f="VISITANTE" onclick="filtrarPessoas('VISITANTE')">Visitantes</button>
+            <button class="chip" data-f="ATRASO" onclick="filtrarPessoas('ATRASO')">Em atraso</button>
+            <button class="chip" data-f="INATIVO" onclick="filtrarPessoas('INATIVO')">Inativos</button>
+          </div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Tipo</th><th>Validade</th><th>Situação</th><th></th></tr></thead><tbody id="pessoas"></tbody></table></div>
+        <p class="help" id="pessoasResumo"></p>
+      </div>
+
+      <div class="grid2">
+        <div class="card" id="cardCadastro">
+          <div class="card-head"><div><h2>Cadastrar pessoa</h2><p class="sub">Aluno, personal trainer ou visitante</p></div></div>
+          <div class="form-grid">
+            <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Nome</span><input id="visNome" placeholder="Nome completo"></label>
+            <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Tipo</span><select id="visTipo"><option>ALUNO</option><option>PERSONAL</option><option>VISITANTE</option></select></label>
+            <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Treinutrix</span><input id="visTreinutrix" placeholder="@usuario ou link"></label>
+            <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Plano</span><select id="visPlano"><option value="">Sem plano</option></select></label>
+            <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Foto do rosto</span><input id="visFoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+            <details style="grid-column:1/-1">
+              <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin:4px 0 8px">Dados complementares (opcional)</summary>
+              <div class="form-grid">
+                <input id="visCpf" placeholder="CPF">
+                <input id="visTelefone" placeholder="Telefone/WhatsApp">
+                <input id="visEmail" placeholder="E-mail">
+                <input id="visNascimento" type="date" title="Nascimento">
+                <input id="visEndereco" placeholder="Endereço">
+                <input id="visBairro" placeholder="Bairro">
+                <input id="visCidade" placeholder="Cidade">
+                <input id="visCep" placeholder="CEP">
+                <input id="visObs" placeholder="Observações" style="grid-column:1/-1">
+              </div>
+            </details>
+            <div class="form-actions"><button class="btn" onclick="cadastrarPessoa()">Cadastrar</button></div>
+          </div>
+          <div class="foto-preview" id="visFotoPreview"></div>
+          <p class="help">Visitante recebe validade de 1 dia. Aluno e personal entram sem vencimento inicial.</p>
+        </div>
+
+        <div>
+          <div class="card gerencia-only">
+            <div class="card-head"><div><h2>Importar cadastros</h2><p class="sub">CSV ou JSON de outro sistema, sem biometria</p></div>
+              <div class="card-head-actions"><button class="btn ghost sm" onclick="baixarModeloImport()">Baixar modelo CSV</button></div></div>
+            <p class="help">Colunas: <code>nome;matricula;tipo;enrollid;validadeFim;treinutrix;ativo</code>.
+              Mapeie colunas com nomes diferentes, escolha importar/atualizar e anexe fotos por matrícula/enrollid.
+              A foto é opcional; sem ela o cadastro entra no leitor sem biometria.</p>
+            <div class="form-actions" style="margin-bottom:10px">
+              <input type="file" id="impFile" accept=".csv,.json,text/csv,application/json" onchange="lerArquivoImport()">
+              <select id="impModo" title="Duplicados">
+                <option value="IGNORAR">Ignorar duplicados</option>
+                <option value="ATUALIZAR">Atualizar existentes (upsert)</option>
+              </select>
+              <input type="file" id="impFotos" accept="image/*" multiple onchange="carregarFotosImport()">
+              <button class="btn ghost sm" onclick="previaImport()">Prévia</button>
+              <button class="btn sm" id="impConfirmar" onclick="confirmarImport()" disabled>Importar</button>
+            </div>
+            <details id="impMapaBox" class="hidden" style="margin-bottom:10px">
+              <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2)">Mapear colunas do arquivo</summary>
+              <div id="impMapa" class="form-grid" style="margin-top:8px"></div>
+              <div class="form-actions"><button class="btn ghost sm" onclick="aplicarMapeamentoImport()">Aplicar mapeamento</button></div>
+            </details>
+            <div id="impResultado" class="help"></div>
+          </div>
+
+          <div class="card gerencia-only">
+            <div class="card-head"><div><h2>Histórico de importações</h2><p class="sub">Últimas 100 execuções e relatório de erros</p></div>
+              <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarImportacoes()">Atualizar</button></div></div>
+            <div class="list" id="listaImportacoes"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ALUNO -->
     <section id="v-aluno" class="hidden">
       <div class="grid2">
@@ -429,34 +512,6 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
     <section id="v-oper" class="hidden">
       <div class="grid2">
         <div>
-          <div class="card">
-            <div class="card-head"><div><h2>Cadastrar pessoa</h2><p class="sub">Aluno, personal trainer ou visitante</p></div></div>
-            <div class="form-grid">
-              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Nome</span><input id="visNome" placeholder="Nome completo"></label>
-              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Tipo</span><select id="visTipo"><option>ALUNO</option><option>PERSONAL</option><option>VISITANTE</option></select></label>
-              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Treinutrix</span><input id="visTreinutrix" placeholder="@usuario ou link"></label>
-              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Plano</span><select id="visPlano"><option value="">Sem plano</option></select></label>
-              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Foto do rosto</span><input id="visFoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
-              <details style="grid-column:1/-1">
-                <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin:4px 0 8px">Dados complementares (opcional)</summary>
-                <div class="form-grid">
-                  <input id="visCpf" placeholder="CPF">
-                  <input id="visTelefone" placeholder="Telefone/WhatsApp">
-                  <input id="visEmail" placeholder="E-mail">
-                  <input id="visNascimento" type="date" title="Nascimento">
-                  <input id="visEndereco" placeholder="Endereço">
-                  <input id="visBairro" placeholder="Bairro">
-                  <input id="visCidade" placeholder="Cidade">
-                  <input id="visCep" placeholder="CEP">
-                  <input id="visObs" placeholder="Observações" style="grid-column:1/-1">
-                </div>
-              </details>
-              <div class="form-actions"><button class="btn" onclick="cadastrarPessoa()">Cadastrar</button></div>
-            </div>
-            <div class="foto-preview" id="visFotoPreview"></div>
-            <p class="help">Visitante recebe validade de 1 dia. Aluno e personal entram sem vencimento inicial.</p>
-          </div>
-
           <div class="card">
             <div class="card-head"><div><h2>Eventos de acesso</h2><p class="sub">Registro do dia e histórico recente</p></div>
               <div class="card-head-actions"><button class="btn ghost sm" onclick="load()">Atualizar</button><button class="btn ghost sm" onclick="csv()">Exportar CSV</button></div></div>
@@ -759,53 +814,6 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
       </div>
 
       <div class="card">
-        <div class="card-head"><div><h2>Pessoas</h2><p class="sub">Alunos, personais e visitantes</p></div><span id="inadBadge"></span></div>
-        <div class="toolbar">
-          <div class="search"><span class="mag">⌕</span><input id="pessoaBusca" placeholder="Buscar por nome, matrícula ou Treinutrix" oninput="renderPessoas()"></div>
-          <div class="chips" id="pessoaChips">
-            <button class="chip on" data-f="TODOS" onclick="filtrarPessoas('TODOS')">Todos</button>
-            <button class="chip" data-f="ALUNO" onclick="filtrarPessoas('ALUNO')">Alunos</button>
-            <button class="chip" data-f="PERSONAL" onclick="filtrarPessoas('PERSONAL')">Personais</button>
-            <button class="chip" data-f="VISITANTE" onclick="filtrarPessoas('VISITANTE')">Visitantes</button>
-            <button class="chip" data-f="ATRASO" onclick="filtrarPessoas('ATRASO')">Em atraso</button>
-            <button class="chip" data-f="INATIVO" onclick="filtrarPessoas('INATIVO')">Inativos</button>
-          </div>
-        </div>
-        <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Tipo</th><th>Validade</th><th>Situação</th><th></th></tr></thead><tbody id="pessoas"></tbody></table></div>
-        <p class="help" id="pessoasResumo"></p>
-      </div>
-
-      <div class="card">
-        <div class="card-head"><div><h2>Importar cadastros</h2><p class="sub">CSV ou JSON de outro sistema, sem biometria</p></div>
-          <div class="card-head-actions"><button class="btn ghost sm" onclick="baixarModeloImport()">Baixar modelo CSV</button></div></div>
-        <p class="help">Colunas: <code>nome;matricula;tipo;enrollid;validadeFim;treinutrix;ativo</code>.
-          Mapeie colunas com nomes diferentes, escolha importar/atualizar e anexe fotos por matrícula/enrollid.
-          A foto é opcional; sem ela o cadastro entra no leitor sem biometria.</p>
-        <div class="form-actions" style="margin-bottom:10px">
-          <input type="file" id="impFile" accept=".csv,.json,text/csv,application/json" onchange="lerArquivoImport()">
-          <select id="impModo" title="Duplicados">
-            <option value="IGNORAR">Ignorar duplicados</option>
-            <option value="ATUALIZAR">Atualizar existentes (upsert)</option>
-          </select>
-          <input type="file" id="impFotos" accept="image/*" multiple onchange="carregarFotosImport()">
-          <button class="btn ghost sm" onclick="previaImport()">Prévia</button>
-          <button class="btn sm" id="impConfirmar" onclick="confirmarImport()" disabled>Importar</button>
-        </div>
-        <details id="impMapaBox" class="hidden" style="margin-bottom:10px">
-          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2)">Mapear colunas do arquivo</summary>
-          <div id="impMapa" class="form-grid" style="margin-top:8px"></div>
-          <div class="form-actions"><button class="btn ghost sm" onclick="aplicarMapeamentoImport()">Aplicar mapeamento</button></div>
-        </details>
-        <div id="impResultado" class="help"></div>
-      </div>
-
-      <div class="card">
-        <div class="card-head"><div><h2>Histórico de importações</h2><p class="sub">Últimas 100 execuções e relatório de erros</p></div>
-          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarImportacoes()">Atualizar</button></div></div>
-        <div class="list" id="listaImportacoes"></div>
-      </div>
-
-      <div class="card">
         <div class="card-head"><div><h2>Operadores</h2><p class="sub">Quem acessa o painel</p></div></div>
         <div class="form-grid" style="margin-bottom:14px">
           <input id="usrNome" placeholder="Nome">
@@ -897,7 +905,8 @@ if (sess) delete sess.token;
 
 const PAGINAS = {
   inicio: ['Início', 'Alunos, acessos, planos e recepção'],
-  oper: ['Operação', 'Acessos, cadastros e equipamentos'],
+  alunos: ['Alunos', 'Cadastro, plano, validade e situação'],
+  oper: ['Operação', 'Acessos, catraca e equipamentos'],
   eventos: ['Eventos', 'Inscrições de alunos e visitantes'],
   sorteios: ['Sorteios', 'Premiações programáveis e roleta'],
   relatorios: ['Relatórios', 'Frequência, inadimplência, eventos e sorteios'],
@@ -1016,10 +1025,13 @@ function entraUI() {
   if (!sess) return;
   // Aluno tem acesso limitado: remove do DOM tudo que é operacional.
   if (sess.perfil === 'aluno') {
-    for (const id of ['v-inicio', 'v-oper', 'v-eventos', 'v-sorteios', 'v-relatorios', 'v-sistema']) {
+    for (const id of ['v-inicio', 'v-alunos', 'v-oper', 'v-eventos', 'v-sorteios', 'v-relatorios', 'v-sistema']) {
       const el = $(id); if (el) el.remove();
     }
     const top = $('topActions'); if (top) top.remove();
+  }
+  if (sess.perfil !== 'gerencia') {
+    document.querySelectorAll('.gerencia-only').forEach((el) => el.remove());
   }
   $('quemNome').textContent = sess.nome || sess.perfil;
   $('quemPerfil').textContent = sess.perfil;
@@ -1030,9 +1042,9 @@ function entraUI() {
   const tabs = $('tabs'); tabs.innerHTML = '';
   const abas = sess.perfil === 'aluno' ? [['aluno', 'Meu acesso']]
     : sess.perfil === 'gerencia'
-      ? [['inicio', 'Início'], ['oper', 'Operação'], ['eventos', 'Eventos'], ['sorteios', 'Sorteios'], ['relatorios', 'Relatórios'], ['sistema', 'Sistema']]
-      : [['inicio', 'Início'], ['oper', 'Operação'], ['eventos', 'Eventos']];
-  const icones = { inicio: '◧', oper: '⇄', eventos: '★', sorteios: '🎁', relatorios: '▤', sistema: '⚙', aluno: '◎' };
+      ? [['inicio', 'Início'], ['alunos', 'Alunos'], ['oper', 'Operação'], ['eventos', 'Eventos'], ['sorteios', 'Sorteios'], ['relatorios', 'Relatórios'], ['sistema', 'Sistema']]
+      : [['inicio', 'Início'], ['alunos', 'Alunos'], ['oper', 'Operação'], ['eventos', 'Eventos']];
+  const icones = { inicio: '◧', alunos: '👥', oper: '⇄', eventos: '★', sorteios: '🎁', relatorios: '▤', sistema: '⚙', aluno: '◎' };
   abas.forEach(([id, label], i) => {
     const b = document.createElement('button');
     b.innerHTML = `<span class="ico">${icones[id] || '•'}</span><span>${label}</span>`;
@@ -1060,13 +1072,14 @@ function entraUI() {
   }
 }
 function mostrar(id) {
-  for (const v of ['aluno', 'oper', 'eventos', 'sorteios', 'relatorios', 'sistema', 'inicio']) {
+  for (const v of ['aluno', 'alunos', 'oper', 'eventos', 'sorteios', 'relatorios', 'sistema', 'inicio']) {
     const el = $('v-' + v); if (el) el.classList.toggle('hidden', id !== v);
   }
   const pg = PAGINAS[id] || PAGINAS.inicio;
   $('pageTitle').textContent = pg[0];
   $('pageSub').textContent = pg[1];
   if (id === 'sistema' && $('v-sistema')) carregarSistema();
+  if (id === 'alunos' && $('v-alunos')) carregarAlunos();
   if (id === 'inicio' && $('v-inicio')) carregarInicio();
   if (id === 'oper' && $('v-oper') && sess && sess.perfil !== 'aluno') carregarOper();
   if (id === 'eventos' && $('v-eventos')) carregarEventos();
@@ -1275,12 +1288,28 @@ async function carregarAluno() {
   carregarMinhasAulas();
 }
 
+// ---------- alunos ----------
+async function carregarAlunos() {
+  await carregarPlanos();
+  try {
+    const s = await jget('/api/system');
+    if ($('inadBadge')) {
+      $('inadBadge').innerHTML = s.counts.inadimplentes
+        ? `<span class="badge bad dot">${s.counts.inadimplentes} em atraso</span>`
+        : '<span class="badge ok dot">sem atrasos</span>';
+    }
+    await loadPessoas(s.inadimplentes || []);
+  } catch (e) {
+    await loadPessoas([]);
+  }
+  await carregarImportacoes();
+}
+
 // ---------- operação ----------
 let CATALOGO = [];
 let editandoDevice = null;
 async function carregarOper() {
   $('edgeUrl').value = `http://${location.hostname}:3002`;
-  await carregarPlanos();
   await load(); await loadSync(); await carregarRostos();
 }
 
@@ -1505,7 +1534,7 @@ async function cadastrarPessoa() {
     $('visPlano').value = '';
     $('visFoto').value = ''; $('visFoto').dataset.data = '';
     $('visFotoPreview').innerHTML = '';
-    load(); carregarCobrancas();
+    load(); carregarAlunos(); carregarCobrancas();
   } catch (e) { toast('Falha ao cadastrar', e.message, 'err'); }
 }
 
@@ -1532,7 +1561,7 @@ async function editarDadosPessoa(id) {
       cpf, telefone, email, nascimento, endereco, cidade, observacoes,
     });
     toast('Dados atualizados', p.nome);
-    carregarSistema();
+    carregarAlunos();
   } catch (e) { toast('Falha ao atualizar', e.message, 'err'); }
 }
 
@@ -1565,7 +1594,7 @@ async function gerenciarPlano(id) {
       await jdel(`/api/persons/${encodeURIComponent(id)}/plano/${encodeURIComponent(ativa.id)}?motivo=${encodeURIComponent(motivo)}`);
       toast('Plano cancelado', '');
     } else return;
-    carregarSistema();
+    carregarAlunos();
   } catch (e) { toast('Falha no plano', e.message, 'err'); }
 }
 async function atribuirPlano(id) {
@@ -1579,7 +1608,7 @@ async function atribuirPlano(id) {
   try {
     await jpost(`/api/persons/${encodeURIComponent(id)}/plano`, { planoId: plano.id });
     toast('Plano contratado', `${plano.nome} · ${plano.duracaoMeses} mês(es)`);
-    carregarSistema();
+    carregarAlunos();
   } catch (e) { toast('Falha ao contratar plano', e.message, 'err'); }
 }
 
@@ -1589,7 +1618,7 @@ function trocarFoto(id) { fotoTarget = id; const el = $('fotoFile'); el.value = 
 async function enviarFoto(dataUrl) {
   await jpost(`/api/persons/${encodeURIComponent(fotoTarget)}/photo`, { foto: dataUrl });
   toast('Foto atualizada', 'Já aparece no painel e será enviada ao leitor');
-  if (sess.perfil === 'aluno') carregarAluno(); else carregarSistema();
+  if (sess.perfil === 'aluno') carregarAluno(); else carregarAlunos();
 }
 function ligarFotos() {
   const input = $('visFoto');
@@ -2167,22 +2196,23 @@ async function confirmarImport() {
     for (const k of Object.keys(importFotos)) delete importFotos[k];
     $('impFile').value = ''; $('impFotos').value = '';
     renderMapaImport();
-    carregarSistema();
-    carregarImportacoes();
+    carregarAlunos();
   } catch (e) { toast('Falha na importação', e.message, 'err'); }
 }
 
 async function carregarImportacoes() {
+  const alvo = $('listaImportacoes');
+  if (!alvo) return;
   try {
     const lista = await jget('/api/imports');
-    $('listaImportacoes').innerHTML = lista.map((i) => `
+    alvo.innerHTML = lista.map((i) => `
       <div class="list-item"><div><div class="t">${esc(i.arquivo || 'importação')} · ${esc(i.modo)}</div>
       <div class="d">${esc(dataHoraCurta(i.em))} · ${i.criados} criado(s), ${i.atualizados} atualizado(s), ${i.ignorados} ignorado(s), ${i.erros} erro(s) · por ${esc(i.por || '—')}</div></div>
       <div style="display:flex;gap:6px;align-items:center">
         <span class="badge ${i.erros ? 'warn' : 'ok'}">${i.erros ? i.erros + ' erro(s)' : 'ok'}</span>
         <button class="btn ghost sm" onclick="baixarRelatorioImportacao('${esc(i.id)}')">CSV</button>
       </div></div>`).join('') || '<div class="empty">Nenhuma importação realizada.</div>';
-  } catch (e) { $('listaImportacoes').innerHTML = '<div class="empty">Histórico indisponível.</div>'; }
+  } catch (e) { alvo.innerHTML = '<div class="empty">Histórico indisponível.</div>'; }
 }
 
 async function baixarRelatorioImportacao(id) {
@@ -2258,7 +2288,7 @@ async function renovar(id, dias) {
   try {
     await jpatch(`/api/persons/${encodeURIComponent(id)}`, { validadeFim: base.toISOString() });
     toast('Plano atualizado', `${p.nome} renovado até ${dataCurta(base)}`);
-    carregarSistema();
+    carregarAlunos();
   } catch (e) { toast('Falha ao renovar', e.message, 'err'); }
 }
 
@@ -2292,7 +2322,7 @@ async function editarHorario(id) {
       rules: devices.map(d => ({ deviceId: d.id, diasSemana: mask, horaIni: ini.trim(), horaFim: fim.trim() })),
     });
     toast('Horário atualizado', 'Vale para todos os equipamentos');
-    carregarSistema();
+    carregarAlunos();
   } catch (e) { toast('Erro no horário', e.message, 'err'); }
 }
 async function renovarValidade(id) {
@@ -2302,7 +2332,7 @@ async function renovarValidade(id) {
   try {
     await jpatch(`/api/persons/${encodeURIComponent(id)}`, { validadeFim: fim.trim() || null });
     toast('Validade atualizada', fim.trim() ? `Vence em ${dataCurta(fim.trim())}` : 'Vencimento removido');
-    carregarSistema();
+    carregarAlunos();
   } catch (e) { toast('Erro na validade', e.message, 'err'); }
 }
 async function excluirPessoa(id, nome) {
@@ -2310,19 +2340,19 @@ async function excluirPessoa(id, nome) {
   try {
     await jdel(`/api/persons/${encodeURIComponent(id)}`);
     toast('Cadastro excluído', nome);
-    carregarSistema();
+    carregarAlunos();
   } catch (e) { toast('Erro ao excluir', e.message, 'err'); }
 }
 async function toggleAtivo(id, ativo) {
   await jpatch(`/api/persons/${encodeURIComponent(id)}`, { ativo });
   toast(ativo ? 'Cadastro reativado' : 'Cadastro inativado', ativo ? 'Volta a contar nas métricas' : 'Não aparece mais como inadimplente');
-  carregarSistema();
+  carregarAlunos();
 }
 async function vincularTreinutrix(id, atual) {
   const v = prompt('Perfil Treinutrix (link ou @usuario, vazio remove):', atual || '');
   if (v === null) return;
   await jpatch(`/api/persons/${encodeURIComponent(id)}`, { treinutrix: v.trim() || null });
-  carregarSistema();
+  carregarAlunos();
 }
 async function loadUsuarios() {
   try {

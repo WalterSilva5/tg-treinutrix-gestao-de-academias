@@ -40,13 +40,13 @@ Base de padrões: `wsi-invest-ai` (`back/src/modules/admin` overview,
 
 ## Importação de cadastros (sem biometria)
 
-- **Sistema → Importar cadastros** aceita CSV (`nome;matricula;tipo;enrollid;
+- **Alunos → Importar cadastros** aceita CSV (`nome;matricula;tipo;enrollid;
   validadeFim;treinutrix;ativo`) ou JSON (lista ou `{ pessoas: [...] }`).
 - `POST /api/persons/import` com `confirmar:false` faz prévia; `true` grava.
   Deduplica por matrícula/enrollid, ignora repetidos, reporta erros por linha e
   limita 5000 linhas.
 - Não importa foto nem template facial: o cadastro nasce sem biometria e a foto
-  é enviada depois em **Pessoas → Foto** (o sync manda `setuserinfo` ao leitor).
+  é enviada depois em **Alunos → Foto** (o sync manda `setuserinfo` ao leitor).
 
 ## Endpoints
 
@@ -127,9 +127,9 @@ ou Agendador de Tarefas) e teste o restore periodicamente.
 - Dashboard com KPIs, gráfico dos últimos 7 dias e lista de **presentes agora**.
 - **Frequência por dias distintos**: várias entradas no mesmo dia contam como 1
   dia (`GET /api/frequency`, `api/src/frequency.js`). Eventos ficam como auditoria.
-- Busca por nome/matrícula/Treinutrix e filtros por tipo/situação na lista de pessoas.
+- Busca por nome/matrícula/Treinutrix e filtros por tipo/situação na aba **Alunos**.
 - Renovação rápida de plano (+30 e +90 dias) direto na linha da pessoa.
-- **Pessoas:** Horário (janela de acesso), Validade (renovar/remover),
+- **Alunos:** Horário (janela de acesso), Validade (renovar/remover),
   Vincular Treinutrix, Foto, Inativar/Reativar e Excluir (gerência).
 
 ## Compartilhar acesso (link + QR)

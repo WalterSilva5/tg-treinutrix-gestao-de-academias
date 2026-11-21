@@ -108,7 +108,7 @@ Cada assinatura gera **uma cobrança por mês de vigência**:
 ## 9. Interface
 
 - **Sistema → Planos de mensalidade:** criar/editar/desativar planos.
-- **Operação → Pessoas:** botão **Plano** abre o menu contratar/trancar/
+- **Alunos → Pessoas:** botão **Plano** abre o menu contratar/trancar/
   retomar/cancelar; **Dados** edita os campos opcionais.
 - **Sistema → Mensalidades:** gerar o mês, filtrar, registrar pagamento.
 - **Sistema → Inadimplência (aging):** ver quem cobrar, contatar e abrir
