@@ -38,6 +38,12 @@ test('agrega acessos, pessoas, inadimplentes, eventos e sorteios', () => {
   assert.equal(r.kpis.sorteios, 1);
 
   assert.deepEqual(r.porDia.map((d) => d.dia), ['2026-11-18', '2026-11-19']);
+  assert.equal(r.porHora.length, 24);
+  assert.equal(r.porHora[10].total, 1);
+  assert.equal(r.porHora[18].total, 1);
+  assert.equal(r.porDiaSemana.length, 7);
+  assert.equal(r.porDiaSemana[3].total, 2); // quarta 18/11
+  assert.equal(r.porDiaSemana[4].total, 1); // quinta 19/11
   assert.equal(r.porDia[0].total, 2);
   assert.equal(r.porDia[0].pessoas, 1);
   assert.equal(r.topPessoas[0].nome, 'Ana');

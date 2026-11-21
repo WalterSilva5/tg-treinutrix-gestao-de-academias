@@ -363,11 +363,21 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
             <div class="legend"><span><i style="background:#f97316"></i>alunos que frequentaram</span></div>
           </div>
           <div class="card">
+            <div class="card-head"><div><h2>Movimento por horário</h2><p class="sub">Acessos de hoje por hora</p></div></div>
+            <div class="chart" id="ovHoras"></div>
+            <div class="legend"><span><i style="background:#f97316"></i>acessos</span><span><i style="background:#14b8a6"></i>liberados</span></div>
+          </div>
+          <div class="card">
             <div class="card-head"><div><h2>Últimas entradas</h2><p class="sub">Movimentação de hoje</p></div></div>
             <div class="table-wrap"><table><thead><tr><th>Hora</th><th>Pessoa</th><th>Método</th><th>Status</th></tr></thead><tbody id="ovEntradas"></tbody></table></div>
           </div>
         </div>
         <div>
+          <div class="card">
+            <div class="card-head"><div><h2>Movimento por dia da semana</h2><p class="sub">Últimos 7 dias, por dia</p></div></div>
+            <div class="chart" id="ovDiaSemana"></div>
+            <div class="legend"><span><i style="background:#14b8a6"></i>acessos</span></div>
+          </div>
           <div class="card">
             <div class="card-head"><div><h2>Presentes agora</h2><p class="sub">Quem entrou e não saiu</p></div><span class="badge accent" id="ovDentro">0</span></div>
             <div id="ovPresentes"></div>
@@ -607,6 +617,13 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
           <div class="table-wrap"><table><thead><tr><th>Dia</th><th>Total</th><th>Liberados</th><th>Negados</th><th>Pessoas</th></tr></thead><tbody id="relGDias"></tbody></table></div></div>
         <div class="card"><div class="card-head"><div><h2>Top pessoas</h2><p class="sub">Mais acessos no período</p></div></div>
           <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Acessos</th><th>Dias</th></tr></thead><tbody id="relGTop"></tbody></table></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><h2>Movimento por horário e dia da semana</h2><p class="sub">Acessos do período</p></div></div>
+        <div class="grid2">
+          <div class="table-wrap"><table><thead><tr><th>Hora</th><th>Acessos</th><th>Liberados</th><th>Negados</th><th>Pessoas</th></tr></thead><tbody id="relGHoras"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Dia</th><th>Acessos</th><th>Liberados</th><th>Negados</th><th>Pessoas</th></tr></thead><tbody id="relGSemana"></tbody></table></div>
+        </div>
       </div>
       <div class="card"><div class="card-head"><div><h2>Inadimplentes</h2><p class="sub">Plano vencido no fim do período</p></div></div>
         <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Matrícula</th><th>Vencimento</th></tr></thead><tbody id="relGInad"></tbody></table></div></div>
@@ -1050,6 +1067,39 @@ function desenharSemana(semana) {
     </div>`;
   }).join('');
 }
+function desenharHoras(horas) {
+  const el = $('ovHoras');
+  if (!el) return;
+  const max = Math.max(1, ...horas.map((h) => h.total || 0));
+  el.innerHTML = horas.map((h) => {
+    const total = h.total || 0;
+    const alt = total ? Math.max(6, Math.round((total / max) * 100)) : 0;
+    return `<div class="col" title="${h.hora}:00 — ${total} acesso(s), ${h.liberados || 0} liberado(s)">
+      <span class="val">${total || ''}</span>
+      <div style="width:100%;display:flex;justify-content:center;align-items:flex-end;height:100%">
+        <div class="bar ${total ? '' : 'zero'}" style="height:${alt}%"></div>
+      </div>
+      <span class="lbl">${String(h.hora).padStart(2, '0')}h</span>
+    </div>`;
+  }).join('');
+}
+function desenharDiaSemana(dias) {
+  const el = $('ovDiaSemana');
+  if (!el) return;
+  const nomes = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const max = Math.max(1, ...dias.map((d) => d.total || 0));
+  el.innerHTML = dias.map((d) => {
+    const total = d.total || 0;
+    const alt = total ? Math.max(8, Math.round((total / max) * 100)) : 0;
+    return `<div class="col" title="${nomes[d.dia]}: ${total} acesso(s), ${d.alunos || 0} pessoa(s)">
+      <span class="val">${total || ''}</span>
+      <div style="width:100%;display:flex;justify-content:center;align-items:flex-end;height:100%">
+        <div class="bar ${total ? '' : 'zero'}" style="height:${alt}%;background:#14b8a6"></div>
+      </div>
+      <span class="lbl">${nomes[d.dia]}</span>
+    </div>`;
+  }).join('');
+}
 async function carregarInicio() {
   const [o, persons] = await Promise.all([jget('/api/overview'), jget('/api/persons')]);
   window.__pessoasObj = Object.fromEntries(persons.map(p => [p.id, p]));
@@ -1063,6 +1113,8 @@ async function carregarInicio() {
     <div class="kpi warn"><div class="v">${k.inadimplentes}</div><div class="l">Inadimplentes</div></div>
     <div class="kpi"><div class="v">${k.syncPendente}</div><div class="l">Sync pendente</div></div>`;
   desenharSemana(o.semana || []);
+  desenharHoras(o.movimentoHora || []);
+  desenharDiaSemana(o.porDiaSemana || []);
 
   const dentro = o.presentes || [];
   $('ovDentro').textContent = dentro.length;
@@ -2520,6 +2572,13 @@ async function carregarRelatorios() {
     $('relGInad').innerHTML = r.inadimplentes.map((p) => `
       <tr><td>${esc(p.nome)}</td><td class="mono">${esc(p.matricula)}</td><td>${esc(dataCurta(p.validadeFim))}</td></tr>`).join('')
       || '<tr><td colspan="3"><div class="empty">Nenhum inadimplente.</div></td></tr>';
+    const nomesDia = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    $('relGHoras').innerHTML = (r.porHora || []).map((h) => `
+      <tr><td class="mono">${String(h.hora).padStart(2, '0')}h</td><td>${h.total}</td><td>${h.liberados}</td><td>${h.negados}</td><td>${h.pessoas || 0}</td></tr>`).join('')
+      || '<tr><td colspan="5"><div class="empty">Sem acessos.</div></td></tr>';
+    $('relGSemana').innerHTML = (r.porDiaSemana || []).map((d) => `
+      <tr><td>${nomesDia[d.dia]}</td><td>${d.total}</td><td>${d.liberados}</td><td>${d.negados}</td><td>${d.pessoas || 0}</td></tr>`).join('')
+      || '<tr><td colspan="5"><div class="empty">Sem acessos.</div></td></tr>';
     $('relGEventos').innerHTML = `
       <div class="list">${r.eventosSociais.map((e) => `
         <div class="list-item"><div><div class="t">${esc(e.nome)}</div>

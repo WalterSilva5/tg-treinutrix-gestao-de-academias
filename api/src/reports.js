@@ -14,7 +14,9 @@ export function relatorioGeral(store, { inicio, fim, agora = new Date() } = {}) 
   const deny = eventos.filter((e) => e.decisao === 'DENY');
 
   const porDia = new Map();
-  const porHora = Array.from({ length: 24 }, () => ({ total: 0, liberados: 0, negados: 0 }));
+  const porHora = Array.from({ length: 24 }, (_, hora) => ({ hora, total: 0, liberados: 0, negados: 0 }));
+  const pessoasHora = Array.from({ length: 24 }, () => new Set());
+  const porDiaSemana = Array.from({ length: 7 }, (_, dia) => ({ dia, total: 0, liberados: 0, negados: 0, pessoas: new Set() }));
   const pessoas = new Map();
   for (const e of eventos) {
     const dia = localDayKey(new Date(e.timestamp));
@@ -26,8 +28,14 @@ export function relatorioGeral(store, { inicio, fim, agora = new Date() } = {}) 
     porDia.set(dia, d);
     const hora = new Date(e.timestamp).getHours();
     porHora[hora].total += 1;
+    if (e.personId) pessoasHora[hora].add(e.personId);
     if (e.decisao === 'ALLOW') porHora[hora].liberados += 1;
     if (e.decisao === 'DENY') porHora[hora].negados += 1;
+    const ds = porDiaSemana[new Date(e.timestamp).getDay()];
+    ds.total += 1;
+    if (e.decisao === 'ALLOW') ds.liberados += 1;
+    if (e.decisao === 'DENY') ds.negados += 1;
+    if (e.personId) ds.pessoas.add(e.personId);
     if (e.personId && e.decisao === 'ALLOW') {
       const p = store.persons.get(e.personId);
       const atual = pessoas.get(e.personId) || { personId: e.personId, nome: p?.nome || e.personId, matricula: p?.matricula || '', acessos: 0, dias: new Set() };
@@ -40,6 +48,9 @@ export function relatorioGeral(store, { inicio, fim, agora = new Date() } = {}) 
   const porDiaLista = [...porDia.values()]
     .map((d) => ({ ...d, pessoas: d.pessoas.size }))
     .sort((a, b) => a.dia.localeCompare(b.dia));
+
+  for (let h = 0; h < 24; h += 1) porHora[h].pessoas = pessoasHora[h].size;
+  for (const d of porDiaSemana) { d.pessoas = d.pessoas.size; }
 
   const topPessoas = [...pessoas.values()]
     .map((p) => ({ ...p, dias: p.dias.size }))
@@ -90,6 +101,7 @@ export function relatorioGeral(store, { inicio, fim, agora = new Date() } = {}) 
     },
     porDia: porDiaLista,
     porHora,
+    porDiaSemana,
     topPessoas,
     novos: novos.map((p) => ({ id: p.id, nome: p.nome, matricula: p.matricula, criadoEm: p.criadoEm })),
     inadimplentes: inadimplentes.map((p) => ({ id: p.id, nome: p.nome, matricula: p.matricula, validadeFim: p.validadeFim })),

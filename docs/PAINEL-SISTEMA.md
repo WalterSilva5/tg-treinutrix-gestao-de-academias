@@ -62,6 +62,7 @@ Base de padrões: `wsi-invest-ai` (`back/src/modules/admin` overview,
 | `GET/POST /api/public/eventos/:token` | inscrição pública sem login |
 | `GET /api/relatorios/eventos[.csv|.pdf]` | relatório de eventos por período |
 | `GET /api/relatorios/geral[.csv|.pdf]` | frequência, inadimplência, agenda e sorteios |
+| `GET /api/overview` | KPIs + movimento por hora/dia da semana |
 | `GET /api/me/eventos` · `POST .../inscrever` · `DELETE .../inscricao` | eventos do aluno |
 | `GET /api/export/dados` | exportação completa para migração |
 | `GET/POST /api/sorteios` · `.../elegiveis` · `.../sortear` | sorteios programáveis e roleta |

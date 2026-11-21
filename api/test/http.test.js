@@ -969,3 +969,21 @@ test('relatorio financeiro: JSON, CSV e PDF (gerencia)', async () => {
   const negado = await api('/api/relatorios/financeiro', { token: aluno.json.token });
   assert.equal(negado.status, 403);
 });
+
+
+test('metricas de movimento por hora e por dia', async () => {
+  const o = await api('/api/overview', { token: admin });
+  assert.equal(o.status, 200);
+  assert.equal(o.json.movimentoHora.length, 24);
+  assert.equal(o.json.porDiaSemana.length, 7);
+  assert.ok(o.json.semana.length === 7);
+
+  const rel = await api('/api/relatorios/geral?inicio=2026-11-01&fim=2026-11-30', { token: admin });
+  assert.equal(rel.json.porHora.length, 24);
+  assert.equal(rel.json.porDiaSemana.length, 7);
+
+  const csv = await fetch(base + '/api/relatorios/geral.csv?inicio=2026-11-01&fim=2026-11-30', { headers: { Authorization: 'Bearer ' + admin } });
+  const texto = await csv.text();
+  assert.match(texto, /Por hor.rio/);
+  assert.match(texto, /Por dia da semana/);
+});

@@ -34,6 +34,7 @@ Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces
   por dias distintos na semana (`docs/PLANOS-MENSALIDADES.md`).
 - Relatórios financeiros por período em CSV/PDF
   (`docs/RELATORIOS-FINANCEIROS.md`).
+- Métricas de movimento por hora e por dia (`docs/METRICAS-MOVIMENTO.md`).
 - Persistência em **SQLite**, sem Docker.
 
 ## Arquitetura

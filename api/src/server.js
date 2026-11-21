@@ -1903,6 +1903,8 @@ async function route(req, res) {
       const secoes = [
         ['Resumo', [['Indicador', 'Valor'], ...Object.entries(r.kpis)]],
         ['Por dia', [['Dia', 'Total', 'Liberados', 'Negados', 'Pessoas'], ...r.porDia.map((d) => [d.dia, d.total, d.liberados, d.negados, d.pessoas])]],
+        ['Por horário', [['Hora', 'Total', 'Liberados', 'Negados', 'Pessoas'], ...r.porHora.map((h) => [`${String(h.hora).padStart(2, '0')}:00`, h.total, h.liberados, h.negados, h.pessoas || 0])]],
+        ['Por dia da semana', [['Dia', 'Total', 'Liberados', 'Negados', 'Pessoas'], ...r.porDiaSemana.map((d) => [['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][d.dia], d.total, d.liberados, d.negados, d.pessoas || 0])]],
         ['Top pessoas', [['Nome', 'Matrícula', 'Acessos', 'Dias'], ...r.topPessoas.map((p) => [p.nome, p.matricula, p.acessos, p.dias])]],
         ['Inadimplentes', [['Nome', 'Matrícula', 'Vencimento'], ...r.inadimplentes.map((p) => [p.nome, p.matricula, p.validadeFim || ''])]],
         ['Eventos', [['Evento', 'Início', 'Inscritos', 'Presentes', 'Espera', 'Receita'], ...r.eventosSociais.map((e) => [e.nome, e.inicio, e.inscritos, e.presentes, e.espera, e.receita])]],
@@ -1928,6 +1930,12 @@ async function route(req, res) {
       '',
       'Por dia:',
       ...r.porDia.map((d) => `${d.dia}: ${d.total} total, ${d.liberados} liberados, ${d.negados} negados, ${d.pessoas} pessoa(s)`),
+      '',
+      'Por horário:',
+      ...r.porHora.map((h) => `${String(h.hora).padStart(2, '0')}:00: ${h.total} acesso(s), ${h.liberados} liberado(s), ${h.negados} negado(s), ${h.pessoas || 0} pessoa(s)`),
+      '',
+      'Por dia da semana:',
+      ...r.porDiaSemana.map((d) => `${['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][d.dia]}: ${d.total} acesso(s), ${d.liberados} liberado(s), ${d.pessoas || 0} pessoa(s)`),
       '',
       'Top pessoas:',
       ...r.topPessoas.map((p) => `${p.nome} (${p.matricula}): ${p.acessos} acesso(s) em ${p.dias} dia(s)`),
@@ -2481,6 +2489,27 @@ async function route(req, res) {
         alunos: alunosNoDia(store.events, key),
       });
     }
+    const movimentoHora = Array.from({ length: 24 }, (_, hora) => ({ hora, total: 0, liberados: 0, negados: 0 }));
+    for (const e of hoje) {
+      const h = new Date(e.timestamp).getHours();
+      const row = movimentoHora[h];
+      if (!row) continue;
+      row.total += 1;
+      if (e.decisao === 'ALLOW') row.liberados += 1;
+      if (e.decisao === 'DENY') row.negados += 1;
+    }
+    const porDiaSemana = Array.from({ length: 7 }, (_, dia) => ({ dia, total: 0, liberados: 0, alunos: 0, pessoas: new Set() }));
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = localDayKey(d);
+      const row = porDiaSemana[d.getDay()];
+      const evs = store.events.filter((e) => localDayKey(new Date(e.timestamp)) === key);
+      row.total += evs.length;
+      row.liberados += evs.filter((e) => e.decisao === 'ALLOW').length;
+      for (const e of evs) if (e.personId) row.pessoas.add(e.personId);
+    }
+    for (const row of porDiaSemana) { row.alunos = row.pessoas.size; delete row.pessoas; }
     // Quem entrou e não saiu: último evento ALLOW por pessoa é de entrada.
     const ultimoPorPessoa = new Map();
     for (const e of store.events) {
@@ -2492,6 +2521,8 @@ async function route(req, res) {
     return send(res, 200, {
       dia,
       semana,
+      movimentoHora,
+      porDiaSemana,
       presentes,
       kpis: {
         eventosHoje: hoje.length,

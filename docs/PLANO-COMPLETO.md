@@ -29,6 +29,7 @@ aceite. Este documento substitui a leitura solta de `PROXIMOS-PASSOS` e
 | 13 | Este plano | ✅ feito | executar as fases abaixo |
 | 14 | Planos, mensalidades e dados extras do aluno | ✅ feito | — |
 | 15 | Relatórios financeiros | ✅ feito | — |
+| 16 | Métricas de movimento por hora/dia | ✅ feito | — |
 
 Legenda: ✅ pronto · 🟡 parcial · ⛔ bloqueado por hardware/terceiros.
 
