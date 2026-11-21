@@ -30,6 +30,7 @@ import {
 } from './social.js';
 import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento, eventosParaCsv, eventosParaPdf, sorteioParaCsv, sorteioParaPdf, csvTabela, pdfTexto } from './report.js';
 import { relatorioGeral } from './reports.js';
+import { relatorioFinanceiro } from './finance.js';
 import { serialize } from './state.js';
 import {
   normalizarPlano, novoPlano, criarAssinatura, cancelarAssinatura,
@@ -1825,6 +1826,63 @@ async function route(req, res) {
     res.writeHead(200, {
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'attachment; filename="relatorio-eventos.pdf"',
+      'Content-Length': pdf.length,
+      ...corsHeaders(),
+    });
+    return res.end(pdf);
+  }
+
+  // Relatório financeiro do período.
+  const relatorioFinanceiroRoute = url.pathname.match(/^\/api\/relatorios\/financeiro(?:\.(csv|pdf))?$/);
+  if (req.method === 'GET' && relatorioFinanceiroRoute) {
+    gerenciaOnly();
+    const formato = relatorioFinanceiroRoute[1];
+    const inicio = url.searchParams.get('inicio');
+    const fim = url.searchParams.get('fim');
+    const r = relatorioFinanceiro(store, { inicio, fim });
+    if (!formato) return send(res, 200, r);
+    const periodoTxt = `${new Date(r.periodo.inicio).toLocaleDateString('pt-BR')} a ${new Date(r.periodo.fim).toLocaleDateString('pt-BR')}`;
+    const brl = (n) => Number(n || 0).toFixed(2).replace('.', ',');
+    if (formato === 'csv') {
+      const secoes = [
+        ['Resumo', [['Indicador', 'Valor'], ['Previsto', brl(r.kpis.previsto)], ['Recebido', brl(r.kpis.recebido)], ['Em aberto', brl(r.kpis.emAberto)], ['Vencido', brl(r.kpis.vencido)], ['Taxa de recebimento (%)', String(r.kpis.taxaRecebimento)], ['Cobranças', String(r.kpis.cobrancas)]]],
+        ['Por competência', [['Competência', 'Cobranças', 'Previsto', 'Recebido', 'Aberto', 'Vencido'], ...r.porCompetencia.map((m) => [m.competencia, m.quantidade, brl(m.previsto), brl(m.recebido), brl(m.aberto), brl(m.vencido)])]],
+        ['Por plano', [['Plano', 'Cobranças', 'Previsto', 'Recebido', 'Aberto'], ...r.porPlano.map((p) => [p.plano, p.quantidade, brl(p.previsto), brl(p.recebido), brl(p.aberto)])]],
+        ['Por forma', [['Forma', 'Pagamentos', 'Total'], ...r.porForma.map((f) => [f.forma, f.quantidade, brl(f.total)])]],
+        ['Devedores', [['Nome', 'Matrícula', 'Cobranças', 'Aberto', 'Vencido'], ...r.devedores.map((d) => [d.nome, d.matricula, d.cobrancas, brl(d.aberto), brl(d.vencido)])]],
+      ];
+      const corpo = secoes.map(([titulo, tabela], i) => {
+        const csv = csvTabela(tabela[0], tabela.slice(1)).replace(/^\uFEFF/, '');
+        return `${i ? '' : '\uFEFF'}${titulo}\r\n${csv}`;
+      }).join('\r\n');
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="relatorio-financeiro.csv"',
+        ...corsHeaders(),
+      });
+      return res.end(corpo);
+    }
+    const linhas = [
+      `Período: ${periodoTxt}`,
+      `Previsto: R$ ${brl(r.kpis.previsto)} · recebido: R$ ${brl(r.kpis.recebido)} · aberto: R$ ${brl(r.kpis.emAberto)} · vencido: R$ ${brl(r.kpis.vencido)}`,
+      `Taxa de recebimento: ${r.kpis.taxaRecebimento}% · ${r.kpis.cobrancas} cobrança(s) · ${r.kpis.devedores} devedor(es)`,
+      '',
+      'Por competência:',
+      ...r.porCompetencia.map((m) => `${m.competencia}: previsto R$ ${brl(m.previsto)}, recebido R$ ${brl(m.recebido)}, aberto R$ ${brl(m.aberto)}, vencido R$ ${brl(m.vencido)}`),
+      '',
+      'Por plano:',
+      ...r.porPlano.map((p) => `${p.plano}: previsto R$ ${brl(p.previsto)}, recebido R$ ${brl(p.recebido)}, aberto R$ ${brl(p.aberto)}`),
+      '',
+      'Por forma de pagamento:',
+      ...r.porForma.map((f) => `${f.forma}: R$ ${brl(f.total)} (${f.quantidade})`),
+      '',
+      'Devedores:',
+      ...r.devedores.map((d) => `${d.nome} (${d.matricula || 'sem matrícula'}): aberto R$ ${brl(d.aberto)}, vencido R$ ${brl(d.vencido)}`),
+    ];
+    const pdf = pdfTexto('Relatório financeiro', periodoTxt, linhas);
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="relatorio-financeiro.pdf"',
       'Content-Length': pdf.length,
       ...corsHeaders(),
     });

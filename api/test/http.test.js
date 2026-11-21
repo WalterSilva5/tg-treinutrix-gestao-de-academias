@@ -943,3 +943,29 @@ test('plano limita dias distintos na semana e nao entradas no mesmo dia', async 
   assert.equal(quinta.json.allow, false);
   assert.equal(quinta.json.motivo, 'LIMITE_DIAS_SEMANA');
 });
+
+
+test('relatorio financeiro: JSON, CSV e PDF (gerencia)', async () => {
+  const r = await api('/api/relatorios/financeiro?inicio=2026-11-01&fim=2026-11-30', { token: admin });
+  assert.equal(r.status, 200, r.text);
+  assert.ok(r.json.kpis.previsto >= 1);
+  assert.ok(Array.isArray(r.json.porCompetencia));
+  assert.ok(Array.isArray(r.json.devedores));
+
+  const csv = await fetch(base + '/api/relatorios/financeiro.csv?inicio=2026-11-01&fim=2026-11-30', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(csv.status, 200);
+  const texto = await csv.text();
+  assert.match(texto, /Resumo/);
+  assert.match(texto, /Por plano/);
+  assert.match(texto, /Devedores/);
+
+  const pdf = await fetch(base + '/api/relatorios/financeiro.pdf?inicio=2026-11-01&fim=2026-11-30', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(pdf.status, 200);
+  const buf = Buffer.from(await pdf.arrayBuffer());
+  assert.equal(buf.subarray(0, 8).toString(), '%PDF-1.4');
+  assert.match(buf.toString('latin1'), /Relat.rio financeiro/);
+
+  const aluno = await api('/api/auth/login', { method: 'POST', body: { login: 'EV' + run, senha: 'aluno123' } });
+  const negado = await api('/api/relatorios/financeiro', { token: aluno.json.token });
+  assert.equal(negado.status, 403);
+});

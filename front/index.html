@@ -583,6 +583,25 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
         </div>
         <div id="relGResumo" class="kpis" style="margin-top:14px"></div>
       </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Financeiro</h2><p class="sub">Recebido, em aberto, por plano e forma de pagamento</p></div></div>
+        <div class="form-actions">
+          <input id="finMes" type="month" title="Competência/mês">
+          <button class="btn sm" onclick="carregarFinanceiro()">Atualizar</button>
+          <button class="btn ghost sm" onclick="baixarFinanceiro('csv')">CSV</button>
+          <button class="btn ghost sm" onclick="baixarFinanceiro('pdf')">PDF</button>
+        </div>
+        <div id="finResumo" class="kpis" style="margin-top:14px"></div>
+        <div class="grid2">
+          <div><h3 style="font-size:14px">Por competência</h3><div class="table-wrap"><table><thead><tr><th>Mês</th><th>Previsto</th><th>Recebido</th><th>Aberto</th><th>Vencido</th></tr></thead><tbody id="finCompetencias"></tbody></table></div></div>
+          <div><h3 style="font-size:14px">Por plano</h3><div class="table-wrap"><table><thead><tr><th>Plano</th><th>Cobranças</th><th>Previsto</th><th>Recebido</th><th>Aberto</th></tr></thead><tbody id="finPlanos"></tbody></table></div></div>
+        </div>
+        <div class="grid2">
+          <div><h3 style="font-size:14px">Por forma</h3><div class="table-wrap"><table><thead><tr><th>Forma</th><th>Pagamentos</th><th>Total</th></tr></thead><tbody id="finFormas"></tbody></table></div></div>
+          <div><h3 style="font-size:14px">Devedores</h3><div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Cobranças</th><th>Aberto</th><th>Vencido</th></tr></thead><tbody id="finDevedores"></tbody></table></div></div>
+        </div>
+      </div>
       <div class="grid2">
         <div class="card"><div class="card-head"><div><h2>Por dia</h2><p class="sub">Acessos e pessoas distintas</p></div></div>
           <div class="table-wrap"><table><thead><tr><th>Dia</th><th>Total</th><th>Liberados</th><th>Negados</th><th>Pessoas</th></tr></thead><tbody id="relGDias"></tbody></table></div></div>
@@ -2511,6 +2530,7 @@ async function carregarRelatorios() {
         <div class="d">${esc((s.vencedores || []).join(', '))} · ${esc(dataHoraCurta(s.sorteadoEm))}</div></div>
         <span class="badge accent">sorteio</span></div>`).join('')}
       ${(!r.eventosSociais.length && !r.sorteios.length) ? '<div class="empty">Nenhum evento ou sorteio no período.</div>' : ''}</div>`;
+    carregarFinanceiro();
   } catch (e) { toast('Falha no relatório', e.message, 'err'); }
 }
 
@@ -2524,6 +2544,54 @@ async function baixarRelatorioGeral(formato) {
     a.href = url; a.download = `relatorio-geral.${formato}`; a.click();
     URL.revokeObjectURL(url);
   } catch (e) { toast('Falha ao exportar', e.message, 'err'); }
+}
+
+function periodoFinanceiro() {
+  if (!$('finMes').value) {
+    const d = new Date();
+    $('finMes').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+  const [ano, mes] = $('finMes').value.split('-').map(Number);
+  const ultimo = new Date(ano, mes, 0).getDate();
+  return new URLSearchParams({
+    inicio: `${ano}-${String(mes).padStart(2, '0')}-01`,
+    fim: `${ano}-${String(mes).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`,
+  });
+}
+
+async function carregarFinanceiro() {
+  try {
+    const r = await jget(`/api/relatorios/financeiro?${periodoFinanceiro()}`);
+    const k = r.kpis;
+    const brl = (n) => 'R$ ' + Number(n || 0).toFixed(2).replace('.', ',');
+    $('finResumo').innerHTML = `
+      <div class="kpi"><div class="v">${brl(k.previsto)}</div><div class="l">Previsto</div></div>
+      <div class="kpi ok"><div class="v">${brl(k.recebido)}</div><div class="l">Recebido</div></div>
+      <div class="kpi warn"><div class="v">${brl(k.emAberto)}</div><div class="l">Em aberto</div></div>
+      <div class="kpi bad"><div class="v">${brl(k.vencido)}</div><div class="l">Vencido</div></div>
+      <div class="kpi accent"><div class="v">${k.taxaRecebimento}%</div><div class="l">Recebimento</div></div>
+      <div class="kpi"><div class="v">${k.devedores}</div><div class="l">Devedores</div></div>`;
+    $('finCompetencias').innerHTML = r.porCompetencia.map((m) => `
+      <tr><td class="mono">${esc(m.competencia)}</td><td>${brl(m.previsto)}</td><td>${brl(m.recebido)}</td><td>${brl(m.aberto)}</td><td>${brl(m.vencido)}</td></tr>`).join('') || '<tr><td colspan="5"><div class="empty">Sem cobranças.</div></td></tr>';
+    $('finPlanos').innerHTML = r.porPlano.map((p) => `
+      <tr><td>${esc(p.plano)}</td><td>${p.quantidade}</td><td>${brl(p.previsto)}</td><td>${brl(p.recebido)}</td><td>${brl(p.aberto)}</td></tr>`).join('') || '<tr><td colspan="5"><div class="empty">Sem planos.</div></td></tr>';
+    $('finFormas').innerHTML = r.porForma.map((f) => `
+      <tr><td>${esc(f.forma)}</td><td>${f.quantidade}</td><td>${brl(f.total)}</td></tr>`).join('') || '<tr><td colspan="3"><div class="empty">Nenhum pagamento.</div></td></tr>';
+    $('finDevedores').innerHTML = r.devedores.map((d) => `
+      <tr><td><b>${esc(d.nome)}</b><div class="muted">${esc(d.matricula || '')}</div></td><td>${d.cobrancas}</td><td>${brl(d.aberto)}</td><td>${brl(d.vencido)}</td></tr>`).join('') || '<tr><td colspan="4"><div class="empty">Nenhum devedor.</div></td></tr>';
+  } catch (e) { toast('Falha no financeiro', e.message, 'err'); }
+}
+
+async function baixarFinanceiro(formato) {
+  try {
+    const r = await req(`/api/relatorios/financeiro.${formato}?${periodoFinanceiro()}`);
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `relatorio-financeiro.${formato}`; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast('Falha ao exportar financeiro', e.message, 'err'); }
 }
 
 // ---------- aluno: eventos ----------

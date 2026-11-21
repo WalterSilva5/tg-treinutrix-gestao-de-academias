@@ -28,6 +28,7 @@ aceite. Este documento substitui a leitura solta de `PROXIMOS-PASSOS` e
 | 12 | Sorteios/premiações + eventos + PDF/CSV | ✅ feito | — |
 | 13 | Este plano | ✅ feito | executar as fases abaixo |
 | 14 | Planos, mensalidades e dados extras do aluno | ✅ feito | — |
+| 15 | Relatórios financeiros | ✅ feito | — |
 
 Legenda: ✅ pronto · 🟡 parcial · ⛔ bloqueado por hardware/terceiros.
 
