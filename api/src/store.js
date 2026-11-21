@@ -21,6 +21,7 @@ export const store = {
   eventParticipants: [], // { id, eventId, personId|null, nome, tipo, documento, contato, status, checkinAt }
   raffles: [], // sorteios/premiações programáveis
   raffleDraws: [], // histórico/auditoria de cada sorteio realizado
+  imports: [], // histórico de importações de cadastros
   syncQueue: [], // { id, personId, deviceId, operacao, status, tentativas, payload }
   notifications: [], // { id, key, tipo, titulo, detalhe, createdAt, resolvida, resolvidaPor, resolvidaEm }
   meta: { lastBackupAt: null, nextEnrollid: 1001, dedup: {} },

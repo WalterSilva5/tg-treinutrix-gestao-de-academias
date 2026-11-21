@@ -34,8 +34,7 @@ scripts\iniciar-painel.cmd
 | Cadastro/validação de catracas | `api/src/devices.js` |
 | Persistência SQLite | `api/src/persist.js` |
 | Descoberta/teste de rede | `api/src/discovery.js` |
-| Eventos e sorteios | `api/src/social.js` |
-| Exportação CSV/PDF | `api/src/report.js` |
+| Eventos e sorteios | `api/src/social.js` || Exportação CSV/PDF | `api/src/report.js` |
 | Fotos (disco) | `api/src/photos.js` |
 | Notificações e inativação | `api/src/notify.js` |
 | Backup/restore | `api/src/backup.js` |

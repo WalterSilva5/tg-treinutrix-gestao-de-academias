@@ -20,7 +20,9 @@ Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces
   exportação **CSV/PDF**.
 - **Sorteios/premiações** programáveis (matrícula da sorte, mensalidade em dia,
   participantes de evento) com roleta e entrega do prêmio.
-- Importação de cadastros por CSV/JSON (sem biometria; foto depois).
+- Importação de cadastros por CSV/JSON (mapeamento de colunas, upsert,
+  gravação atômica, fotos e histórico) — sem biometria obrigatória.
+  Ver `docs/IMPORTACAO.md`.
 - Backup automático, restauração, notificações e PWA na rede local.
 - Persistência em **SQLite**, sem Docker.
 

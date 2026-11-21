@@ -23,6 +23,10 @@ function csvCelula(valor) {
   return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+export function csvTabela(headers, linhas) {
+  return `\uFEFF${[headers, ...linhas].map((l) => l.map(csvCelula).join(';')).join('\r\n')}\r\n`;
+}
+
 export function eventoParaCsv(evento, participantes) {
   const linhas = [
     ['Nome', 'Tipo', 'Matrícula', 'Documento', 'Contato', 'Status', 'Código', 'Pago', 'Valor pago', 'Check-in', 'Inscrito em'],

@@ -28,7 +28,7 @@ import {
   normalizarEvento, normalizarSorteio, novoEvento, novaInscricao, elegiveis, sortear, sortearVarios,
   STATUS_PARTICIPANTE, promoverEspera, gerarRecorrencias, eventoPorToken,
 } from './social.js';
-import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento, eventosParaCsv, eventosParaPdf, sorteioParaCsv, sorteioParaPdf } from './report.js';
+import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento, eventosParaCsv, eventosParaPdf, sorteioParaCsv, sorteioParaPdf, csvTabela } from './report.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FRONT_DIR = path.join(HERE, '..', '..', 'front');
@@ -42,6 +42,8 @@ const STATIC_TYPES = {
 const PORT = Number(process.env.API_PORT || 3001);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '';
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 2 * 1024 * 1024);
+const IMPORT_MAX_ROWS = Number(process.env.IMPORT_MAX_ROWS || 20000);
+const IMPORT_MAX_BYTES = Number(process.env.IMPORT_MAX_BYTES || 10 * 1024 * 1024);
 const EVENT_MAX = Number(process.env.EVENT_MAX || 50000);
 const MIN_SCORE = Number(process.env.MIN_SCORE || 0.7);
 const EDGE_URL = process.env.EDGE_URL || `http://localhost:${process.env.EDGE_PORT || 3002}`;
@@ -433,6 +435,208 @@ function normalizeValidity(value) {
   return isDateOnly(value) ? String(value).trim() : parsed.toISOString();
 }
 
+const IMPORT_FIELDS = new Set(['nome', 'matricula', 'tipo', 'enrollid', 'validadeIni', 'validadeFim', 'treinutrix', 'ativo', 'senha', 'foto']);
+
+function mapearLinha(linha, mapeamento) {
+  if (!mapeamento || typeof mapeamento !== 'object') return linha;
+  const out = { ...linha };
+  for (const [campo, origem] of Object.entries(mapeamento)) {
+    if (!IMPORT_FIELDS.has(campo) || !origem) continue;
+    if (linha[origem] !== undefined) out[campo] = linha[origem];
+  }
+  return out;
+}
+
+// Importação de pessoas com prévia, upsert, fotos e gravação atômica.
+function importarPessoas(store, b, { por = 'operador' } = {}) {
+  const linhas = Array.isArray(b.pessoas) ? b.pessoas : null;
+  if (!linhas) throw Object.assign(new Error('pessoas deve ser uma lista'), { status: 400 });
+  if (linhas.length > IMPORT_MAX_ROWS) {
+    throw Object.assign(new Error(`máximo de ${IMPORT_MAX_ROWS} linhas por importação`), { status: 413 });
+  }
+  const confirmar = b.confirmar === true;
+  const modo = String(b.modo || 'IGNORAR').toUpperCase() === 'ATUALIZAR' ? 'ATUALIZAR' : 'IGNORAR';
+  const atomic = b.atomic !== false;
+  const ignorarErros = b.ignorarErros === true;
+
+  const usadosEnroll = new Set([...store.persons.values()].map((p) => Number(p.enrollid)));
+  const usadosMat = new Set([...store.persons.values()].map((p) => p.matricula));
+  let proximoEnroll = Number(store.meta.nextEnrollid) || 1001;
+  const alocarEnroll = () => {
+    while (usadosEnroll.has(proximoEnroll)) proximoEnroll += 1;
+    const n = proximoEnroll;
+    proximoEnroll += 1;
+    usadosEnroll.add(n);
+    return n;
+  };
+  const plano = [];
+  const itens = [];
+  let criados = 0;
+  let atualizados = 0;
+  let ignorados = 0;
+  let erros = 0;
+  const alvos = new Set();
+
+  linhas.forEach((original, i) => {
+    const numero = i + 1;
+    const linha = mapearLinha(original || {}, b.mapeamento);
+    const nome = cleanText(linha.nome, 120);
+    const matricula = cleanText(linha.matricula, 40) || null;
+    try {
+      if (!nome) throw new Error('nome obrigatório');
+      const tipo = TIPOS_PESSOA.includes(linha.tipo) ? linha.tipo : 'ALUNO';
+      const enrollTexto = linha.enrollid !== undefined && linha.enrollid !== null ? String(linha.enrollid).trim() : '';
+      let enrollid = null;
+      if (enrollTexto !== '') {
+        enrollid = Number(enrollTexto);
+        if (!Number.isInteger(enrollid) || enrollid < 1 || enrollid > 99999999) throw new Error('enrollid inválido');
+      }
+      const validadeIni = normalizeValidity(linha.validadeIni);
+      const validadeFim = normalizeValidity(linha.validadeFim);
+      const ativo = linha.ativo === undefined ? true
+        : !['0', 'false', 'nao', 'não', 'inativo', 'n'].includes(String(linha.ativo).trim().toLowerCase());
+      let foto = null;
+      if (linha.foto) {
+        const parsed = parsePhoto(linha.foto);
+        const ok = parsed && validatePhoto(parsed);
+        if (!ok || !ok.ok) throw new Error(ok ? ok.error : 'foto inválida');
+        foto = { buffer: parsed.buffer, ext: ok.ext, mime: ok.mime, bytes: ok.bytes };
+      }
+      const porMatricula = matricula ? [...store.persons.values()].find((p) => p.matricula === matricula) : null;
+      const porEnroll = enrollid !== null ? [...store.persons.values()].find((p) => Number(p.enrollid) === enrollid) : null;
+      const existente = porMatricula || porEnroll || null;
+
+      if (existente) {
+        if (alvos.has(existente.id)) throw new Error('cadastro repetido na mesma importação');
+        alvos.add(existente.id);
+        if (modo === 'IGNORAR') {
+          ignorados += 1;
+          itens.push({ linha: numero, nome, matricula: existente.matricula, status: 'JA_EXISTE', id: existente.id, enrollid: existente.enrollid });
+          return;
+        }
+        plano.push({
+          acao: 'ATUALIZAR', linha: numero, existente, nome, tipo,
+          treinutrix: cleanText(linha.treinutrix, 200) || null,
+          validadeIni, validadeFim, ativo,
+          senha: linha.senha ? String(linha.senha) : null,
+          foto,
+        });
+        atualizados += 1;
+        itens.push({ linha: numero, nome, matricula: existente.matricula, status: 'ATUALIZAR', id: existente.id, enrollid: existente.enrollid });
+        return;
+      }
+
+      const novoEnroll = enrollid !== null ? enrollid : alocarEnroll();
+      if (enrollid !== null) usadosEnroll.add(enrollid);
+      const novaMatricula = matricula || defaultMatricula(tipo, novoEnroll);
+      if (usadosMat.has(novaMatricula)) throw new Error(`matrícula ${novaMatricula} já existe; informe a matrícula correta`);
+      usadosMat.add(novaMatricula);
+      const id = nextId('per');
+      plano.push({
+        acao: 'CRIAR', linha: numero, id, nome, matricula: novaMatricula, tipo,
+        enrollid: novoEnroll, treinutrix: cleanText(linha.treinutrix, 200) || null,
+        validadeIni, validadeFim, ativo,
+        senha: linha.senha ? String(linha.senha) : novaMatricula,
+        foto,
+      });
+      criados += 1;
+      itens.push({ linha: numero, nome, matricula: novaMatricula, status: 'NOVO', id, enrollid: novoEnroll });
+    } catch (e) {
+      erros += 1;
+      itens.push({ linha: numero, nome: nome || null, matricula: matricula || null, status: 'ERRO', erro: e.message });
+    }
+  });
+
+  const resumo = {
+    confirmado: confirmar, modo, atomic, total: linhas.length,
+    criados: confirmar ? criados : 0,
+    atualizados: confirmar ? atualizados : 0,
+    novos: itens.filter((i) => i.status === 'NOVO').length,
+    atualizaveis: itens.filter((i) => i.status === 'ATUALIZAR').length,
+    ignorados, erros,
+    itens: itens.slice(0, 500),
+    truncado: itens.length > 500,
+  };
+
+  if (confirmar && erros > 0 && atomic && !ignorarErros) {
+    throw Object.assign(new Error('importação com erros; nada foi gravado'), { status: 409, relatorio: resumo });
+  }
+  if (!confirmar) return { status: 200, ...resumo };
+
+  // Aplica com rollback em memória se algo inesperado falhar.
+  const backup = {
+    persons: new Map(store.persons),
+    rules: [...store.rules],
+    syncQueue: [...store.syncQueue],
+    meta: { ...store.meta },
+    nextEnrollid: store.meta.nextEnrollid,
+  };
+  const fotosGravadas = [];
+  try {
+    for (const item of plano) {
+      if (item.acao === 'CRIAR') {
+        const person = {
+          id: item.id, nome: item.nome, matricula: item.matricula, tipo: item.tipo,
+          treinutrix: item.treinutrix, enrollid: item.enrollid, ativo: item.ativo,
+          validadeIni: item.validadeIni, validadeFim: item.validadeFim,
+          foto: null, senhaHash: hashPassword(item.senha),
+          criadoEm: new Date().toISOString(),
+        };
+        if (item.foto) {
+          savePhoto(item.id, item.foto.buffer, item.foto.ext);
+          fotosGravadas.push(item.id);
+          person.foto = { ext: item.foto.ext, mime: item.foto.mime, bytes: item.foto.bytes, updatedAt: new Date().toISOString() };
+        }
+        store.persons.set(person.id, person);
+        ensureRules(store, person.id);
+        enqueueSync(store, person);
+      } else {
+        const p = item.existente;
+        p.nome = item.nome;
+        p.tipo = item.tipo;
+        p.treinutrix = item.treinutrix;
+        p.validadeIni = item.validadeIni;
+        p.validadeFim = item.validadeFim;
+        p.ativo = item.ativo;
+        if (item.senha) p.senhaHash = hashPassword(item.senha);
+        if (item.foto) {
+          deletePhoto(p.id);
+          savePhoto(p.id, item.foto.buffer, item.foto.ext);
+          fotosGravadas.push(p.id);
+          p.foto = { ext: item.foto.ext, mime: item.foto.mime, bytes: item.foto.bytes, updatedAt: new Date().toISOString() };
+        }
+        enqueueSync(store, p);
+      }
+    }
+    store.meta.nextEnrollid = Math.max(Number(store.meta.nextEnrollid) || 1001, proximoEnroll);
+    store.imports = store.imports || [];
+    store.imports.unshift({
+      id: nextId('imp'), em: new Date().toISOString(), por,
+      arquivo: cleanText(b.arquivo, 120), modo, atomic,
+      total: linhas.length, criados, atualizados, ignorados, erros,
+      itens: itens.map((i) => (i.status === 'NOVO' ? { ...i, status: 'CRIADO' } : i)).slice(0, 500),
+      truncado: itens.length > 500,
+    });
+    if (store.imports.length > 100) store.imports.length = 100;
+    saveNow(store);
+  } catch (e) {
+    store.persons = backup.persons;
+    store.rules = backup.rules;
+    store.syncQueue = backup.syncQueue;
+    store.meta = backup.meta;
+    for (const id of fotosGravadas) { try { deletePhoto(id); } catch { /* já removida */ } }
+    throw Object.assign(new Error(`importação revertida: ${e.message}`), { status: 500 });
+  }
+
+  // Reflete os status definitivos nos itens retornados.
+  const itensFinal = itens.map((i) => (i.status === 'NOVO' ? { ...i, status: 'CRIADO' } : i));
+  return {
+    status: 200, ...resumo,
+    criados, atualizados,
+    itens: itensFinal.slice(0, 500),
+  };
+}
+
 async function forwardRelease({ deviceId, direcao }) {
   try {
     const res = await fetch(`${EDGE_URL.replace(/\/$/, '')}/open`, {
@@ -663,74 +867,49 @@ async function route(req, res) {
     return send(res, 201, publicPerson(person));
   }
 
-  // Importação em lote de outro sistema (sem biometria): JSON ou CSV já
-  // convertido pelo painel. `confirmar:false` faz a prévia sem gravar nada.
+  // Importação em lote de outro sistema (CSV/JSON convertido pelo painel).
+  // `confirmar:false` faz a prévia; `modo:ATUALIZAR` faz upsert; atômica por padrão.
   if (req.method === 'POST' && url.pathname === '/api/persons/import') {
     gerenciaOnly();
-    const b = await readBody(req);
-    const linhas = Array.isArray(b.pessoas) ? b.pessoas : null;
-    if (!linhas) return send(res, 400, { error: 'pessoas deve ser uma lista' });
-    if (linhas.length > 5000) return send(res, 413, { error: 'máximo de 5000 linhas por importação' });
-    const confirmar = b.confirmar === true;
-    const itens = [];
-    let criados = 0;
-    let ignorados = 0;
-    let erros = 0;
-
-    linhas.forEach((linha, i) => {
-      const numero = i + 1;
-      const nome = cleanText(linha && linha.nome, 120);
-      const matricula = cleanText(linha && linha.matricula, 40);
-      const enrollidTexto = linha && linha.enrollid !== undefined && linha.enrollid !== null
-        ? String(linha.enrollid).trim() : '';
-      try {
-        if (!nome) throw new Error('nome obrigatório');
-        if (enrollidTexto !== '') {
-          const n = Number(enrollidTexto);
-          if (!Number.isInteger(n) || n < 1 || n > 99999999) throw new Error('enrollid inválido');
-        }
-        if (linha && linha.validadeFim) normalizeValidity(linha.validadeFim);
-
-        const jaMatricula = matricula
-          ? [...store.persons.values()].find((p) => p.matricula === matricula) : null;
-        const jaEnrollid = enrollidTexto !== ''
-          ? [...store.persons.values()].find((p) => String(p.enrollid) === enrollidTexto) : null;
-        const existente = jaMatricula || jaEnrollid;
-        if (existente) {
-          ignorados += 1;
-          itens.push({
-            linha: numero, nome, matricula: matricula || existente.matricula,
-            status: 'JA_EXISTE', id: existente.id, enrollid: existente.enrollid,
-          });
-          return;
-        }
-
-        if (!confirmar) {
-          itens.push({ linha: numero, nome, matricula: matricula || null, status: 'NOVO' });
-          return;
-        }
-
-        const person = criarPessoa({ ...linha, nome, matricula: matricula || undefined });
-        store.persons.set(person.id, person);
-        ensureRules(store, person.id);
-        enqueueSync(store, person);
-        criados += 1;
-        itens.push({
-          linha: numero, nome: person.nome, matricula: person.matricula,
-          status: 'CRIADO', id: person.id, enrollid: person.enrollid,
-        });
-      } catch (e) {
-        erros += 1;
-        itens.push({ linha: numero, nome: nome || null, matricula: matricula || null, status: 'ERRO', erro: e.message });
-      }
+    const b = await readBody(req, IMPORT_MAX_BYTES);
+    try {
+      const out = importarPessoas(store, b, { por: user.nome || user.sub });
+      return send(res, out.status || 200, out);
+    } catch (e) {
+      return send(res, e.status || 400, {
+        error: e.message,
+        ...(e.relatorio ? { relatorio: e.relatorio } : {}),
+      });
+    }
+  }
+  if (req.method === 'GET' && url.pathname === '/api/imports') {
+    operadorOnly();
+    return send(res, 200, store.imports || []);
+  }
+  const importacaoRoute = url.pathname.match(/^\/api\/imports\/([^/]+)$/);
+  if (req.method === 'GET' && importacaoRoute) {
+    operadorOnly();
+    const id = safeDecode(importacaoRoute[1]);
+    const rec = (store.imports || []).find((i) => i.id === id);
+    if (!rec) return send(res, 404, { error: 'importacao_not_found' });
+    return send(res, 200, rec);
+  }
+  const importacaoRelatorioRoute = url.pathname.match(/^\/api\/imports\/([^/]+)\/relatorio\.csv$/);
+  if (req.method === 'GET' && importacaoRelatorioRoute) {
+    operadorOnly();
+    const id = safeDecode(importacaoRelatorioRoute[1]);
+    const rec = (store.imports || []).find((i) => i.id === id);
+    if (!rec) return send(res, 404, { error: 'importacao_not_found' });
+    const linhas = (rec.itens || []).map((i) => [
+      i.linha, i.nome || '', i.matricula || '', i.status || '', i.erro || '',
+    ]);
+    const corpo = csvTabela(['Linha', 'Nome', 'Matrícula', 'Status', 'Erro'], linhas);
+    res.writeHead(200, {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="importacao-${id}.csv"`,
+      ...corsHeaders(),
     });
-
-    if (confirmar && criados > 0) markDirty();
-    return send(res, 200, {
-      confirmado: confirmar, total: linhas.length, criados, ignorados, erros,
-      itens: itens.slice(0, 500),
-      truncado: itens.length > 500,
-    });
+    return res.end(corpo);
   }
 
   // Foto do cadastro: ver, enviar e remover.

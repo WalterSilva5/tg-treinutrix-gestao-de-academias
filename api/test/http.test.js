@@ -281,7 +281,7 @@ test('importação em lote: prévia não grava, confirmação cria sem foto e de
   assert.equal(previa.json.itens[2].status, 'ERRO');
   assert.equal((await api('/api/persons', { token: admin })).json.length, antes.length);
 
-  const conf = await api('/api/persons/import', { method: 'POST', token: admin, body: { confirmar: true, pessoas: linhas } });
+  const conf = await api('/api/persons/import', { method: 'POST', token: admin, body: { confirmar: true, ignorarErros: true, pessoas: linhas } });
   assert.equal(conf.status, 200, conf.text);
   assert.equal(conf.json.criados, 1);
   assert.equal(conf.json.ignorados, 1);
@@ -641,4 +641,63 @@ test('sorteio exige confirmacao do agendamento e valida exclusao', async () => {
   assert.deepEqual(excl.json.excluidos, ['per_demo_01']);
   const eleg = await api('/api/sorteios/' + comConf.json.id + '/elegiveis', { token: admin });
   assert.equal(eleg.json.participantes.some((p) => p.personId === 'per_demo_01'), false);
+});
+
+
+test('importacao: upsert, mapeamento, foto, atomica e historico', async () => {
+  const criada = await api('/api/persons', {
+    method: 'POST', token: admin,
+    body: { nome: 'Base Import ' + run, tipo: 'ALUNO', matricula: 'UP' + run, validadeFim: '2026-12-31' },
+  });
+  assert.equal(criada.status, 201, criada.text);
+
+  const up = await api('/api/persons/import', {
+    method: 'POST', token: admin,
+    body: { confirmar: true, modo: 'ATUALIZAR', arquivo: 'upsert.csv', pessoas: [{ nome: 'Base Renomeada ' + run, matricula: 'UP' + run, validadeFim: '2028-01-31' }] },
+  });
+  assert.equal(up.status, 200, up.text);
+  assert.equal(up.json.atualizados, 1);
+  const pessoas1 = (await api('/api/persons', { token: admin })).json;
+  const atualizada = pessoas1.find((p) => p.matricula === 'UP' + run);
+  assert.equal(atualizada.nome, 'Base Renomeada ' + run);
+  assert.equal(atualizada.validadeFim, '2028-01-31');
+
+  const map = await api('/api/persons/import', {
+    method: 'POST', token: admin,
+    body: {
+      confirmar: true,
+      pessoas: [{ 'Nome Completo': 'Mapeado ' + run, CPF: 'MAP' + run }],
+      mapeamento: { nome: 'Nome Completo', matricula: 'CPF' },
+    },
+  });
+  assert.equal(map.status, 200, map.text);
+  assert.equal(map.json.criados, 1);
+  assert.ok((await api('/api/persons', { token: admin })).json.some((p) => p.matricula === 'MAP' + run));
+
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64');
+  const comFoto = await api('/api/persons/import', {
+    method: 'POST', token: admin,
+    body: { confirmar: true, pessoas: [{ nome: 'Com Foto ' + run, matricula: 'FOT' + run, foto: 'data:image/jpeg;base64,' + jpeg }] },
+  });
+  assert.equal(comFoto.status, 200, comFoto.text);
+  const pessoaFoto = (await api('/api/persons', { token: admin })).json.find((p) => p.matricula === 'FOT' + run);
+  const foto = await fetch(base + '/api/persons/' + pessoaFoto.id + '/photo', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(foto.status, 200);
+  assert.equal(foto.headers.get('content-type'), 'image/jpeg');
+
+  const atomica = await api('/api/persons/import', {
+    method: 'POST', token: admin,
+    body: { confirmar: true, pessoas: [{ nome: 'Atomico ' + run, matricula: 'ATM' + run }, { nome: '' }] },
+  });
+  assert.equal(atomica.status, 409, atomica.text);
+  assert.ok(atomica.json.relatorio);
+  assert.equal((await api('/api/persons', { token: admin })).json.some((p) => p.matricula === 'ATM' + run), false);
+
+  const hist = await api('/api/imports', { token: admin });
+  assert.equal(hist.status, 200);
+  assert.ok(hist.json.length >= 3);
+  const rec = hist.json[0];
+  const rel = await fetch(base + '/api/imports/' + rec.id + '/relatorio.csv', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(rel.status, 200);
+  assert.match(await rel.text(), /Linha;Nome;Matr/);
 });

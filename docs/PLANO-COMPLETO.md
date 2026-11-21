@@ -23,7 +23,7 @@ aceite. Este documento substitui a leitura solta de `PROXIMOS-PASSOS` e
 | 7 | Doc `validacoes_pendentes.md` | ✅ feito | executar o roteiro no ambiente real |
 | 8 | Cadastro de catracas no painel Sistema | ✅ feito | diagnóstico ao vivo e edição sem reiniciar edge |
 | 9 | SQLite por padrão, sem Docker | ✅ feito | manutenção/compactação e teste de restore em máquina limpa |
-| 10 | Importar cadastros sem biometria | 🟡 parcial | XLSX não (zero-dep), fotos, upsert, histórico, rollback |
+| 10 | Importar cadastros sem biometria | ✅ feito | XLSX não por decisão zero-dep |
 | 11 | Scripts `.bat`/`.sh` para restaurar admin | ✅ feito | teste do modo offline e serviço |
 | 12 | Sorteios/premiações + eventos + PDF/CSV | ✅ feito | — |
 | 13 | Este plano | ✅ feito | executar as fases abaixo |
@@ -189,14 +189,19 @@ sorteio simultâneo, agendamento confirmado, resultado CSV/PDF e tela pública
 **Aceite:** sortear duas vezes sem apagar histórico; duas abas não sorteiam em
 duplicidade; resultado exportável. ✅
 
-### Fase 4 — Importação robusta (1–2 dias)
+### Fase 4 — Importação robusta (1–2 dias) — ✅ concluída em 2026-11-20
 
 1. Mapeamento de colunas e `upsert`.
 2. Rollback/transação e relatório de erros.
 3. Fotos opcionais e histórico.
 
+**Entregue:** mapeamento na UI e via `mapeamento`, modos `IGNORAR`/`ATUALIZAR`,
+gravação atômica com `409` + relatório, `ignorarErros` para importar válidos,
+fotos por matrícula/cartão/nome, histórico (`imports`) com CSV de erros,
+limites 20k/10 MB e rollback em memória. Documentado em `docs/IMPORTACAO.md`.
+
 **Aceite:** importar 1000 linhas com 3 erros, receber relatório, nenhum cadastro
-parcial; repetir a importação sem duplicar.
+parcial; repetir a importação sem duplicar. ✅
 
 ### Fase 5 — Hardware real (bancada; 1–2 dias + dependências)
 

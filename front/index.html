@@ -609,13 +609,30 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
         <div class="card-head"><div><h2>Importar cadastros</h2><p class="sub">CSV ou JSON de outro sistema, sem biometria</p></div>
           <div class="card-head-actions"><button class="btn ghost sm" onclick="baixarModeloImport()">Baixar modelo CSV</button></div></div>
         <p class="help">Colunas: <code>nome;matricula;tipo;enrollid;validadeFim;treinutrix;ativo</code>.
-          A importação não traz foto nem rosto: envie a foto depois em <b>Pessoas → Foto</b> para o leitor facial.</p>
+          Mapeie colunas com nomes diferentes, escolha importar/atualizar e anexe fotos por matrícula/enrollid.
+          A foto é opcional; sem ela o cadastro entra no leitor sem biometria.</p>
         <div class="form-actions" style="margin-bottom:10px">
           <input type="file" id="impFile" accept=".csv,.json,text/csv,application/json" onchange="lerArquivoImport()">
+          <select id="impModo" title="Duplicados">
+            <option value="IGNORAR">Ignorar duplicados</option>
+            <option value="ATUALIZAR">Atualizar existentes (upsert)</option>
+          </select>
+          <input type="file" id="impFotos" accept="image/*" multiple onchange="carregarFotosImport()">
           <button class="btn ghost sm" onclick="previaImport()">Prévia</button>
           <button class="btn sm" id="impConfirmar" onclick="confirmarImport()" disabled>Importar</button>
         </div>
+        <details id="impMapaBox" class="hidden" style="margin-bottom:10px">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2)">Mapear colunas do arquivo</summary>
+          <div id="impMapa" class="form-grid" style="margin-top:8px"></div>
+          <div class="form-actions"><button class="btn ghost sm" onclick="aplicarMapeamentoImport()">Aplicar mapeamento</button></div>
+        </details>
         <div id="impResultado" class="help"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Histórico de importações</h2><p class="sub">Últimas 100 execuções e relatório de erros</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarImportacoes()">Atualizar</button></div></div>
+        <div class="list" id="listaImportacoes"></div>
       </div>
 
       <div class="card">
@@ -1258,6 +1275,7 @@ async function carregarSistema() {
   await loadPessoas(s.inadimplentes || []);
   await loadUsuarios();
   await loadBackups(); await loadNotifications();
+  await carregarImportacoes();
 }
 let PESSOAS_CACHE = [];
 let PESSOAS_INAD = new Set();
@@ -1265,11 +1283,24 @@ let filtroPessoa = 'TODOS';
 
 // ---------- importação em lote (CSV/JSON, sem biometria) ----------
 let importPessoas = [];
+let importRaw = [];
+let importHeaders = [];
+let importMapa = {};
+let importArquivo = '';
+const importFotos = {};
+const IMP_CAMPOS = [
+  ['', '— ignorar —'], ['nome', 'Nome'], ['matricula', 'Matrícula'], ['tipo', 'Tipo'],
+  ['enrollid', 'Cartão/enrollid'], ['validadeIni', 'Validade início'], ['validadeFim', 'Validade fim'],
+  ['treinutrix', 'Treinutrix'], ['ativo', 'Ativo'], ['senha', 'Senha'],
+];
 const IMP_ALIAS = {
-  nome: 'nome', name: 'nome', matricula: 'matricula', tipo: 'tipo',
-  enrollid: 'enrollid', cartao: 'enrollid', validadefim: 'validadeFim',
-  validade: 'validadeFim', vencimento: 'validadeFim', treinutrix: 'treinutrix',
-  ativo: 'ativo', status: 'ativo', senha: 'senha',
+  nome: 'nome', name: 'nome', 'nome completo': 'nome', 'nome do aluno': 'nome',
+  matricula: 'matricula', tipo: 'tipo',
+  enrollid: 'enrollid', cartao: 'enrollid', 'numero do cartao': 'enrollid',
+  validadefim: 'validadeFim', validade: 'validadeFim', vencimento: 'validadeFim',
+  'data de vencimento': 'validadeFim', 'data vencimento': 'validadeFim',
+  validadeini: 'validadeIni', 'inicio validade': 'validadeIni',
+  treinutrix: 'treinutrix', ativo: 'ativo', status: 'ativo', senha: 'senha',
   contato: 'contato', telefone: 'contato', email: 'contato', documento: 'documento', cpf: 'documento',
 };
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -1289,73 +1320,197 @@ function dividirLinhaCsv(linha, delim) {
   return out;
 }
 
-function csvParaPessoas(texto) {
-  const linhas = String(texto || '').replace(/\r/g, '').split('\n').filter((l) => l.trim());
-  if (linhas.length < 2) return [];
+function lerCsvBruto(texto) {
+  const linhas = String(texto || '').replace(/^\uFEFF/, '').replace(/\r/g, '').split('\n').filter((l) => l.trim());
+  if (linhas.length < 2) return { headers: [], rows: [] };
   const delim = (linhas[0].match(/;/g) || []).length >= (linhas[0].match(/,/g) || []).length ? ';' : ',';
-  const colunas = dividirLinhaCsv(linhas[0], delim).map((c) => IMP_ALIAS[semAcento(c)] || null);
-  return linhas.slice(1).map((linha) => {
+  const headers = dividirLinhaCsv(linhas[0], delim).map((h) => h.trim()).filter(Boolean);
+  const rows = linhas.slice(1).map((linha) => {
     const valores = dividirLinhaCsv(linha, delim);
-    const pessoa = {};
-    colunas.forEach((campo, i) => { if (campo) pessoa[campo] = String(valores[i] ?? '').trim(); });
-    if (!pessoa.enrollid) delete pessoa.enrollid;
-    if (pessoa.ativo !== undefined) {
-      pessoa.ativo = !['0', 'false', 'nao', 'inativo', 'n'].includes(semAcento(pessoa.ativo));
-    }
-    return pessoa;
-  }).filter((p) => p.nome || p.matricula);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = String(valores[i] ?? '').trim(); });
+    return obj;
+  });
+  return { headers, rows };
 }
+
+function mapaPadrao(headers) {
+  const mapa = {};
+  headers.forEach((h) => {
+    const campo = IMP_ALIAS[semAcento(h)];
+    if (campo) mapa[h] = campo;
+  });
+  return mapa;
+}
+
+function renderMapaImport() {
+  $('impMapa').innerHTML = importHeaders.map((h) => `
+    <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);margin-bottom:4px">${esc(h)}</span>
+      <select data-src="${esc(h)}">
+        ${IMP_CAMPOS.map(([v, label]) => `<option value="${v}" ${importMapa[h] === v ? 'selected' : ''}>${esc(label)}</option>`).join('')}
+      </select></label>`).join('');
+  $('impMapaBox').classList.toggle('hidden', importHeaders.length === 0);
+}
+
+function aplicarMapaImport() {
+  const mapa = {};
+  $('impMapa').querySelectorAll('select[data-src]').forEach((sel) => {
+    if (sel.value) mapa[sel.dataset.src] = sel.value;
+  });
+  importMapa = mapa;
+  importPessoas = importRaw.map((raw) => {
+    const p = {};
+    for (const [origem, campo] of Object.entries(mapa)) {
+      if (raw[origem] !== undefined && raw[origem] !== '') p[campo] = raw[origem];
+    }
+    if (!p.enrollid) delete p.enrollid;
+    if (p.ativo !== undefined) p.ativo = !['0', 'false', 'nao', 'inativo', 'n'].includes(semAcento(p.ativo));
+    return p;
+  }).filter((p) => p.nome || p.matricula);
+  $('impConfirmar').disabled = true;
+  $('impResultado').textContent = `${importPessoas.length} linha(s) pronta(s) com o mapeamento. Clique em Prévia.`;
+}
+
+function aplicarMapeamentoImport() { aplicarMapaImport(); }
 
 async function lerArquivoImport() {
   const arquivo = $('impFile').files[0];
   if (!arquivo) return;
+  importArquivo = arquivo.name;
   try {
     const texto = await arquivo.text();
     if (/\.json$/i.test(arquivo.name)) {
       const dados = JSON.parse(texto);
       importPessoas = Array.isArray(dados) ? dados : (Array.isArray(dados.pessoas) ? dados.pessoas : []);
+      importRaw = []; importHeaders = []; renderMapaImport();
     } else {
-      importPessoas = csvParaPessoas(texto);
+      const { headers, rows } = lerCsvBruto(texto);
+      importHeaders = headers;
+      importRaw = rows;
+      importMapa = mapaPadrao(headers);
+      renderMapaImport();
+      aplicarMapaImport();
     }
-    $('impConfirmar').disabled = true;
-    $('impResultado').textContent = `${importPessoas.length} linha(s) lida(s). Clique em Prévia para validar sem gravar.`;
+    $('impResultado').textContent = `${importPessoas.length} linha(s) lida(s). Ajuste o mapeamento se precisar e clique em Prévia.`;
   } catch (e) {
-    importPessoas = [];
+    importPessoas = []; importRaw = []; importHeaders = [];
+    renderMapaImport();
     $('impResultado').textContent = 'Arquivo inválido: ' + e.message;
   }
 }
 
+async function carregarFotosImport() {
+  const arquivos = [...($('impFotos').files || [])];
+  if (!arquivos.length) return;
+  let lidas = 0;
+  for (const f of arquivos) {
+    try {
+      const data = await comprimirFoto(f);
+      const chave = f.name.replace(/\.[^.]+$/, '').trim().toLowerCase();
+      importFotos[chave] = data;
+      lidas += 1;
+    } catch (e) { toast('Foto ignorada', `${f.name}: ${e.message}`, 'err'); }
+  }
+  $('impResultado').textContent = `${lidas} foto(s) carregada(s). Elas serão ligadas por matrícula, cartão ou nome do arquivo.`;
+}
+
+function linhasComFotos() {
+  return importPessoas.map((p) => {
+    const copia = { ...p };
+    if (!copia.foto) {
+      const chaves = [copia.matricula, copia.enrollid, copia.nome].filter(Boolean).map((x) => String(x).toLowerCase());
+      const achou = chaves.map((k) => importFotos[k]).find(Boolean);
+      if (achou) copia.foto = achou;
+    }
+    return copia;
+  });
+}
+
 function renderResultadoImport(r) {
-  const rotulo = { NOVO: 'novo', CRIADO: 'criado', JA_EXISTE: 'já existe', ERRO: 'erro' };
-  const cls = { NOVO: 'neutral', CRIADO: 'ok', JA_EXISTE: 'warn', ERRO: 'bad' };
+  const rotulo = { NOVO: 'novo', CRIADO: 'criado', ATUALIZAR: 'atualizar', ATUALIZADO: 'atualizado', JA_EXISTE: 'já existe', ERRO: 'erro' };
+  const cls = { NOVO: 'neutral', CRIADO: 'ok', ATUALIZAR: 'warn', ATUALIZADO: 'ok', JA_EXISTE: 'neutral', ERRO: 'bad' };
   const itens = (r.itens || []).slice(0, 20).map((i) => `
     <div class="list-item"><div><div class="t">${esc(i.nome || '(sem nome)')}</div>
     <div class="d">linha ${i.linha}${i.matricula ? ' · matrícula ' + esc(i.matricula) : ''}${i.erro ? ' · ' + esc(i.erro) : ''}</div></div>
     <span class="badge ${cls[i.status] || 'neutral'}">${rotulo[i.status] || esc(i.status)}</span></div>`).join('');
-  $('impResultado').innerHTML = `<b>${r.total}</b> linha(s): ${r.criados} criada(s), ${r.ignorados} já existente(s), ${r.erros} erro(s).`
+  const novos = r.novos ?? r.criados ?? 0;
+  const atualizaveis = r.atualizaveis ?? r.atualizados ?? 0;
+  $('impResultado').innerHTML = `<b>${r.total}</b> linha(s): ${novos} nova(s), ${atualizaveis} para atualizar, ${r.ignorados} já existente(s), ${r.erros} erro(s).`
+    + (r.atomic ? ' A gravação é atômica: com erro, nada é gravado.' : '')
     + (r.truncado ? ' Mostrando os primeiros 20.' : '') + `<div class="list" style="margin-top:8px">${itens}</div>`;
-  $('impConfirmar').disabled = !(r.itens || []).some((i) => i.status === 'NOVO');
+  $('impConfirmar').disabled = (novos + atualizaveis) === 0;
+}
+
+async function chamarImport(body) {
+  const r = await req('/api/persons/import', { method: 'POST', body: JSON.stringify(body) });
+  const json = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, json };
 }
 
 async function previaImport() {
   if (!importPessoas.length) return toast('Nenhuma linha', 'Escolha um CSV ou JSON primeiro', 'err');
   try {
-    const r = await jpost('/api/persons/import', { confirmar: false, pessoas: importPessoas });
-    renderResultadoImport(r);
+    const r = await chamarImport({
+      confirmar: false, pessoas: linhasComFotos(), modo: $('impModo').value, arquivo: importArquivo,
+    });
+    if (!r.ok) throw new Error(r.json.error || r.status);
+    renderResultadoImport(r.json);
+    if (r.json.erros) toast('Prévia com erros', `${r.json.erros} linha(s) inválida(s)`, 'warn');
   } catch (e) { toast('Falha na prévia', e.message, 'err'); }
 }
 
 async function confirmarImport() {
   if (!importPessoas.length) return;
+  const base = {
+    confirmar: true, pessoas: linhasComFotos(), modo: $('impModo').value,
+    arquivo: importArquivo, atomic: true,
+  };
   try {
-    const r = await jpost('/api/persons/import', { confirmar: true, pessoas: importPessoas });
-    renderResultadoImport(r);
-    toast('Importação concluída', `${r.criados} criada(s) · ${r.ignorados} já existia(m) · ${r.erros} erro(s)`, r.erros ? 'warn' : 'ok');
+    let r = await chamarImport(base);
+    if (r.status === 409 && r.json.relatorio) {
+      renderResultadoImport(r.json.relatorio);
+      if (!confirm(`${r.json.relatorio.erros} linha(s) com erro. Nada foi gravado. Importar apenas as linhas válidas?`)) return;
+      r = await chamarImport({ ...base, ignorarErros: true });
+    }
+    if (!r.ok) {
+      if (r.json.relatorio) renderResultadoImport(r.json.relatorio);
+      throw new Error(r.json.error || r.status);
+    }
+    renderResultadoImport(r.json);
+    toast('Importação concluída', `${r.json.criados} criada(s) · ${r.json.atualizados} atualizada(s) · ${r.json.erros} erro(s)`, r.json.erros ? 'warn' : 'ok');
     $('impConfirmar').disabled = true;
-    importPessoas = [];
-    $('impFile').value = '';
+    importPessoas = []; importRaw = []; importHeaders = [];
+    for (const k of Object.keys(importFotos)) delete importFotos[k];
+    $('impFile').value = ''; $('impFotos').value = '';
+    renderMapaImport();
     carregarSistema();
+    carregarImportacoes();
   } catch (e) { toast('Falha na importação', e.message, 'err'); }
+}
+
+async function carregarImportacoes() {
+  try {
+    const lista = await jget('/api/imports');
+    $('listaImportacoes').innerHTML = lista.map((i) => `
+      <div class="list-item"><div><div class="t">${esc(i.arquivo || 'importação')} · ${esc(i.modo)}</div>
+      <div class="d">${esc(dataHoraCurta(i.em))} · ${i.criados} criado(s), ${i.atualizados} atualizado(s), ${i.ignorados} ignorado(s), ${i.erros} erro(s) · por ${esc(i.por || '—')}</div></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="badge ${i.erros ? 'warn' : 'ok'}">${i.erros ? i.erros + ' erro(s)' : 'ok'}</span>
+        <button class="btn ghost sm" onclick="baixarRelatorioImportacao('${esc(i.id)}')">CSV</button>
+      </div></div>`).join('') || '<div class="empty">Nenhuma importação realizada.</div>';
+  } catch (e) { $('listaImportacoes').innerHTML = '<div class="empty">Histórico indisponível.</div>'; }
+}
+
+async function baixarRelatorioImportacao(id) {
+  try {
+    const r = await req(`/api/imports/${encodeURIComponent(id)}/relatorio.csv`);
+    if (!r.ok) throw new Error('relatório indisponível');
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `importacao-${id}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast('Falha no relatório', e.message, 'err'); }
 }
 
 function baixarModeloImport() {

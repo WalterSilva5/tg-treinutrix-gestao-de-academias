@@ -16,6 +16,7 @@ export function serialize(store, at = new Date()) {
     eventParticipants: store.eventParticipants || [],
     raffles: store.raffles || [],
     raffleDraws: store.raffleDraws || [],
+    imports: store.imports || [],
     syncQueue: store.syncQueue,
     notifications: store.notifications,
     meta: store.meta,
@@ -26,7 +27,7 @@ export function serialize(store, at = new Date()) {
 // formato não for compatível (restore/persistência nunca sobrescreve no escuro).
 export function hydrate(store, data) {
   if (!data || data.v !== STATE_VERSION) throw new Error('estado incompatível');
-  for (const k of ['persons', 'devices', 'users', 'rules', 'events', 'syncQueue', 'notifications', 'socialEvents', 'eventParticipants', 'raffles', 'raffleDraws']) {
+  for (const k of ['persons', 'devices', 'users', 'rules', 'events', 'syncQueue', 'notifications', 'socialEvents', 'eventParticipants', 'raffles', 'raffleDraws', 'imports']) {
     if (data[k] !== undefined && !Array.isArray(data[k])) throw new Error(`estado corrompido: ${k}`);
   }
   if (!Array.isArray(data.persons) || !Array.isArray(data.devices)) throw new Error('estado incompatível');
@@ -41,6 +42,7 @@ export function hydrate(store, data) {
   store.eventParticipants = data.eventParticipants || [];
   store.raffles = data.raffles || [];
   store.raffleDraws = data.raffleDraws || [];
+  store.imports = data.imports || [];
   store.syncQueue = data.syncQueue || [];
   store.notifications = data.notifications || [];
   store.meta = data.meta || { lastBackupAt: null };

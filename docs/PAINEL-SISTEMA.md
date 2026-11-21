@@ -67,6 +67,7 @@ Base de padrões: `wsi-invest-ai` (`back/src/modules/admin` overview,
 | `GET /api/device-catalog` · `POST/PATCH/DELETE /api/devices` | catálogo e cadastro de catracas |
 | `POST /api/devices/:id/test` · `POST /api/devices/discover` | teste TCP e detecção na rede |
 | `POST /api/persons/import` | importação em lote (prévia/confirmação) |
+| `GET /api/imports` · `.../relatorio.csv` | histórico e relatório de importações |
 | `POST /api/release` | liberação manual: evento + `POST /open` no edge |
 | `GET /api/notifications` | `alerts/list` |
 | `POST /api/notifications/evaluate` | `alerts/evaluate` (aqui sem tenant) |

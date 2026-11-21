@@ -10,7 +10,8 @@ Execução manual no navegador interno em **2026-11-20**, com a API em
 - [x] Console do navegador sem erros após navegar por todas as abas.
 - [x] **Sistema → Catracas**: lista, botões Testar/Editar/Excluir, campo de
   detecção e formulário de cadastro presentes.
-- [x] **Sistema → Importar cadastros**: input CSV/JSON, prévia e confirmação.
+- [x] **Sistema → Importar cadastros**: mapeamento de colunas, prévia, `upsert`,
+  gravação atômica, fotos por matrícula/cartão, histórico e relatório CSV.
 - [x] **Eventos**: criar/editar/cancelar/duplicar e repetir (semanal/mensal).
 - [x] **Eventos**: inscrever externo, lista de espera, check-in por código,
   pagamento manual e importação CSV de participantes.
