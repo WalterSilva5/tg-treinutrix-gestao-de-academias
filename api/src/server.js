@@ -467,6 +467,22 @@ function normalizarPeso(value) {
   return Math.round(n * 10) / 10;
 }
 
+// Registra o peso no histórico da pessoa (uma entrada por dia/valor).
+function registrarPeso(p, peso, por = 'operador', em = new Date()) {
+  if (peso === undefined || peso === null) return false;
+  const valor = Number(peso);
+  if (!Number.isFinite(valor)) return false;
+  const quando = em instanceof Date ? em : new Date(em);
+  if (Number.isNaN(quando.getTime())) return false;
+  const hist = Array.isArray(p.pesoHistorico) ? p.pesoHistorico : (p.pesoHistorico = []);
+  const ultimo = hist[hist.length - 1];
+  const dia = localDayKey(quando);
+  if (ultimo && Number(ultimo.peso) === valor && localDayKey(new Date(ultimo.em)) === dia) return false;
+  hist.push({ em: quando.toISOString(), peso: Math.round(valor * 10) / 10, por });
+  if (hist.length > 500) hist.splice(0, hist.length - 500);
+  return true;
+}
+
 function safeDecode(value) {
   try { return decodeURIComponent(value); } catch { return null; }
 }
@@ -507,7 +523,7 @@ function uniqueEnrollid() {
 
 // Valida e monta a pessoa (não grava). Usado pelo cadastro unitário e pela
 // importação em lote, para as duas rotas terem exatamente as mesmas regras.
-function criarPessoa(b) {
+function criarPessoa(b, { por = 'operador' } = {}) {
   const nome = cleanText(b.nome, 120);
   if (!nome) throw fail(400, 'nome obrigatório');
   const tipo = TIPOS_PESSOA.includes(b.tipo) ? b.tipo : 'ALUNO';
@@ -558,6 +574,7 @@ function criarPessoa(b) {
     mustChangePassword: !b.senha,
     criadoEm: new Date().toISOString(),
   };
+  if (person.peso != null) registrarPeso(person, person.peso, por, person.criadoEm);
   if (b.foto) {
     const parsed = parsePhoto(b.foto);
     const ok = parsed && validatePhoto(parsed);
@@ -756,6 +773,7 @@ function importarPessoas(store, b, { por = 'operador' } = {}) {
           tokenVersion: 0, mustChangePassword: !item.senha,
           criadoEm: new Date().toISOString(),
         };
+        if (person.peso != null) registrarPeso(person, person.peso, por, person.criadoEm);
         if (item.foto) {
           savePhoto(item.id, item.foto.buffer, item.foto.ext);
           fotosGravadas.push(item.id);
@@ -780,6 +798,7 @@ function importarPessoas(store, b, { por = 'operador' } = {}) {
         p.observacoes = item.observacoes;
         p.objetivo = item.objetivo;
         p.peso = item.peso;
+        if (item.peso != null) registrarPeso(p, item.peso, por);
         p.problemasSaude = item.problemasSaude;
         p.necessidadesEspeciais = item.necessidadesEspeciais;
         p.validadeIni = item.validadeIni;
@@ -1093,7 +1112,7 @@ async function route(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/persons') {
     operadorOnly();
     const b = await readBody(req);
-    const person = criarPessoa(b);
+    const person = criarPessoa(b, { por: user.nome || user.sub });
     store.persons.set(person.id, person);
     // Sem regra não há acesso: o cadastro já nasce liberado no horário padrão.
     ensureRules(store, person.id);
@@ -1272,7 +1291,15 @@ async function route(req, res) {
     if (b.cep !== undefined) p.cep = cleanText(b.cep, 20) || null;
     if (b.observacoes !== undefined) p.observacoes = cleanText(b.observacoes, 1000) || null;
     if (b.objetivo !== undefined) p.objetivo = cleanText(b.objetivo, 200) || null;
-    if (b.peso !== undefined) p.peso = normalizarPeso(b.peso);
+    if (b.peso !== undefined) {
+      const novo = normalizarPeso(b.peso);
+      if (novo !== null) {
+        p.peso = novo;
+        registrarPeso(p, novo, user.nome || user.sub);
+      } else {
+        p.peso = null;
+      }
+    }
     if (b.problemasSaude !== undefined) p.problemasSaude = cleanText(b.problemasSaude, 1000) || null;
     if (b.necessidadesEspeciais !== undefined) p.necessidadesEspeciais = cleanText(b.necessidadesEspeciais, 1000) || null;
     if (b.senha) {
@@ -1370,6 +1397,12 @@ async function route(req, res) {
     }
     timeline.sort((a, b) => String(b.em).localeCompare(String(a.em)));
 
+    const pesos = Array.isArray(p.pesoHistorico) ? p.pesoHistorico.map((x) => ({ ...x })) : [];
+    if (!pesos.length && p.peso != null) {
+      pesos.push({ em: p.criadoEm || new Date().toISOString(), peso: p.peso, por: null });
+    }
+    pesos.sort((a, b) => String(a.em).localeCompare(String(b.em)));
+
     return send(res, 200, {
       pessoa: publicPerson(p),
       ficha: {
@@ -1384,12 +1417,13 @@ async function route(req, res) {
         ultimaVisita: eventos.find((e) => e.decisao === 'ALLOW')?.timestamp || null,
         frequencia: diasFrequentados(store.events, id),
         planosAtivos: planosAtivos(store, id).map((x) => x.nome),
+        pesoAtual: p.peso ?? (pesos.length ? pesos[pesos.length - 1].peso : null),
         aberto: cobrancas
           .filter((c) => c.status === 'PENDENTE' || c.status === 'ATRASADO')
           .reduce((s, c) => s + Number(c.valor || 0), 0),
       },
       timeline: timeline.slice(0, 150),
-      assinaturas, cobrancas, contatos, reservas,
+      assinaturas, cobrancas, contatos, reservas, pesos,
     });
   }
 
@@ -2111,7 +2145,7 @@ async function route(req, res) {
       const pessoa = criarPessoa({
         nome: p.nome, tipo: b.tipo === 'VISITANTE' ? 'VISITANTE' : 'ALUNO',
         matricula: b.matricula, senha: b.senha, validadeFim: b.validadeFim,
-      });
+      }, { por: user.nome || user.sub });
       store.persons.set(pessoa.id, pessoa);
       ensureRules(store, pessoa.id);
       enqueueSync(store, pessoa);
@@ -2623,7 +2657,7 @@ async function route(req, res) {
       const p = criarPessoa({
         nome: cleanText(b.name, 120) || `Usuário ${enrollid}`,
         tipo: 'ALUNO', enrollid, ativo: true,
-      });
+      }, { por: user.nome || user.sub });
       store.persons.set(p.id, p);
       ensureRules(store, p.id);
       enqueueSync(store, p);

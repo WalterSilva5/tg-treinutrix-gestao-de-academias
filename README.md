@@ -22,6 +22,8 @@ Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces
 - Catraca Topdata/leitor facial + controladores HTTP, com detecção na rede e
   teste de conexão.
 - Cadastro de pessoas, planos, regras de horário e frequência por dias distintos.
+- **Ficha do aluno** com objetivo, saúde, necessidades especiais, histórico de
+  peso com gráfico e linha do tempo (acessos, planos, cobranças e aulas).
 - **Eventos** com inscrições de alunos, visitantes e externos, check-in e
   exportação **CSV/PDF**.
 - **Sorteios/premiações** programáveis (matrícula da sorte, mensalidade em dia,

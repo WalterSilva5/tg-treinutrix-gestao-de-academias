@@ -135,6 +135,9 @@ tbody tr:hover{background:#fcfcfb}
 .acoes-linha td{background:var(--surface-hover);padding-top:8px;padding-bottom:8px}
 .acoes-wrap{display:flex;flex-wrap:wrap;gap:6px}
 .modal.larga{max-width:720px}
+.peso-chart{margin:6px 0 12px;background:var(--surface-hover);border:1px solid var(--line);border-radius:12px;padding:8px}
+.peso-chart svg{display:block;width:100%;height:auto;overflow:visible}
+.peso-chart text{fill:var(--ink-3);font-size:10px}
 .ficha-resumo{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px}
 .ficha-resumo .badge{font-size:11px}
 .mono{font-variant-numeric:tabular-nums}
@@ -928,6 +931,10 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
       <button class="btn" onclick="salvarFicha()">Salvar ficha</button>
       <button class="btn ghost" onclick="fecharFicha()">Fechar</button>
     </div>
+    <h3 style="font-size:14px;margin:20px 0 8px">Histórico de peso</h3>
+    <p class="help" id="fichaPesoResumo" style="margin:0 0 8px"></p>
+    <div class="peso-chart" id="fichaPesoChart"></div>
+    <div class="list" id="fichaPesoHistorico"></div>
     <h3 style="font-size:14px;margin:20px 0 10px">Histórico</h3>
     <div class="list" id="fichaHistorico"></div>
   </div>
@@ -2371,7 +2378,9 @@ async function abrirFicha(id) {
         ? `<span class="badge bad">${brl(h.resumo.aberto)} em aberto</span>`
         : '<span class="badge ok">sem débito</span>',
       ...(h.resumo.planosAtivos || []).map((n) => `<span class="badge accent">${esc(n)}</span>`),
+      h.resumo.pesoAtual != null ? `<span class="badge info">${Number(h.resumo.pesoAtual).toFixed(1).replace('.', ',')} kg</span>` : '',
     ].join('');
+    desenharPeso(h.pesos || []);
     const icone = { CADASTRO: '◎', ACESSO: '⇄', PLANO: '▣', COBRANCA: 'R$', CONTATO: '☎', AULA: '★' };
     $('fichaHistorico').innerHTML = (h.timeline || []).map((t) => `
       <div class="list-item"><div><div class="t">${icone[t.tipo] || '•'} ${esc(t.titulo)}</div>
@@ -2389,9 +2398,10 @@ function fecharFicha() {
 
 async function salvarFicha() {
   if (!fichaAtualId) return;
+  const id = fichaAtualId;
   const peso = $('fichaPeso').value.trim();
   try {
-    await jpatch(`/api/persons/${encodeURIComponent(fichaAtualId)}`, {
+    await jpatch(`/api/persons/${encodeURIComponent(id)}`, {
       objetivo: $('fichaObjetivo').value.trim() || null,
       peso: peso === '' ? null : Number(peso.replace(',', '.')),
       problemasSaude: $('fichaSaude').value.trim() || null,
@@ -2399,9 +2409,53 @@ async function salvarFicha() {
       observacoes: $('fichaObs').value.trim() || null,
     });
     toast('Ficha atualizada', '');
-    fecharFicha();
     carregarAlunos();
+    await abrirFicha(id);
   } catch (e) { toast('Falha ao salvar ficha', e.message, 'err'); }
+}
+
+function desenharPeso(pesos) {
+  const resumo = $('fichaPesoResumo');
+  const chart = $('fichaPesoChart');
+  const lista = $('fichaPesoHistorico');
+  if (!resumo || !chart || !lista) return;
+  const fmt = (n) => Number(n).toFixed(1).replace('.', ',');
+  if (!pesos.length) {
+    resumo.textContent = 'Nenhum peso registrado. Preencha o peso acima e salve.';
+    chart.innerHTML = '';
+    lista.innerHTML = '';
+    return;
+  }
+  const atual = pesos[pesos.length - 1];
+  const primeiro = pesos[0];
+  const dif = Number(atual.peso) - Number(primeiro.peso);
+  resumo.textContent = `Atual: ${fmt(atual.peso)} kg` + (pesos.length > 1
+    ? ` · variação desde ${dataCurta(primeiro.em)}: ${dif > 0 ? '+' : ''}${fmt(dif)} kg`
+    : ' · primeiro registro');
+  if (pesos.length < 2) {
+    chart.innerHTML = '<div class="help" style="padding:8px">Registre o peso em outra data para ver a evolução.</div>';
+  } else {
+    const w = 560, h = 120, pad = 18;
+    const vals = pesos.map((x) => Number(x.peso));
+    let min = Math.min(...vals), max = Math.max(...vals);
+    if (max === min) { min -= 1; max += 1; }
+    const span = max - min;
+    const pts = vals.map((v, i) => {
+      const x = pad + (i * (w - 2 * pad)) / (vals.length - 1);
+      const y = h - pad - ((v - min) / span) * (h - 2 * pad);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    chart.innerHTML = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Evolução do peso">
+      <text x="${pad}" y="12">${fmt(max)} kg</text>
+      <text x="${pad}" y="${h - 4}">${fmt(min)} kg</text>
+      <polyline points="${pts.join(' ')}" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      ${pts.map((p) => { const [x, y] = p.split(','); return `<circle cx="${x}" cy="${y}" r="3" fill="var(--primary)"/>`; }).join('')}
+    </svg>`;
+  }
+  lista.innerHTML = pesos.slice().reverse().map((x) => `
+    <div class="list-item"><div><div class="t">${fmt(x.peso)} kg</div>
+    <div class="d">${x.por ? esc(x.por) : 'registro manual'}</div></div>
+    <span class="muted mono">${esc(dataCurta(x.em))}</span></div>`).join('');
 }
 async function renovar(id, dias) {
   const p = PESSOAS_CACHE.find(x => x.id === id);

@@ -5,7 +5,8 @@
 Além dos campos obrigatórios (`nome`, `tipo`), o cadastro aceita **opcionais**:
 `cpf`, `telefone`, `email`, `nascimento`, `endereco`, `bairro`, `cidade`,
 `cep`, `observacoes`, `objetivo`, `peso` (kg), `problemasSaude` e
-`necessidadesEspeciais`.
+`necessidadesEspeciais`. Cada alteração de peso (valor diferente ou em outro
+dia) entra no histórico de peso da ficha.
 
 - Nenhum campo opcional bloqueia o cadastro.
 - CPF é guardado apenas com dígitos quando informado (sem validar dígito).

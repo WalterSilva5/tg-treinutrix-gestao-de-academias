@@ -132,8 +132,8 @@ ou Agendador de Tarefas) e teste o restore periodicamente.
 - **Alunos:** Horário (janela de acesso), Validade (renovar/remover),
   Vincular Treinutrix, Foto, Inativar/Reativar e Excluir (gerência).
 - **Ficha do aluno:** objetivo, peso, problemas de saúde, necessidades especiais
-  e observações, com histórico consolidado (acessos, planos, cobranças,
-  contatos e aulas).
+  e observações, com **histórico de peso** (gráfico de evolução e registros) e
+  histórico consolidado (acessos, planos, cobranças, contatos e aulas).
 
 ## Compartilhar acesso (link + QR)
 - Botão **Compartilhar acesso** no topo (equipe) e no cartão do servidor em Sistema.

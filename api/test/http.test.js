@@ -1162,7 +1162,16 @@ test('ficha do aluno guarda objetivo, peso, saude e necessidades; historico cons
   assert.equal(h.json.ficha.objetivo, 'emagrecimento');
   assert.equal(h.json.ficha.peso, 80);
   assert.equal(h.json.ficha.necessidadesEspeciais, 'rampa');
+  assert.equal(h.json.resumo.pesoAtual, 80);
+  assert.equal(h.json.pesos.length, 2);
+  assert.equal(h.json.pesos[0].peso, 72.5);
+  assert.equal(h.json.pesos[1].peso, 80);
   assert.ok(h.json.resumo.frequencia.totalDias >= 1);
+
+  // Repetir o mesmo peso no mesmo dia não duplica o histórico.
+  await api('/api/persons/' + p.json.id, { method: 'PATCH', token: admin, body: { peso: 80 } });
+  const h2 = await api('/api/persons/' + p.json.id + '/historico', { token: admin });
+  assert.equal(h2.json.pesos.length, 2);
   assert.ok(h.json.timeline.some((t) => t.tipo === 'CADASTRO'));
   assert.ok(h.json.timeline.some((t) => t.tipo === 'ACESSO'));
   assert.ok(h.json.timeline.some((t) => t.tipo === 'PLANO'));
