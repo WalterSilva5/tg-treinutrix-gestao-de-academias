@@ -277,6 +277,11 @@ Repetir seções 1–8 em cada unidade (uma instalação por rede local). Regras
 | `PHOTO_DIR` | ./data/photos | API — fora do git; incluir no backup |
 | `PHOTO_MAX_BYTES` | 409600 | API — limite por foto |
 | `MIN_SCORE` | 0.7 | API — score mínimo facial |
+| `SEED_ADMIN_MUST_CHANGE` | 0 | API — exige troca no primeiro login do admin |
+| `COOKIE_SECURE` | 0 | API — 1 atrás de HTTPS |
+| `RETENTION_EVENT_DAYS` | 365 | API — retenção de eventos de acesso |
+| `RETENTION_EXTERNAL_DAYS` | 365 | API — anonimiza externos antigos |
+| `RETENTION_PHOTO_DAYS` | 0 | API — fotos de inativos (0 desliga) |
 | `NOTIFY_INTERVAL_MS` | 300000 | API |
 | `AUTH_SECRET` | aleatório (reinício invalida tokens) | API — defina um fixo em produção |
 | `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD` | admin / admin123 | API — primeiro operador |

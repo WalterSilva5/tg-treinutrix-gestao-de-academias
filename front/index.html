@@ -648,6 +648,12 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
       </div>
 
       <div class="card">
+        <div class="card-head"><div><h2>Auditoria</h2><p class="sub">Últimas ações administrativas</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarAuditoria()">Atualizar</button></div></div>
+        <div class="list" id="listaAuditoria"></div>
+      </div>
+
+      <div class="card">
         <div class="card-head"><div><h2>Notificações</h2><p class="sub">Lembretes que exigem confirmação manual</p></div><span id="ntfBadge"></span></div>
         <div class="form-actions" style="margin-bottom:14px">
           <input id="respNome" placeholder="Seu nome na baixa" style="max-width:240px">
@@ -717,6 +723,7 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
 const API = ''; // mesma origem: a API serve este painel
 const $ = (id) => document.getElementById(id);
 let sess = JSON.parse(localStorage.getItem('pwa_session') || 'null');
+if (sess) delete sess.token;
 
 const PAGINAS = {
   inicio: ['Início', 'Alunos, acessos, planos e recepção'],
@@ -781,8 +788,7 @@ function avatarHtml(p, size = 30, cls = 'avatar-inline') {
   const temFoto = typeof p === 'object' && p && p.foto;
   const style = `width:${size}px;height:${size}px;font-size:${Math.max(10, Math.round(size * 0.38))}px`;
   if (temFoto) {
-    const t = sess ? encodeURIComponent(sess.token) : '';
-    return `<div class="${cls}" style="${style}"><img src="/api/persons/${encodeURIComponent(id)}/photo?t=${t}" alt="${esc(nome || '')}" loading="lazy"></div>`;
+    return `<div class="${cls}" style="${style}"><img src="/api/persons/${encodeURIComponent(id)}/photo" alt="${esc(nome || '')}" loading="lazy"></div>`;
   }
   return `<div class="${cls}" style="${style}">${iniciais(nome)}</div>`;
 }
@@ -821,7 +827,7 @@ function nomePorId(id) {
 }
 
 async function req(p, opts = {}) {
-  const r = await fetch(API + p, { ...opts, headers: { 'Content-Type': 'application/json', ...(sess && sess.token ? { Authorization: 'Bearer ' + sess.token } : {}), ...((opts && opts.headers) || {}) } });
+  const r = await fetch(API + p, { ...opts, headers: { 'Content-Type': 'application/json', ...((opts && opts.headers) || {}) } });
   if (r.status === 401 && sess) { sair(); throw new Error('sessão expirada — entre de novo'); }
   return r;
 }
@@ -846,6 +852,9 @@ function entraUI() {
   $('quemNome').textContent = sess.nome || sess.perfil;
   $('quemPerfil').textContent = sess.perfil;
   $('avatar').textContent = iniciais(sess.nome || sess.perfil);
+  if (sess.mustChangePassword) {
+    setTimeout(() => toast('Troque a senha inicial', 'Use o botão Senha antes de continuar', 'warn'), 400);
+  }
   const tabs = $('tabs'); tabs.innerHTML = '';
   const abas = sess.perfil === 'aluno' ? [['aluno', 'Meu acesso']]
     : sess.perfil === 'gerencia'
@@ -892,18 +901,31 @@ async function entrar() {
   try {
     const r = await (await fetch(API + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login: $('login').value.trim(), senha: $('senha').value }) })).json();
     if (!r.token) return toast('Não foi possível entrar', r.error || 'Verifique login e senha', 'err');
-    sess = r;
+    const { token, ...perfil } = r;
+    sess = perfil;
     localStorage.setItem('pwa_session', JSON.stringify(sess));
     // Recarrega para montar apenas a interface permitida ao perfil.
     location.reload();
   } catch (e) { toast('API fora do ar', 'Verifique se o servidor está rodando', 'err'); }
 }
-function sair() { sess = null; localStorage.removeItem('pwa_session'); location.reload(); }
+async function sair() {
+  try { await fetch(API + '/api/auth/logout', { method: 'POST' }); } catch { /* sessão local apenas */ }
+  sess = null;
+  localStorage.removeItem('pwa_session');
+  location.reload();
+}
 async function trocarSenha() {
   const atual = prompt('Senha atual:'); if (atual === null) return;
   const nova = prompt('Nova senha (mín. 4):'); if (!nova) return;
-  try { await jpost('/api/auth/change-password', { atual, nova }); toast('Senha atualizada', 'Use a nova senha no próximo acesso'); }
-  catch (e) { toast('Falha ao trocar senha', e.message, 'err'); }
+  try {
+    const r = await jpost('/api/auth/change-password', { atual, nova });
+    if (sess) {
+      sess.mustChangePassword = false;
+      if (r.nome) sess.nome = r.nome;
+      localStorage.setItem('pwa_session', JSON.stringify(sess));
+    }
+    toast('Senha atualizada', 'As outras sessões foram encerradas');
+  } catch (e) { toast('Falha ao trocar senha', e.message, 'err'); }
 }
 
 // ---------- início ----------
@@ -1276,6 +1298,18 @@ async function carregarSistema() {
   await loadUsuarios();
   await loadBackups(); await loadNotifications();
   await carregarImportacoes();
+  await carregarAuditoria();
+}
+
+async function carregarAuditoria() {
+  try {
+    const lista = await jget('/api/audit?limit=50');
+    $('listaAuditoria').innerHTML = lista.map((a) => `
+      <div class="list-item"><div><div class="t">${esc(a.acao)}</div>
+      <div class="d">${esc(a.detalhe || '')}</div></div>
+      <div style="text-align:right"><div class="d">${esc(dataHoraCurta(a.em))}</div><div class="d">${esc(a.por || '')}${a.ip ? ' · ' + esc(a.ip) : ''}</div></div></div>`).join('')
+      || '<div class="empty">Nenhuma ação registrada.</div>';
+  } catch (e) { $('listaAuditoria').innerHTML = '<div class="empty">Auditoria indisponível.</div>'; }
 }
 let PESSOAS_CACHE = [];
 let PESSOAS_INAD = new Set();

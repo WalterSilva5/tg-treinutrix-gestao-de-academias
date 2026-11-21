@@ -21,7 +21,9 @@ Execução manual no navegador interno em **2026-11-20**, com a API em
   resultado exibido e lista atualizada.
 - [x] **Sorteios**: editar, prévia de elegíveis, múltiplos ganhadores, histórico,
   exclusão de pessoa, exportação e tela pública `/s/<token>`.
-- [x] Aba **Sistema → Banco** mostrando `sqlite`.
+- [x] **Sistema → Auditoria** com ações administrativas.
+- [x] Sessão por cookie HttpOnly (sem token no localStorage) e cabeçalhos CSP.
+- [x] Retenção LGPD configurável (`RETENTION_*`).
 - [x] `/api/health` com `edge.ok=true` e contadores.
 - [x] Reinício do processo da API pelo supervisor: volta em ~3 s.
 - [x] Restore em diretório limpo coberto por `api/test/restore-clean.test.js`.

@@ -22,6 +22,7 @@ export const store = {
   raffles: [], // sorteios/premiações programáveis
   raffleDraws: [], // histórico/auditoria de cada sorteio realizado
   imports: [], // histórico de importações de cadastros
+  audit: [], // trilha de auditoria de ações administrativas
   syncQueue: [], // { id, personId, deviceId, operacao, status, tentativas, payload }
   notifications: [], // { id, key, tipo, titulo, detalhe, createdAt, resolvida, resolvidaPor, resolvidaEm }
   meta: { lastBackupAt: null, nextEnrollid: 1001, dedup: {} },
@@ -66,6 +67,7 @@ export function seed() {
   }
   store.users.set('usr_admin', {
     id: 'usr_admin', nome: 'Administrador', login: process.env.SEED_ADMIN_LOGIN || 'admin',
-    senhaHash: hashPassword(senha), perfil: 'gerencia',
+    senhaHash: hashPassword(senha), perfil: 'gerencia', tokenVersion: 0,
+    mustChangePassword: process.env.SEED_ADMIN_MUST_CHANGE === '1',
   });
 }

@@ -354,6 +354,9 @@ test('recuperação local do administrador padrão', async () => {
   // Devolve a senha padrão para o restante da suíte/ambiente de teste.
   const volta = await api('/api/auth/recover-admin', { method: 'POST', body: { login: 'admin', senha: 'admin123' } });
   assert.equal(volta.status, 200);
+  const relogin = await api('/api/auth/login', { method: 'POST', body: { login: 'admin', senha: 'admin123' } });
+  assert.equal(relogin.status, 200);
+  admin = relogin.json.token;
 });
 
 
@@ -700,4 +703,70 @@ test('importacao: upsert, mapeamento, foto, atomica e historico', async () => {
   const rel = await fetch(base + '/api/imports/' + rec.id + '/relatorio.csv', { headers: { Authorization: 'Bearer ' + admin } });
   assert.equal(rel.status, 200);
   assert.match(await rel.text(), /Linha;Nome;Matr/);
+});
+
+
+test('sessao por cookie HttpOnly, logout e troca obrigatoria', async () => {
+  const op = await api('/api/users', {
+    method: 'POST', token: admin,
+    body: { nome: 'Cookie ' + run, login: 'CK' + run, senha: 'cookie123', perfil: 'recepcao' },
+  });
+  assert.equal(op.status, 201, op.text);
+  const login = await fetch(base + '/api/auth/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ login: 'CK' + run, senha: 'cookie123' }),
+  });
+  assert.equal(login.status, 200);
+  const setCookie = login.headers.get('set-cookie') || '';
+  assert.match(setCookie, /painel_token=/);
+  assert.match(setCookie, /HttpOnly/);
+  const cookie = setCookie.split(';')[0];
+
+  const viaCookie = await fetch(base + '/api/persons', { headers: { Cookie: cookie } });
+  assert.equal(viaCookie.status, 200);
+
+  const p = await api('/api/persons', {
+    method: 'POST', token: admin,
+    body: { nome: 'Primeiro Acesso ' + run, matricula: 'PA' + run, tipo: 'ALUNO' },
+  });
+  assert.equal(p.status, 201);
+  const l = await api('/api/auth/login', { method: 'POST', body: { login: 'PA' + run, senha: 'PA' + run } });
+  assert.equal(l.status, 200);
+  assert.equal(l.json.mustChangePassword, true);
+
+  const bloqueado = await api('/api/persons', { method: 'POST', token: l.json.token, body: { nome: 'X' } });
+  assert.equal(bloqueado.status, 403);
+  assert.match(bloqueado.json.error, /senha inicial/);
+
+  const troca = await api('/api/auth/change-password', {
+    method: 'POST', token: l.json.token,
+    body: { atual: 'PA' + run, nova: 'NovaSenha123' },
+  });
+  assert.equal(troca.status, 200, troca.text);
+  assert.equal(troca.json.mustChangePassword, false);
+
+  const antigo = await api('/api/persons', { token: l.json.token });
+  assert.equal(antigo.status, 401);
+  const novo = await api('/api/persons', { token: troca.json.token });
+  assert.equal(novo.status, 200);
+
+  const logout = await fetch(base + '/api/auth/logout', { method: 'POST', headers: { Cookie: cookie } });
+  assert.equal(logout.status, 200);
+  const depois = await fetch(base + '/api/persons', { headers: { Cookie: cookie } });
+  assert.equal(depois.status, 401);
+
+  const auditoria = await api('/api/audit', { token: admin });
+  assert.equal(auditoria.status, 200);
+  assert.ok(auditoria.json.some((a) => a.acao === 'SENHA_ALTERADA'));
+});
+
+test('cabecalhos de seguranca e auditoria de acoes', async () => {
+  const h = await fetch(base + '/health');
+  assert.match(h.headers.get('content-security-policy') || '', /default-src 'self'/);
+  assert.equal(h.headers.get('x-frame-options'), 'DENY');
+  assert.equal(h.headers.get('x-content-type-options'), 'nosniff');
+
+  const aud = await api('/api/audit', { token: admin });
+  assert.equal(aud.status, 200);
+  assert.ok(aud.json.some((a) => a.acao === 'IMPORTACAO'));
 });

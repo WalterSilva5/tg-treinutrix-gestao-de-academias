@@ -213,15 +213,20 @@ parcial; repetir a importação sem duplicar. ✅
 **Aceite:** giro liberado e negado reais, leitor cadastrando/reconhecendo,
 reconexão automática, evidências registradas.
 
-### Fase 6 — Segurança/operação (2 dias)
+### Fase 6 — Segurança/operação (2 dias) — ✅ concluída em 2026-11-20
 
 1. Rate limits e auditoria.
 2. Cookie HttpOnly / CSP.
 3. Retenção LGPD.
 4. Testes E2E.
 
+**Entregue:** cookie HttpOnly com `tokenVersion` (logout/troca invalidam),
+troca obrigatória para senha inicial, CSP e cabeçalhos, limites em descoberta/
+importação/exportação, auditoria (`/api/audit`) e retenção configurável
+(eventos, externos, social, fotos). Documento `docs/SEGURANCA-LGPD.md`.
+
 **Aceite:** checklist de segurança sem itens abertos; sessão não vaza em XSS
-básico; dados expiram conforme política.
+básico; dados expiram conforme política. ✅ (HTTPS/Secure depende do proxy).
 
 ### Fase 7 — Relatórios, PWA e portabilidade (3–5 dias)
 

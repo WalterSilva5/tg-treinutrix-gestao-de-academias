@@ -50,8 +50,8 @@ function b64url(o) {
   return Buffer.from(JSON.stringify(o)).toString('base64url');
 }
 
-export function issueToken({ sub, perfil, nome }, ttlMs = TOKEN_TTL_MS) {
-  const body = b64url({ sub, perfil, nome, exp: Date.now() + ttlMs });
+export function issueToken({ sub, perfil, nome, ver = 0, epoch = 0 }, ttlMs = TOKEN_TTL_MS) {
+  const body = b64url({ sub, perfil, nome, ver, epoch, exp: Date.now() + ttlMs });
   const sig = crypto.createHmac('sha256', SECRET).update(body).digest('base64url');
   return `${body}.${sig}`;
 }

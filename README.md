@@ -24,7 +24,8 @@ Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces
   gravação atômica, fotos e histórico) — sem biometria obrigatória.
   Ver `docs/IMPORTACAO.md`.
 - Backup automático, restauração, notificações e PWA na rede local.
-- Persistência em **SQLite**, sem Docker.
+- Sessão por cookie HttpOnly, auditoria de ações e retenção LGPD
+  (`docs/SEGURANCA-LGPD.md`).- Persistência em **SQLite**, sem Docker.
 
 ## Arquitetura
 

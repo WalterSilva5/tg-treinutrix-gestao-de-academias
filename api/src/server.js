@@ -15,12 +15,12 @@ import { store, seed, nextId, ensureRules, TIPOS_PESSOA, METODOS } from './store
 import { getSystemInfo } from './system.js';
 import { evaluateNotifications, ackNotification, listInadimplentes } from './notify.js';
 import { doBackup, listBackups, doRestore } from './backup.js';
-import { hashPassword, verifyPassword, issueToken, verifyToken, authenticate } from './auth.js';
+import { hashPassword, verifyPassword, issueToken, verifyToken, authenticate, TOKEN_TTL_MS } from './auth.js';
 import { visiblePersons, visibleEvents, canSeeOperations } from './scope.js';
 import { parsePhoto, validatePhoto, savePhoto, readPhoto, deletePhoto } from './photos.js';
 import { localDayKey, parseDate, isDateOnly, endOfDay } from './time.js';
 import { enqueueSync, enqueueDelete, ackSync } from './sync.js';
-import { DB_FILE, loadState, saveNow, saveIfDirty, startAutoSave, markDirty, appendEvent, compactEvents, closeDb } from './persist.js';
+import { DB_FILE, loadState, saveNow, saveIfDirty, startAutoSave, markDirty, appendEvent, compactEvents, closeDb, replaceEvents } from './persist.js';
 import { catalogo, normalizarDevice } from './devices.js';
 import { diasFrequentados, alunosNoDia } from './frequency.js';
 import { descobrirCatracas, probarTcp, redesLocais, normalizarSubnet } from './discovery.js';
@@ -29,6 +29,7 @@ import {
   STATUS_PARTICIPANTE, promoverEspera, gerarRecorrencias, eventoPorToken,
 } from './social.js';
 import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento, eventosParaCsv, eventosParaPdf, sorteioParaCsv, sorteioParaPdf, csvTabela } from './report.js';
+import { aplicarRetencao } from './retention.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FRONT_DIR = path.join(HERE, '..', '..', 'front');
@@ -67,6 +68,14 @@ function commitAtual() {
 const GIT_COMMIT = commitAtual();
 const DISCOVER_MIN_MS = Number(process.env.DISCOVER_MIN_MS || 5000);
 const RAFFLE_INTERVAL_MS = Number(process.env.RAFFLE_INTERVAL_MS || 60000);
+const RETENCAO = {
+  eventosDias: Number(process.env.RETENTION_EVENT_DAYS ?? 365),
+  externosDias: Number(process.env.RETENTION_EXTERNAL_DAYS ?? 365),
+  socialDias: Number(process.env.RETENTION_SOCIAL_DAYS ?? 0),
+  fotosDias: Number(process.env.RETENTION_PHOTO_DAYS ?? 0),
+};
+const RETENCAO_INTERVALO_H = Number(process.env.RETENTION_INTERVAL_HOURS ?? 24);
+let retentionTimer = null;
 let ultimaVarredura = 0;
 let varrendo = false;
 let raffleTimer = null;
@@ -123,7 +132,36 @@ export function bootstrap() {
     }, RAFFLE_INTERVAL_MS);
     raffleTimer.unref();
   }
+  if (RETENCAO_INTERVALO_H > 0) {
+    try { executarRetencao(); } catch (e) { console.log('[retencao]', e.message); }
+    retentionTimer = setInterval(() => {
+      try { executarRetencao(); } catch (e) { console.log('[retencao]', e.message); }
+    }, RETENCAO_INTERVALO_H * 3600 * 1000);
+    retentionTimer.unref();
+  }
   return store;
+}
+
+function executarRetencao(agora = new Date()) {
+  const r = aplicarRetencao(store, { agora, ...RETENCAO });
+  let mudou = false;
+  for (const id of r.fotosParaRemover) {
+    const p = store.persons.get(id);
+    if (!p) continue;
+    try { deletePhoto(id); } catch { /* arquivo já ausente */ }
+    p.foto = null;
+    mudou = true;
+  }
+  if (r.eventosRemovidos > 0) {
+    replaceEvents(store);
+    mudou = true;
+  }
+  if (r.externosAnonimizados > 0 || r.eventosSociaisRemovidos > 0) mudou = true;
+  if (mudou) {
+    saveNow(store);
+    console.log(`[retencao] eventos=${r.eventosRemovidos} externos=${r.externosAnonimizados} social=${r.eventosSociaisRemovidos} fotos=${r.fotosParaRemover.length}`);
+  }
+  return r;
 }
 
 // Executa sorteios ATIVOS cuja data programada já passou.
@@ -261,15 +299,68 @@ function serveStatic(pathname, res) {
 // autenticação / perfis
 // ---------------------------------------------------------------------------
 function getUser(req, url) {
+  let payload = null;
   const h = req.headers.authorization || '';
   const m = h.match(/^Bearer (.+)$/);
-  if (m) return verifyToken(m[1]);
+  if (m) payload = verifyToken(m[1]);
+  if (!payload) {
+    const cookie = lerCookie(req);
+    if (cookie) payload = verifyToken(cookie);
+  }
   // <img> não envia cabeçalho: aceita token na query apenas na rota de foto.
-  if (url.pathname.endsWith('/photo')) {
+  if (!payload && url.pathname.endsWith('/photo')) {
     const t = url.searchParams.get('t');
-    if (t) return verifyToken(t);
+    if (t) payload = verifyToken(t);
+  }
+  if (!payload) return null;
+  if ((Number(payload.epoch) || 0) !== (Number(store.meta.sessionEpoch) || 0)) return null;
+  const ent = payload.perfil === 'aluno' ? store.persons.get(payload.sub) : store.users.get(payload.sub);
+  if (!ent) return null;
+  if ((Number(payload.ver) || 0) !== (Number(ent.tokenVersion) || 0)) return null;
+  return { ...payload, mustChangePassword: ent.mustChangePassword === true };
+}
+
+const COOKIE_NAME = 'painel_token';
+const COOKIE_SECURE = process.env.COOKIE_SECURE === '1';
+
+function lerCookie(req) {
+  const raw = String(req.headers.cookie || '');
+  for (const parte of raw.split(';')) {
+    const [nome, ...resto] = parte.trim().split('=');
+    if (nome === COOKIE_NAME) {
+      try { return decodeURIComponent(resto.join('=')); } catch { return null; }
+    }
   }
   return null;
+}
+
+function definirCookieSessao(req, res, token) {
+  const seguro = COOKIE_SECURE || Boolean(req.socket.encrypted) ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(TOKEN_TTL_MS / 1000)}${seguro}`);
+}
+
+function limparCookieSessao(res) {
+  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+}
+
+function entradaDe(user) {
+  if (!user) return null;
+  return user.perfil === 'aluno' ? store.persons.get(user.sub) : store.users.get(user.sub);
+}
+
+function auditar(user, acao, detalhe = '', req = null) {
+  store.audit = store.audit || [];
+  store.audit.unshift({
+    id: nextId('aud'),
+    em: new Date().toISOString(),
+    por: user?.nome || user?.sub || 'sistema',
+    perfil: user?.perfil || '',
+    ip: req ? clientIp(req) : '',
+    acao,
+    detalhe: String(detalhe || '').slice(0, 300),
+  });
+  if (store.audit.length > 2000) store.audit.length = 2000;
+  markDirty();
 }
 
 const isOperador = (u) => Boolean(u) && (u.perfil === 'recepcao' || u.perfil === 'gerencia');
@@ -310,6 +401,19 @@ function publicHit(ip) {
   a.until = Date.now() + PUBLIC_WINDOW_MS;
   publicAttempts.set(ip, a);
   if (publicAttempts.size > 5000) publicAttempts.clear();
+}
+
+const limites = new Map();
+function limitar(chave, max, janelaMs) {
+  const agora = Date.now();
+  const a = limites.get(chave);
+  if (!a || agora > a.until) {
+    limites.set(chave, { count: 1, until: agora + janelaMs });
+    return true;
+  }
+  if (a.count >= max) return false;
+  a.count += 1;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -403,6 +507,8 @@ function criarPessoa(b) {
     validadeFim: normalizeValidity(b.validadeFim),
     foto: null,
     senhaHash: hashPassword(b.senha || matricula),
+    tokenVersion: 0,
+    mustChangePassword: !b.senha,
     criadoEm: new Date().toISOString(),
   };
   if (b.foto) {
@@ -580,6 +686,7 @@ function importarPessoas(store, b, { por = 'operador' } = {}) {
           treinutrix: item.treinutrix, enrollid: item.enrollid, ativo: item.ativo,
           validadeIni: item.validadeIni, validadeFim: item.validadeFim,
           foto: null, senhaHash: hashPassword(item.senha),
+          tokenVersion: 0, mustChangePassword: !item.senha,
           criadoEm: new Date().toISOString(),
         };
         if (item.foto) {
@@ -695,6 +802,11 @@ function resumoEventos(inicio, fim) {
 // rotas
 // ---------------------------------------------------------------------------
 async function route(req, res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self' https://fonts.gstatic.com data:");
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       ...corsHeaders(),
@@ -720,7 +832,18 @@ async function route(req, res) {
       return send(res, 401, { error: 'credenciais inválidas' });
     }
     loginAttempts.delete(ip);
-    return send(res, 200, { ...who, token: issueToken(who) });
+    const ent = who.perfil === 'aluno' ? store.persons.get(who.sub) : store.users.get(who.sub);
+    const token = issueToken({
+      ...who,
+      ver: Number(ent?.tokenVersion) || 0,
+      epoch: Number(store.meta.sessionEpoch) || 0,
+    });
+    definirCookieSessao(req, res, token);
+    return send(res, 200, {
+      ...who,
+      token,
+      mustChangePassword: ent?.mustChangePassword === true,
+    });
   }
 
   // Recuperação do administrador padrão: só aceita conexão da própria máquina
@@ -743,6 +866,8 @@ async function route(req, res) {
     admin.nome = admin.nome || 'Administrador';
     admin.perfil = 'gerencia';
     admin.senhaHash = hashPassword(senha);
+    admin.tokenVersion = (Number(admin.tokenVersion) || 0) + 1;
+    admin.mustChangePassword = false;
     loginAttempts.clear();
     saveNow(store);
     console.log(`[auth] administrador restaurado (${login})`);
@@ -808,6 +933,15 @@ async function route(req, res) {
   // Demais /api/* exigem token.
   const user = url.pathname.startsWith('/api/') ? getUser(req, url) : null;
   if (url.pathname.startsWith('/api/') && !user) return send(res, 401, { error: 'não autenticado' });
+  const trocaObrigatoria = ['/api/auth/change-password', '/api/auth/logout'].includes(url.pathname);
+  if (user?.mustChangePassword && req.method !== 'GET' && !trocaObrigatoria) {
+    return send(res, 403, { error: 'troque a senha inicial antes de continuar' });
+  }
+  if (req.method === 'GET' && /(export\.(csv|pdf)|resultado\.(csv|pdf)|relatorios\/eventos\.(csv|pdf))/.test(url.pathname)) {
+    if (!limitar('export:' + clientIp(req), 60, 10 * 60 * 1000)) {
+      return send(res, 429, { error: 'muitas exportações — aguarde alguns minutos' });
+    }
+  }
 
   const operadorOnly = () => {
     if (!isOperador(user)) throw fail(403, 'só equipe (recepção/gerência)');
@@ -816,20 +950,40 @@ async function route(req, res) {
     if (!isGerencia(user)) throw fail(403, 'só gerência');
   };
 
-  // Troca de senha (qualquer autenticado).
+  // Encerra a sessão atual (invalida os tokens deste usuário).
+  if (req.method === 'POST' && url.pathname === '/api/auth/logout') {
+    const ent = entradaDe(user);
+    if (ent) {
+      ent.tokenVersion = (Number(ent.tokenVersion) || 0) + 1;
+      markDirty();
+    }
+    limparCookieSessao(res);
+    auditar(user, 'LOGOUT', '', req);
+    return send(res, 200, { ok: true });
+  }
+
+  // Troca de senha (qualquer autenticado). Invalida tokens antigos e emite novo.
   if (req.method === 'POST' && url.pathname === '/api/auth/change-password') {
     const b = await readBody(req);
     if (!b.nova || String(b.nova).length < 4) return send(res, 400, { error: 'nova senha curta (mín. 4)' });
-    if (user.perfil === 'aluno') {
-      const p = store.persons.get(user.sub);
-      if (!p || !verifyPassword(b.atual, p.senhaHash || '')) return send(res, 401, { error: 'senha atual incorreta' });
-      p.senhaHash = hashPassword(b.nova);
-    } else {
-      const u = store.users.get(user.sub);
-      if (!u || !verifyPassword(b.atual, u.senhaHash)) return send(res, 401, { error: 'senha atual incorreta' });
-      u.senhaHash = hashPassword(b.nova);
+    const ent = entradaDe(user);
+    if (!ent || !verifyPassword(b.atual, ent.senhaHash || '')) {
+      return send(res, 401, { error: 'senha atual incorreta' });
     }
-    return send(res, 200, { ok: true });
+    ent.senhaHash = hashPassword(b.nova);
+    ent.mustChangePassword = false;
+    ent.tokenVersion = (Number(ent.tokenVersion) || 0) + 1;
+    const token = issueToken({
+      sub: user.sub, perfil: user.perfil, nome: user.nome,
+      ver: ent.tokenVersion, epoch: Number(store.meta.sessionEpoch) || 0,
+    });
+    definirCookieSessao(req, res, token);
+    markDirty();
+    auditar({ ...user, mustChangePassword: false }, 'SENHA_ALTERADA', '', req);
+    return send(res, 200, {
+      ok: true, token, sub: user.sub, perfil: user.perfil, nome: user.nome,
+      mustChangePassword: false,
+    });
   }
 
   // Gestão de operadores (só gerência).
@@ -844,7 +998,7 @@ async function route(req, res) {
       if (!/^[A-Za-z0-9._@-]{3,40}$/.test(String(b.login))) return send(res, 400, { error: 'login inválido (3-40, letras/números/._@-)' });
       if (!['recepcao', 'gerencia'].includes(b.perfil)) return send(res, 400, { error: 'perfil deve ser recepcao|gerencia' });
       if ([...store.users.values()].some((u) => u.login === b.login)) return send(res, 409, { error: 'login já existe' });
-      const u = { id: nextId('usr'), nome: cleanText(b.nome, 120) || b.login, login: String(b.login), senhaHash: hashPassword(b.senha), perfil: b.perfil };
+      const u = { id: nextId('usr'), nome: cleanText(b.nome, 120) || b.login, login: String(b.login), senhaHash: hashPassword(b.senha), perfil: b.perfil, tokenVersion: 0, mustChangePassword: false };
       store.users.set(u.id, u);
       const { senhaHash, ...pub } = u;
       return send(res, 201, pub);
@@ -871,9 +1025,13 @@ async function route(req, res) {
   // `confirmar:false` faz a prévia; `modo:ATUALIZAR` faz upsert; atômica por padrão.
   if (req.method === 'POST' && url.pathname === '/api/persons/import') {
     gerenciaOnly();
+    if (!limitar('import:' + user.sub, 10, 60 * 60 * 1000)) {
+      return send(res, 429, { error: 'muitas importações — aguarde uma hora' });
+    }
     const b = await readBody(req, IMPORT_MAX_BYTES);
     try {
       const out = importarPessoas(store, b, { por: user.nome || user.sub });
+      auditar(user, 'IMPORTACAO', `${b.modo || 'IGNORAR'} · ${out.criados} criado(s), ${out.atualizados} atualizado(s), ${out.erros} erro(s)`, req);
       return send(res, out.status || 200, out);
     } catch (e) {
       return send(res, e.status || 400, {
@@ -1005,6 +1163,8 @@ async function route(req, res) {
       store.persons.delete(id);
       store.rules = store.rules.filter((r) => r.personId !== id);
       enqueueDelete(store, id, p.enrollid);
+      markDirty();
+      auditar(user, 'PESSOA_EXCLUIDA', `${p.nome} (${p.matricula})`, req);
       return send(res, 200, { ok: true });
     }
 
@@ -1046,6 +1206,9 @@ async function route(req, res) {
   // Detecção de catracas/controladores na rede local (somente gerência).
   if (req.method === 'POST' && url.pathname === '/api/devices/discover') {
     gerenciaOnly();
+    if (!limitar('discover:' + clientIp(req), 5, 10 * 60 * 1000)) {
+      return send(res, 429, { error: 'muitas varreduras — aguarde alguns minutos' });
+    }
     const b = await readBody(req);
     const redes = redesLocais();
     const subnet = b.subnet ? normalizarSubnet(b.subnet) : (redes[0] && redes[0].cidr);
@@ -1121,6 +1284,7 @@ async function route(req, res) {
       store.rules = store.rules.filter((r) => r.deviceId !== id);
       store.syncQueue = store.syncQueue.filter((s) => s.deviceId !== id);
       markDirty();
+      auditar(user, 'DISPOSITIVO_EXCLUIDO', dev ? dev.nome : id, req);
       return send(res, 200, { ok: true });
     }
     const b = await readBody(req);
@@ -1194,6 +1358,7 @@ async function route(req, res) {
       store.socialEvents = store.socialEvents.filter((e) => e.id !== id);
       store.eventParticipants = store.eventParticipants.filter((p) => p.eventId !== id);
       markDirty();
+      auditar(user, 'EVENTO_EXCLUIDO', evento.nome, req);
       return send(res, 200, { ok: true });
     }
   }
@@ -1495,6 +1660,7 @@ async function route(req, res) {
       gerenciaOnly();
       store.raffles = store.raffles.filter((r) => r.id !== id);
       markDirty();
+      auditar(user, 'SORTEIO_EXCLUIDO', sorteio.nome, req);
       return send(res, 200, { ok: true });
     }
   }
@@ -1529,6 +1695,7 @@ async function route(req, res) {
         sorteio.status = 'ATIVA';
       }
       const out = realizarSorteio(sorteio, { agora: new Date(), por: user.nome || user.sub });
+      auditar(user, 'SORTEIO', `${sorteio.nome}: ${out.vencedores.map((v) => v.nome).join(', ')}`, req);
       return send(res, 200, out);
     } catch (e) {
       return send(res, 400, { error: e.message });
@@ -1591,6 +1758,7 @@ async function route(req, res) {
     sorteio.status = 'ATIVA';
     sorteio.ultimoErro = null;
     markDirty();
+    auditar(user, 'SORTEIO_RESET', sorteio.nome, req);
     return send(res, 200, sorteio);
   }
   const sorteioEntregaRoute = url.pathname.match(/^\/api\/sorteios\/([^/]+)\/entregar$/);
@@ -1617,6 +1785,7 @@ async function route(req, res) {
       sorteio.entrega = { entregue: true, por, em };
     }
     markDirty();
+    auditar(user, 'PREMIO_ENTREGUE', sorteio.nome, req);
     return send(res, 200, sorteio);
   }
 
@@ -1807,6 +1976,12 @@ async function route(req, res) {
       lastBackupAt: store.meta.lastBackupAt,
     });
   }
+  if (req.method === 'GET' && url.pathname === '/api/audit') {
+    gerenciaOnly();
+    const limite = Math.min(1000, Math.max(1, Number(url.searchParams.get('limit')) || 200));
+    return send(res, 200, (store.audit || []).slice(0, limite));
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/system') {
     operadorOnly();
     const inad = listInadimplentes(store);
@@ -1824,6 +1999,7 @@ async function route(req, res) {
         file: DB_FILE,
         bytes: (() => { try { return fs.statSync(DB_FILE).size; } catch { return 0; } })(),
       },
+      retention: { ...RETENCAO },
       lastBackupAt: store.meta.lastBackupAt,
     });
   }
@@ -1863,6 +2039,7 @@ async function route(req, res) {
       const out = doRestore(store, b.file);
       compactEvents(store);
       saveNow(store);
+      auditar(user, 'BACKUP_RESTAURADO', b.file, req);
       return send(res, 200, out);
     } catch (e) {
       throw fail(400, e.message);
