@@ -1,6 +1,7 @@
 # Próximos passos
 
-> **Plano consolidado (todas as solicitações e lacunas):** `docs/PLANO-COMPLETO.md`.
+> **Lista priorizada atual:** `docs/PROXIMOS-PASSOS-2026-11-21.md`.
+> Plano consolidado (todas as solicitações e lacunas): `docs/PLANO-COMPLETO.md`.
 > Este documento continua como roteiro curto por fase; em caso de divergência,
 > vale o plano completo.
 

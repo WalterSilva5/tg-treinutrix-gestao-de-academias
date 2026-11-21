@@ -11,6 +11,7 @@ Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces
 > Revisão técnica completa (achados, correções e pendências): `docs/REVISAO.md`.
 > Plano consolidado de tudo que foi solicitado e ainda falta: `docs/PLANO-COMPLETO.md`.
 > Plano de execução atual (bancada, go-live e backlog): `docs/PLANO-EXECUCAO.md`.
+> Lista priorizada de próximos passos: `docs/PROXIMOS-PASSOS-2026-11-21.md`.
 
 ## Recursos
 
