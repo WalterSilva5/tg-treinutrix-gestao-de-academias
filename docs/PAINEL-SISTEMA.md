@@ -131,6 +131,9 @@ ou Agendador de Tarefas) e teste o restore periodicamente.
 - Renovação rápida de plano (+30 e +90 dias) direto na linha da pessoa.
 - **Alunos:** Horário (janela de acesso), Validade (renovar/remover),
   Vincular Treinutrix, Foto, Inativar/Reativar e Excluir (gerência).
+- **Ficha do aluno:** objetivo, peso, problemas de saúde, necessidades especiais
+  e observações, com histórico consolidado (acessos, planos, cobranças,
+  contatos e aulas).
 
 ## Compartilhar acesso (link + QR)
 - Botão **Compartilhar acesso** no topo (equipe) e no cartão do servidor em Sistema.

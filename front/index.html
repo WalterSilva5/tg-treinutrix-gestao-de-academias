@@ -100,7 +100,8 @@ button{font:inherit}
 .btn-icon{background:transparent;border:1px solid var(--line);border-radius:8px;width:32px;height:32px;cursor:pointer;color:var(--ink-2)}
 .btn-icon:hover{background:var(--surface-hover)}
 
-input,select{width:100%;min-width:0;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--radius-btn);padding:9px 12px;font:inherit;font-size:13px;color:var(--ink);outline:none;transition:border-color .15s,box-shadow .15s}
+input,select,textarea{width:100%;min-width:0;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--radius-btn);padding:9px 12px;font:inherit;font-size:13px;color:var(--ink);outline:none;transition:border-color .15s,box-shadow .15s}
+textarea{resize:vertical;min-height:64px}
 input::placeholder{color:#a8a29e}
 input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
 select{cursor:pointer}
@@ -128,6 +129,14 @@ tbody td{padding:11px 10px;border-bottom:1px solid var(--line);font-size:13px;ve
 tbody tr:last-child td{border-bottom:0}
 tbody tr:hover{background:#fcfcfb}
 .table-wrap{overflow-x:auto;margin:0 -4px;max-width:100%;-webkit-overflow-scrolling:touch}
+.pessoa-nome{font-weight:600;font-size:13px}
+.pessoa-meta{color:var(--ink-3);font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+.linha-acoes{display:flex;gap:6px;justify-content:flex-end;flex-wrap:nowrap}
+.acoes-linha td{background:var(--surface-hover);padding-top:8px;padding-bottom:8px}
+.acoes-wrap{display:flex;flex-wrap:wrap;gap:6px}
+.modal.larga{max-width:720px}
+.ficha-resumo{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px}
+.ficha-resumo .badge{font-size:11px}
 .mono{font-variant-numeric:tabular-nums}
 .muted{color:var(--ink-3);font-size:12px}
 
@@ -420,7 +429,7 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
             <button class="chip" data-f="INATIVO" onclick="filtrarPessoas('INATIVO')">Inativos</button>
           </div>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Tipo</th><th>Validade</th><th>Situação</th><th></th></tr></thead><tbody id="pessoas"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Tipo</th><th class="hide-sm">Validade</th><th>Situação</th><th style="text-align:right">Ações</th></tr></thead><tbody id="pessoas"></tbody></table></div>
         <p class="help" id="pessoasResumo"></p>
       </div>
 
@@ -445,6 +454,10 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
                 <input id="visCidade" placeholder="Cidade">
                 <input id="visCep" placeholder="CEP">
                 <input id="visObs" placeholder="Observações" style="grid-column:1/-1">
+                <input id="visObjetivo" placeholder="Objetivo (ex.: hipertrofia, emagrecimento)">
+                <input id="visPeso" type="text" inputmode="decimal" placeholder="Peso (kg)">
+                <input id="visSaude" placeholder="Problemas de saúde" style="grid-column:1/-1">
+                <input id="visNecessidades" placeholder="Necessidades especiais" style="grid-column:1/-1">
               </div>
             </details>
             <div class="form-actions"><button class="btn" onclick="cadastrarPessoa()">Cadastrar</button></div>
@@ -893,6 +906,30 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
       <button class="btn" onclick="copiarLink()">Copiar link</button>
       <button class="btn ghost" onclick="baixarQr()">Baixar QR</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL: FICHA DO ALUNO -->
+<div id="fichaModal" class="modal-backdrop hidden">
+  <div class="modal larga" role="dialog" aria-modal="true" aria-labelledby="fichaNome">
+    <div class="modal-head">
+      <div><h2 id="fichaNome">Ficha do aluno</h2><p class="help" id="fichaMeta" style="margin:2px 0 0"></p></div>
+      <button class="btn-icon" onclick="fecharFicha()" aria-label="Fechar">×</button>
+    </div>
+    <div class="ficha-resumo" id="fichaResumo"></div>
+    <div class="form-grid">
+      <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Objetivo</span><input id="fichaObjetivo" placeholder="Ex.: hipertrofia, emagrecimento"></label>
+      <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Peso (kg)</span><input id="fichaPeso" type="text" inputmode="decimal" placeholder="Ex.: 72,5"></label>
+      <label class="field" style="margin:0;grid-column:1/-1"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Problemas de saúde</span><textarea id="fichaSaude" rows="2" placeholder="Lesões, alergias, condições que exigem atenção"></textarea></label>
+      <label class="field" style="margin:0;grid-column:1/-1"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Necessidades especiais</span><textarea id="fichaNecessidades" rows="2" placeholder="Acessibilidade, adaptações de treino, acompanhamento"></textarea></label>
+      <label class="field" style="margin:0;grid-column:1/-1"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Observações</span><textarea id="fichaObs" rows="2" placeholder="Anotações gerais do cadastro"></textarea></label>
+    </div>
+    <div class="form-actions" style="justify-content:flex-start">
+      <button class="btn" onclick="salvarFicha()">Salvar ficha</button>
+      <button class="btn ghost" onclick="fecharFicha()">Fechar</button>
+    </div>
+    <h3 style="font-size:14px;margin:20px 0 10px">Histórico</h3>
+    <div class="list" id="fichaHistorico"></div>
   </div>
 </div>
 
@@ -1521,6 +1558,10 @@ async function cadastrarPessoa() {
     cidade: $('visCidade').value.trim() || null,
     cep: $('visCep').value.trim() || null,
     observacoes: $('visObs').value.trim() || null,
+    objetivo: $('visObjetivo').value.trim() || null,
+    peso: $('visPeso').value.trim() || null,
+    problemasSaude: $('visSaude').value.trim() || null,
+    necessidadesEspeciais: $('visNecessidades').value.trim() || null,
   };
   try {
     const p = await jpost('/api/persons', { nome, tipo, treinutrix, foto, ativo: true, validadeFim: fim, ...extras });
@@ -1530,7 +1571,7 @@ async function cadastrarPessoa() {
       catch (e) { toast('Cadastro criado, mas o plano falhou', e.message, 'warn'); }
     }
     toast('Pessoa cadastrada', `${p.nome} · ${tipo} · matrícula ${p.matricula} · senha inicial ${p.matricula}` + (fim ? ' · válido até ' + dataCurta(fim) : ''));
-    ['visNome', 'visTreinutrix', 'visCpf', 'visTelefone', 'visEmail', 'visNascimento', 'visEndereco', 'visBairro', 'visCidade', 'visCep', 'visObs'].forEach((id) => { $(id).value = ''; });
+    ['visNome', 'visTreinutrix', 'visCpf', 'visTelefone', 'visEmail', 'visNascimento', 'visEndereco', 'visBairro', 'visCidade', 'visCep', 'visObs', 'visObjetivo', 'visPeso', 'visSaude', 'visNecessidades'].forEach((id) => { $(id).value = ''; });
     $('visPlano').value = '';
     $('visFoto').value = ''; $('visFoto').dataset.data = '';
     $('visFotoPreview').innerHTML = '';
@@ -2258,26 +2299,109 @@ function renderPessoas() {
     if (filtroPessoa === 'INATIVO') return p.ativo === false;
     return (p.tipo || 'ALUNO') === filtroPessoa;
   });
-  $('pessoas').innerHTML = list.map(p => `
+  $('pessoas').innerHTML = list.map(p => {
+    const id = esc(p.id);
+    const nome = esc((p.nome || '').replace(/'/g, ''));
+    return `
     <tr>
-      <td><div class="stack">${avatarHtml(p, 30)}<div><b>${esc(p.nome)}</b><div class="muted">${esc(p.matricula)} · cartão ${esc(p.enrollid)} · Treinutrix: ${treinutrixLink(p.treinutrix)}</div></div></div></td>
-      <td>${badgeTipo(p.tipo)}</td>
-      <td class="mono muted">${p.validadeFim ? dataCurta(p.validadeFim) : '—'}</td>
-      <td>${!p.ativo ? '<span class="badge neutral dot">inativo</span>' : PESSOAS_INAD.has(p.id) ? '<span class="badge bad dot">em atraso</span>' : '<span class="badge ok dot">ativo</span>'}</td>
-      <td style="text-align:right;white-space:nowrap">
-        <button class="btn ghost sm" onclick="renovar('${esc(p.id)}', 30)" title="Renovar +30 dias">+30d</button>
-        <button class="btn ghost sm" onclick="renovar('${esc(p.id)}', 90)" title="Renovar +90 dias">+90d</button>
-        <button class="btn ghost sm" onclick="gerenciarPlano('${esc(p.id)}')">Plano</button>
-        <button class="btn ghost sm" onclick="editarDadosPessoa('${esc(p.id)}')">Dados</button>
-        <button class="btn ghost sm" onclick="trocarFoto('${esc(p.id)}')">Foto</button>
-        <button class="btn ghost sm" onclick="editarHorario('${esc(p.id)}')">Horário</button>
-        <button class="btn ghost sm" onclick="renovarValidade('${esc(p.id)}')">Validade</button>
-        <button class="btn ghost sm" onclick="vincularTreinutrix('${esc(p.id)}', '${esc((p.treinutrix || '').replace(/'/g, ''))}')">Vincular</button>
-        <button class="btn ${p.ativo ? 'danger' : 'ghost'} sm" onclick="toggleAtivo('${esc(p.id)}', ${p.ativo ? 'false' : 'true'})">${p.ativo ? 'Inativar' : 'Reativar'}</button>
-        ${sess.perfil === 'gerencia' ? `<button class="btn danger sm" onclick="excluirPessoa('${esc(p.id)}', '${esc((p.nome || '').replace(/'/g, ''))}')">Excluir</button>` : ''}
+      <td>
+        <div class="stack">${avatarHtml(p, 34)}<div style="min-width:0">
+          <div class="pessoa-nome">${esc(p.nome)}</div>
+          <div class="pessoa-meta">${esc(p.matricula)} · cartão ${esc(p.enrollid)}</div>
+          ${p.treinutrix ? `<div class="pessoa-meta">Treinutrix: ${treinutrixLink(p.treinutrix)}</div>` : ''}
+          ${p.objetivo ? `<div class="pessoa-meta">Objetivo: ${esc(p.objetivo)}</div>` : ''}
+        </div></div>
       </td>
-    </tr>`).join('') || '<tr><td colspan="5"><div class="empty">Nenhuma pessoa encontrada.</div></td></tr>';
+      <td>${badgeTipo(p.tipo)}</td>
+      <td class="mono muted hide-sm">${p.validadeFim ? dataCurta(p.validadeFim) : '—'}</td>
+      <td>${!p.ativo ? '<span class="badge neutral dot">inativo</span>' : PESSOAS_INAD.has(p.id) ? '<span class="badge bad dot">em atraso</span>' : '<span class="badge ok dot">ativo</span>'}</td>
+      <td>
+        <div class="linha-acoes">
+          <button class="btn ghost sm" onclick="abrirFicha('${id}')">Ficha</button>
+          <button class="btn ghost sm" onclick="toggleAcoes('${id}')">Ações</button>
+        </div>
+      </td>
+    </tr>
+    <tr id="acoes-${id}" class="acoes-linha hidden"><td colspan="5">
+      <div class="acoes-wrap">
+        <button class="btn ghost sm" onclick="renovar('${id}', 30)" title="Renovar +30 dias">+30d</button>
+        <button class="btn ghost sm" onclick="renovar('${id}', 90)" title="Renovar +90 dias">+90d</button>
+        <button class="btn ghost sm" onclick="gerenciarPlano('${id}')">Plano</button>
+        <button class="btn ghost sm" onclick="editarDadosPessoa('${id}')">Dados</button>
+        <button class="btn ghost sm" onclick="trocarFoto('${id}')">Foto</button>
+        <button class="btn ghost sm" onclick="editarHorario('${id}')">Horário</button>
+        <button class="btn ghost sm" onclick="renovarValidade('${id}')">Validade</button>
+        <button class="btn ghost sm" onclick="vincularTreinutrix('${id}', '${esc((p.treinutrix || '').replace(/'/g, ''))}')">Vincular Treinutrix</button>
+        <button class="btn ${p.ativo ? 'danger' : 'ghost'} sm" onclick="toggleAtivo('${id}', ${p.ativo ? 'false' : 'true'})">${p.ativo ? 'Inativar' : 'Reativar'}</button>
+        ${sess.perfil === 'gerencia' ? `<button class="btn danger sm" onclick="excluirPessoa('${id}', '${nome}')">Excluir</button>` : ''}
+      </div>
+    </td></tr>`;
+  }).join('') || '<tr><td colspan="5"><div class="empty">Nenhuma pessoa encontrada.</div></td></tr>';
   if ($('pessoasResumo')) $('pessoasResumo').textContent = `${list.length} de ${PESSOAS_CACHE.length} pessoa(s)`;
+}
+
+function toggleAcoes(id) {
+  const el = document.getElementById('acoes-' + id);
+  if (el) el.classList.toggle('hidden');
+}
+
+let fichaAtualId = null;
+
+async function abrirFicha(id) {
+  try {
+    const h = await jget(`/api/persons/${encodeURIComponent(id)}/historico`);
+    fichaAtualId = id;
+    $('fichaNome').textContent = h.pessoa.nome || 'Ficha do aluno';
+    $('fichaMeta').textContent = [h.pessoa.matricula, h.pessoa.tipo, h.pessoa.telefone].filter(Boolean).join(' · ');
+    $('fichaObjetivo').value = h.ficha.objetivo || '';
+    $('fichaPeso').value = h.ficha.peso ?? '';
+    $('fichaSaude').value = h.ficha.problemasSaude || '';
+    $('fichaNecessidades').value = h.ficha.necessidadesEspeciais || '';
+    $('fichaObs').value = h.ficha.observacoes || '';
+    const f = h.resumo.frequencia || {};
+    const brl = (n) => 'R$ ' + Number(n || 0).toFixed(2).replace('.', ',');
+    $('fichaResumo').innerHTML = [
+      `<span class="badge ${h.pessoa.ativo === false ? 'neutral' : 'ok'}">${h.pessoa.ativo === false ? 'inativo' : 'ativo'}</span>`,
+      `<span class="badge neutral">${f.totalDias || 0} dia(s) frequentados</span>`,
+      `<span class="badge neutral">${h.resumo.totalAcessos || 0} acesso(s)</span>`,
+      h.resumo.ultimaVisita
+        ? `<span class="badge info">última visita ${esc(dataHoraCurta(h.resumo.ultimaVisita))}</span>`
+        : '<span class="badge warn">sem visita</span>',
+      h.resumo.aberto > 0
+        ? `<span class="badge bad">${brl(h.resumo.aberto)} em aberto</span>`
+        : '<span class="badge ok">sem débito</span>',
+      ...(h.resumo.planosAtivos || []).map((n) => `<span class="badge accent">${esc(n)}</span>`),
+    ].join('');
+    const icone = { CADASTRO: '◎', ACESSO: '⇄', PLANO: '▣', COBRANCA: 'R$', CONTATO: '☎', AULA: '★' };
+    $('fichaHistorico').innerHTML = (h.timeline || []).map((t) => `
+      <div class="list-item"><div><div class="t">${icone[t.tipo] || '•'} ${esc(t.titulo)}</div>
+      <div class="d">${esc(t.detalhe || '')}</div></div>
+      <span class="muted mono">${esc(dataHoraCurta(t.em))}</span></div>`).join('')
+      || '<div class="empty">Sem histórico registrado.</div>';
+    $('fichaModal').classList.remove('hidden');
+  } catch (e) { toast('Falha ao abrir ficha', e.message, 'err'); }
+}
+
+function fecharFicha() {
+  $('fichaModal').classList.add('hidden');
+  fichaAtualId = null;
+}
+
+async function salvarFicha() {
+  if (!fichaAtualId) return;
+  const peso = $('fichaPeso').value.trim();
+  try {
+    await jpatch(`/api/persons/${encodeURIComponent(fichaAtualId)}`, {
+      objetivo: $('fichaObjetivo').value.trim() || null,
+      peso: peso === '' ? null : Number(peso.replace(',', '.')),
+      problemasSaude: $('fichaSaude').value.trim() || null,
+      necessidadesEspeciais: $('fichaNecessidades').value.trim() || null,
+      observacoes: $('fichaObs').value.trim() || null,
+    });
+    toast('Ficha atualizada', '');
+    fecharFicha();
+    carregarAlunos();
+  } catch (e) { toast('Falha ao salvar ficha', e.message, 'err'); }
 }
 async function renovar(id, dias) {
   const p = PESSOAS_CACHE.find(x => x.id === id);

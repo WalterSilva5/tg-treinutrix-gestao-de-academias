@@ -29,7 +29,8 @@ JSON:
 Campos: `nome` (obrigatório), `matricula`, `tipo` (`ALUNO`/`PERSONAL`/
 `VISITANTE`), `enrollid`, `validadeIni`, `validadeFim`, `treinutrix`, `ativo`,
 `senha`, `foto` (data URL/base64) e opcionais `cpf`, `telefone`, `email`,
-`nascimento`, `endereco`, `bairro`, `cidade`, `cep`, `observacoes`.
+`nascimento`, `endereco`, `bairro`, `cidade`, `cep`, `observacoes`, `objetivo`,
+`peso`, `problemasSaude`, `necessidadesEspeciais`.
 
 ## 2. Mapeamento de colunas
 

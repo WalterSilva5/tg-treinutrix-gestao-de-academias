@@ -4,7 +4,8 @@
 
 Além dos campos obrigatórios (`nome`, `tipo`), o cadastro aceita **opcionais**:
 `cpf`, `telefone`, `email`, `nascimento`, `endereco`, `bairro`, `cidade`,
-`cep` e `observacoes`.
+`cep`, `observacoes`, `objetivo`, `peso` (kg), `problemasSaude` e
+`necessidadesEspeciais`.
 
 - Nenhum campo opcional bloqueia o cadastro.
 - CPF é guardado apenas com dígitos quando informado (sem validar dígito).
@@ -119,5 +120,8 @@ Cada assinatura gera **uma cobrança por mês de vigência**:
 
 - CPF/telefone/endereço são dados pessoais: acesso restrito à equipe e retenção
   conforme política da academia.
+- Objetivo, peso, problemas de saúde e necessidades especiais são **dados de
+  saúde/sensíveis**: restrinja o acesso, não use como critério de bloqueio de
+  acesso e inclua na política de retenção/eliminação.
 - Não use os campos opcionais como pré-requisito de acesso; eles existem para
   contato, cobrança e relacionamento.

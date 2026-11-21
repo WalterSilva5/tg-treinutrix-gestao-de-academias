@@ -1115,3 +1115,60 @@ test('trancamento via HTTP zera validade e retomada reativa', async () => {
   assert.equal(riscos.status, 200, riscos.text);
   assert.ok(Array.isArray(riscos.json.pessoas));
 });
+
+test('ficha do aluno guarda objetivo, peso, saude e necessidades; historico consolida', async () => {
+  const p = await api('/api/persons', {
+    method: 'POST', token: admin,
+    body: {
+      nome: 'Ficha ' + run, matricula: 'FI' + run, tipo: 'ALUNO',
+      objetivo: 'hipertrofia', peso: '72,5', problemasSaude: 'joelho',
+      necessidadesEspeciais: 'acessibilidade',
+    },
+  });
+  assert.equal(p.status, 201, p.text);
+  assert.equal(p.json.objetivo, 'hipertrofia');
+  assert.equal(p.json.peso, 72.5);
+  assert.equal(p.json.problemasSaude, 'joelho');
+  assert.equal(p.json.necessidadesEspeciais, 'acessibilidade');
+
+  const patch = await api('/api/persons/' + p.json.id, {
+    method: 'PATCH', token: admin,
+    body: { peso: '80', objetivo: 'emagrecimento', problemasSaude: null, necessidadesEspeciais: 'rampa' },
+  });
+  assert.equal(patch.status, 200, patch.text);
+  assert.equal(patch.json.peso, 80);
+  assert.equal(patch.json.problemasSaude, null);
+
+  const invalido = await api('/api/persons', {
+    method: 'POST', token: admin, body: { nome: 'Peso ruim ' + run, peso: 999 },
+  });
+  assert.equal(invalido.status, 400);
+
+  const plano = await api('/api/plans', {
+    method: 'POST', token: admin,
+    body: { nome: 'Ficha plano ' + run, valor: 100, duracaoMeses: 1 },
+  });
+  assert.equal(plano.status, 201, plano.text);
+  await api('/api/persons/' + p.json.id + '/plano', {
+    method: 'POST', token: admin, body: { planoId: plano.json.id, inicio: '2026-11-01' },
+  });
+  await api('/api/identification', {
+    method: 'POST', token: admin,
+    body: { device_id: 'dev_fit4_01', person_id: p.json.id, metodo: 'CARTAO', timestamp: '2026-11-20T10:00:00' },
+  });
+
+  const h = await api('/api/persons/' + p.json.id + '/historico', { token: admin });
+  assert.equal(h.status, 200, h.text);
+  assert.equal(h.json.ficha.objetivo, 'emagrecimento');
+  assert.equal(h.json.ficha.peso, 80);
+  assert.equal(h.json.ficha.necessidadesEspeciais, 'rampa');
+  assert.ok(h.json.resumo.frequencia.totalDias >= 1);
+  assert.ok(h.json.timeline.some((t) => t.tipo === 'CADASTRO'));
+  assert.ok(h.json.timeline.some((t) => t.tipo === 'ACESSO'));
+  assert.ok(h.json.timeline.some((t) => t.tipo === 'PLANO'));
+  assert.ok(h.json.timeline.some((t) => t.tipo === 'COBRANCA'));
+
+  const login = await api('/api/auth/login', { method: 'POST', body: { login: 'EV' + run, senha: 'aluno123' } });
+  const negado = await api('/api/persons/' + p.json.id + '/historico', { token: login.json.token });
+  assert.equal(negado.status, 403);
+});

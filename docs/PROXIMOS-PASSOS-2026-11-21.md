@@ -20,7 +20,9 @@ Lista priorizada a partir do estado atual. O plano completo está em
 - [x] Aulas com capacidade, reserva pelo PWA, lista de espera, promoção
       automática, check-in por código e cancelamento.
 - [x] Histórico de contatos de cobrança/retenção no cadastro.
-- [x] 156 testes verdes (classes, risco, aging, fluxo, trancamento e HTTP).
+- [x] Ficha do aluno com objetivo, peso, saúde, necessidades especiais e
+      histórico consolidado (acessos, planos, cobranças, contatos e aulas).
+- [x] 157 testes verdes (classes, risco, aging, fluxo, trancamento, ficha e HTTP).
 
 Ainda pendente deste bloco: backup offsite, 2FA e a validação física da
 catraca. O restante segue a ordem abaixo.

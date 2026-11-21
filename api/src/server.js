@@ -459,6 +459,14 @@ function limparCpf(value) {
   return d ? d.slice(0, 11) : null;
 }
 
+// Peso em kg, aceita vírgula; vazio remove.
+function normalizarPeso(value) {
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+  const n = Number(String(value).replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0 || n > 500) throw fail(400, 'peso deve estar entre 0 e 500 kg');
+  return Math.round(n * 10) / 10;
+}
+
 function safeDecode(value) {
   try { return decodeURIComponent(value); } catch { return null; }
 }
@@ -537,6 +545,10 @@ function criarPessoa(b) {
     cidade: cleanText(b.cidade, 100) || null,
     cep: cleanText(b.cep, 20) || null,
     observacoes: cleanText(b.observacoes, 1000) || null,
+    objetivo: cleanText(b.objetivo, 200) || null,
+    peso: normalizarPeso(b.peso),
+    problemasSaude: cleanText(b.problemasSaude, 1000) || null,
+    necessidadesEspeciais: cleanText(b.necessidadesEspeciais, 1000) || null,
     enrollid, ativo: b.ativo !== false,
     validadeIni: normalizeValidity(b.validadeIni),
     validadeFim: normalizeValidity(b.validadeFim),
@@ -576,7 +588,7 @@ function normalizeValidity(value) {
   return isDateOnly(value) ? String(value).trim() : parsed.toISOString();
 }
 
-const IMPORT_FIELDS = new Set(['nome', 'matricula', 'tipo', 'enrollid', 'validadeIni', 'validadeFim', 'treinutrix', 'ativo', 'senha', 'foto', 'cpf', 'telefone', 'email', 'nascimento', 'endereco', 'bairro', 'cidade', 'cep', 'observacoes']);
+const IMPORT_FIELDS = new Set(['nome', 'matricula', 'tipo', 'enrollid', 'validadeIni', 'validadeFim', 'treinutrix', 'ativo', 'senha', 'foto', 'cpf', 'telefone', 'email', 'nascimento', 'endereco', 'bairro', 'cidade', 'cep', 'observacoes', 'objetivo', 'peso', 'problemasSaude', 'necessidadesEspeciais']);
 
 function mapearLinha(linha, mapeamento) {
   if (!mapeamento || typeof mapeamento !== 'object') return linha;
@@ -646,6 +658,10 @@ function importarPessoas(store, b, { por = 'operador' } = {}) {
         cidade: cleanText(linha.cidade, 100) || null,
         cep: cleanText(linha.cep, 20) || null,
         observacoes: cleanText(linha.observacoes, 1000) || null,
+        objetivo: cleanText(linha.objetivo, 200) || null,
+        peso: normalizarPeso(linha.peso),
+        problemasSaude: cleanText(linha.problemasSaude, 1000) || null,
+        necessidadesEspeciais: cleanText(linha.necessidadesEspeciais, 1000) || null,
       };
       let foto = null;
       if (linha.foto) {
@@ -733,6 +749,8 @@ function importarPessoas(store, b, { por = 'operador' } = {}) {
           cpf: item.cpf, telefone: item.telefone, email: item.email, nascimento: item.nascimento,
           endereco: item.endereco, bairro: item.bairro, cidade: item.cidade, cep: item.cep,
           observacoes: item.observacoes,
+          objetivo: item.objetivo, peso: item.peso,
+          problemasSaude: item.problemasSaude, necessidadesEspeciais: item.necessidadesEspeciais,
           validadeIni: item.validadeIni, validadeFim: item.validadeFim,
           foto: null, senhaHash: hashPassword(item.senha),
           tokenVersion: 0, mustChangePassword: !item.senha,
@@ -760,6 +778,10 @@ function importarPessoas(store, b, { por = 'operador' } = {}) {
         p.cidade = item.cidade;
         p.cep = item.cep;
         p.observacoes = item.observacoes;
+        p.objetivo = item.objetivo;
+        p.peso = item.peso;
+        p.problemasSaude = item.problemasSaude;
+        p.necessidadesEspeciais = item.necessidadesEspeciais;
         p.validadeIni = item.validadeIni;
         p.validadeFim = item.validadeFim;
         p.ativo = item.ativo;
@@ -1249,6 +1271,10 @@ async function route(req, res) {
     if (b.cidade !== undefined) p.cidade = cleanText(b.cidade, 100) || null;
     if (b.cep !== undefined) p.cep = cleanText(b.cep, 20) || null;
     if (b.observacoes !== undefined) p.observacoes = cleanText(b.observacoes, 1000) || null;
+    if (b.objetivo !== undefined) p.objetivo = cleanText(b.objetivo, 200) || null;
+    if (b.peso !== undefined) p.peso = normalizarPeso(b.peso);
+    if (b.problemasSaude !== undefined) p.problemasSaude = cleanText(b.problemasSaude, 1000) || null;
+    if (b.necessidadesEspeciais !== undefined) p.necessidadesEspeciais = cleanText(b.necessidadesEspeciais, 1000) || null;
     if (b.senha) {
       if (String(b.senha).length < 4) return send(res, 400, { error: 'senha curta (mín. 4)' });
       p.senhaHash = hashPassword(b.senha);
@@ -1258,6 +1284,113 @@ async function route(req, res) {
     if (b.foto === null) { deletePhoto(id); p.foto = null; }
     enqueueSync(store, p);
     return send(res, 200, publicPerson(p));
+  }
+
+  // Histórico consolidado: ficha, frequência, planos, cobranças, contatos e aulas.
+  const personHistoryRoute = url.pathname.match(/^\/api\/persons\/([^/]+)\/historico$/);
+  if (req.method === 'GET' && personHistoryRoute) {
+    const id = safeDecode(personHistoryRoute[1]);
+    const p = id ? store.persons.get(id) : null;
+    if (!p) return send(res, 404, { error: 'person_not_found' });
+    if (user.perfil === 'aluno' && user.sub !== id) return send(res, 403, { error: 'sem permissão' });
+
+    const eventos = (store.events || [])
+      .filter((e) => e.personId === id)
+      .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+    const assinaturas = (store.subscriptions || [])
+      .filter((s) => s.personId === id)
+      .sort((a, b) => String(b.inicio).localeCompare(String(a.inicio)));
+    const cobrancas = (store.charges || [])
+      .filter((c) => c.personId === id)
+      .sort((a, b) => String(b.competencia).localeCompare(String(a.competencia)));
+    const contatos = (store.contacts || [])
+      .filter((c) => c.personId === id)
+      .sort((a, b) => String(b.em).localeCompare(String(a.em)));
+    const reservas = (store.classBookings || [])
+      .filter((b) => b.personId === id)
+      .map((b) => {
+        const aula = (store.classSessions || []).find((a) => a.id === b.sessionId);
+        return { ...b, aulaNome: aula?.nome || '', aulaInicio: aula?.inicio || null };
+      })
+      .sort((a, b) => String(b.criadoEm).localeCompare(String(a.criadoEm)));
+
+    const timeline = [];
+    if (p.criadoEm) {
+      timeline.push({ tipo: 'CADASTRO', em: p.criadoEm, titulo: 'Cadastro criado', detalhe: p.tipo || 'ALUNO' });
+    }
+    for (const e of eventos.slice(0, 80)) {
+      timeline.push({
+        tipo: 'ACESSO', em: e.timestamp,
+        titulo: e.decisao === 'ALLOW' ? 'Acesso liberado' : 'Acesso negado',
+        detalhe: [e.motivo, e.metodo, e.deviceId].filter(Boolean).join(' · '),
+      });
+    }
+    for (const s of assinaturas) {
+      timeline.push({
+        tipo: 'PLANO', em: s.criadoEm || s.inicio,
+        titulo: `Plano ${s.planoNome || s.planId}`,
+        detalhe: `${s.status} · ${String(s.inicio).slice(0, 10)} a ${s.fim ? String(s.fim).slice(0, 10) : '—'}`,
+      });
+      if (s.trancadoEm) {
+        timeline.push({
+          tipo: 'PLANO', em: s.trancadoEm, titulo: 'Plano trancado',
+          detalhe: `${s.diasTrancados || ''} dia(s)${s.motivoTrancamento ? ' · ' + s.motivoTrancamento : ''}`,
+        });
+      }
+      if (s.canceladoEm) {
+        timeline.push({
+          tipo: 'PLANO', em: s.canceladoEm, titulo: 'Plano cancelado',
+          detalhe: s.motivoCancelamento || '',
+        });
+      }
+    }
+    for (const c of cobrancas) {
+      const rotulo = {
+        PAGO: 'Mensalidade paga', PENDENTE: 'Mensalidade pendente',
+        ATRASADO: 'Mensalidade atrasada', CANCELADO: 'Mensalidade cancelada',
+      }[c.status] || 'Mensalidade';
+      timeline.push({
+        tipo: 'COBRANCA', em: c.pagoEm || `${c.vencimento}T12:00:00`,
+        titulo: rotulo,
+        detalhe: `${c.competencia} · R$ ${Number(c.valor || 0).toFixed(2)} · vence ${c.vencimento}${c.forma ? ' · ' + c.forma : ''}`,
+      });
+    }
+    for (const c of contatos) {
+      timeline.push({
+        tipo: 'CONTATO', em: c.em, titulo: c.resultado || 'Contato',
+        detalhe: [c.canal, c.observacao].filter(Boolean).join(' · '),
+      });
+    }
+    for (const b of reservas) {
+      timeline.push({
+        tipo: 'AULA', em: b.checkinAt || b.criadoEm,
+        titulo: `Aula ${b.aulaNome || ''}`.trim(),
+        detalhe: [b.status, b.aulaInicio ? String(b.aulaInicio).slice(0, 16).replace('T', ' ') : ''].filter(Boolean).join(' · '),
+      });
+    }
+    timeline.sort((a, b) => String(b.em).localeCompare(String(a.em)));
+
+    return send(res, 200, {
+      pessoa: publicPerson(p),
+      ficha: {
+        objetivo: p.objetivo || null,
+        peso: p.peso ?? null,
+        problemasSaude: p.problemasSaude || null,
+        necessidadesEspeciais: p.necessidadesEspeciais || null,
+        observacoes: p.observacoes || null,
+      },
+      resumo: {
+        totalAcessos: eventos.filter((e) => e.decisao === 'ALLOW').length,
+        ultimaVisita: eventos.find((e) => e.decisao === 'ALLOW')?.timestamp || null,
+        frequencia: diasFrequentados(store.events, id),
+        planosAtivos: planosAtivos(store, id).map((x) => x.nome),
+        aberto: cobrancas
+          .filter((c) => c.status === 'PENDENTE' || c.status === 'ATRASADO')
+          .reduce((s, c) => s + Number(c.valor || 0), 0),
+      },
+      timeline: timeline.slice(0, 150),
+      assinaturas, cobrancas, contatos, reservas,
+    });
   }
 
   // -------------------------------------------------------- planos/mensalidades
