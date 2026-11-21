@@ -1,6 +1,7 @@
 # AGENTS.md — guia para agentes neste repositório
 
-Sistema de gestão de academia com controle de acesso (catraca Topdata + outras).
+**TG · Treinutrix — Gestão de Academias.** Plataforma de gestão de academia com
+controle de acesso (catraca Topdata + outras).
 Leia `docs/HANDOFF-WINDOWS.md` antes de implementar qualquer coisa.
 
 ## Stack

@@ -8,7 +8,8 @@ if errorlevel 1 (
 )
 echo Liberando portas 3001-3003 no firewall (perfis private/domain)...
 netsh advfirewall firewall delete rule name="Painel Catraca" >nul 2>&1
-netsh advfirewall firewall add rule name="Painel Catraca" dir=in action=allow protocol=TCP localport=3001-3003 profile=private,domain
+netsh advfirewall firewall delete rule name="TG Treinutrix" >nul 2>&1
+netsh advfirewall firewall add rule name="TG Treinutrix" dir=in action=allow protocol=TCP localport=3001-3003 profile=private,domain
 if errorlevel 1 (
   echo Falha ao criar a regra.
   pause

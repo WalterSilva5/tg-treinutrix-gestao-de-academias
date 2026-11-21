@@ -164,7 +164,7 @@ Linux — systemd (`/etc/systemd/system/painel-api.service`):
 
 ```ini
 [Unit]
-Description=Painel Catraca API
+Description=TG Treinutrix API
 After=network.target
 
 [Service]

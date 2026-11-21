@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0.."
 
 echo ============================================
-echo  Academia - Gestao de acesso
+echo  TG Treinutrix - Gestao de academias
 echo ============================================
 
 where node >nul 2>nul
