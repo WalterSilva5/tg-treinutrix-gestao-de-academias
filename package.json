@@ -1,9 +1,9 @@
 {
-  "name": "wsi-topdata-catraca-painel",
+  "name": "tg-treinutrix-gestao-de-academias",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Painel de acesso Topdata Fit 4 - scaffold sem hardware",
+  "description": "TG · Treinutrix — plataforma de gestão de academias: alunos, planos, financeiro, aulas, eventos e controle de acesso",
   "scripts": {
     "test": "node --test",
     "api": "node api/src/server.js",

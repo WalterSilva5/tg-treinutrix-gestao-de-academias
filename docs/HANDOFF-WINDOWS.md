@@ -52,7 +52,7 @@ Leia junto com `docs/PROXIMOS-PASSOS.md` (ordem de execução) e `docs/INSTALACA
 ## 3. Instalação no Windows (resumo)
 
 1. Instalar Node.js 22 LTS e Git.
-2. `git clone https://github.com/WalterSilva5/wsi-topdata-catraca-painel.git`
+2. `git clone https://github.com/WalterSilva5/tg-treinutrix-gestao-de-academias.git`
 3. `scripts\iniciar-painel.cmd` (cria `data\auth.secret` no primeiro run).
 4. Liberar firewall TCP 3001 e 3002.
 5. Abrir `http://<IP-da-máquina>:3001`, entrar com `admin` / `admin123` e trocar a senha.

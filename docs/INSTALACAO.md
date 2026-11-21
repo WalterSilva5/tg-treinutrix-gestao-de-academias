@@ -29,8 +29,8 @@ Esperado: `v18+` ou `v2x`.
 ## 2. Obter o código
 
 ```cmd
-git clone https://github.com/WalterSilva5/wsi-topdata-catraca-painel.git
-cd wsi-topdata-catraca-painel
+git clone https://github.com/WalterSilva5/tg-treinutrix-gestao-de-academias.git
+cd tg-treinutrix-gestao-de-academias
 ```
 
 Sem git: baixar o ZIP do repositório e extrair.
@@ -168,7 +168,7 @@ Description=Painel Catraca API
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/wsi-topdata-catraca-painel
+WorkingDirectory=/opt/tg-treinutrix-gestao-de-academias
 Environment=API_PORT=3001
 Environment=AUTH_SECRET=troque-por-um-segredo-longo
 Environment=SEED_ADMIN_PASSWORD=troque-esta-senha

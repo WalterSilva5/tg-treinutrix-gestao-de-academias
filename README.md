@@ -1,9 +1,13 @@
-# wsi-topdata-catraca-painel
+# TG · Treinutrix — Gestão de Academias
 
-Sistema de gestão de academia com controle de acesso integrado a catracas:
-alunos, planos, frequência, recepção e catraca **Topdata Fit 4** — com suporte
-também a outras catracas Topdata (Revolution 4, Box 4, PNE 4), leitor facial e
-controladores HTTP genéricos.
+Plataforma de gestão de academias: alunos, planos e mensalidades, financeiro,
+aulas e reservas, eventos, sorteios, frequência e controle de acesso integrado
+a catracas **Topdata Fit 4** (e outras Topdata: Revolution 4, Box 4, PNE 4),
+leitor facial e controladores HTTP genéricos.
+
+O nome interno dos serviços e pastas de dados (`PainelCatracaAPI`,
+`PainelCatracaEdge`, `data/`) foi mantido por compatibilidade com instalações
+existentes; a marca do produto é **TG · Treinutrix**.
 
 Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces
 + simuladores. O teste físico entra só na validação final.
