@@ -70,7 +70,29 @@ Cada assinatura gera **uma cobrança por mês de vigência**:
 - O pagamento **não altera** o limite de dias; a validade vem da assinatura.
   A recepção pode cancelar/renovar o plano conforme a política da academia.
 
-## 6. Endpoints
+## 6. Trancamento e cancelamento
+
+- **Trancar** (`POST /api/persons/:id/plano/:subId/trancar` com `{ dias, motivo }`):
+  - status passa a `TRANCADA` e `validadeFim` fica nula (acesso bloqueado);
+  - o fim da assinatura é **estendido** pelos dias parados na retomada;
+  - `dias` entre 1 e 365; motivo opcional.
+- **Retomar** (`POST .../retomar`): status volta a `ATIVA`, soma os dias
+  trancados ao `fim` e recalcula a validade.
+- **Cancelar** (`DELETE /api/persons/:id/plano/:subId`): status `CANCELADA`,
+  limpa a validade e preserva histórico (`canceladoEm`, `motivoCancelamento`).
+- Trancamento/cancelamento **não apagam** cobranças já geradas; a recepção
+  decide sobre isenção/ajuste manual.
+- Toda ação gera auditoria (`PLANO_TRANCADO`, `PLANO_RETOMADO`,
+  `PLANO_CANCELADO`).
+
+## 7. Contatos de cobrança
+
+- `GET/POST /api/persons/:id/contatos` guarda histórico de contato:
+  `canal`, `resultado`, `observacao`, `promessaEm`, `por` e `em`.
+- A lista de aging mostra o botão **Contato** e o atalho **WhatsApp**
+  (`wa.me`, sem API oficial) com mensagem pronta.
+
+## 8. Endpoints
 
 | Método | Rota |
 |--------|------|
@@ -78,18 +100,22 @@ Cada assinatura gera **uma cobrança por mês de vigência**:
 | PATCH/DELETE | `/api/plans/:id` |
 | GET/POST | `/api/persons/:id/plano` |
 | DELETE | `/api/persons/:id/plano/:subId` |
+| POST | `/api/persons/:id/plano/:subId/trancar` · `/api/persons/:id/plano/:subId/retomar` |
+| GET/POST | `/api/persons/:id/contatos` |
 | GET | `/api/charges?personId=&competencia=&status=` |
 | POST | `/api/charges/:id/pagar` · `/api/charges/gerar` · `/api/charges/:id/cancelar` |
 
-## 7. Interface
+## 9. Interface
 
 - **Sistema → Planos de mensalidade:** criar/editar/desativar planos.
-- **Operação → Pessoas:** botões **Plano** (contratar) e **Dados** (campos
-  opcionais).
+- **Operação → Pessoas:** botão **Plano** abre o menu contratar/trancar/
+  retomar/cancelar; **Dados** edita os campos opcionais.
 - **Sistema → Mensalidades:** gerar o mês, filtrar, registrar pagamento.
+- **Sistema → Inadimplência (aging):** ver quem cobrar, contatar e abrir
+  WhatsApp.
 - **Meu acesso (aluno):** plano atual, dias/semana e mensalidades em aberto.
 
-## 8. LGPD
+## 10. LGPD
 
 - CPF/telefone/endereço são dados pessoais: acesso restrito à equipe e retenção
   conforme política da academia.

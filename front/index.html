@@ -387,6 +387,11 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
             <div class="list" id="ovPend"></div>
           </div>
           <div class="card">
+            <div class="card-head"><div><h2>Risco de evasão</h2><p class="sub">Alunos para contatar</p></div>
+              <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarRiscos()">Atualizar</button></div></div>
+            <div class="list" id="ovRisco"></div>
+          </div>
+          <div class="card">
             <div class="card-head"><div><h2>Dispositivos</h2><p class="sub">Status da catraca</p></div></div>
             <div class="list" id="ovDevices"></div>
           </div>
@@ -410,6 +415,10 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
       <div class="card">
         <div class="card-head"><div><h2>Próximos eventos</h2><p class="sub">Inscreva-se ou cancele sua inscrição</p></div></div>
         <div class="list" id="meusEventos"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><h2>Próximas aulas</h2><p class="sub">Reserve ou cancele sua vaga</p></div></div>
+        <div class="list" id="minhasAulas"></div>
       </div>
     </section>
     <section id="v-oper" class="hidden">
@@ -696,6 +705,45 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
         </div>
         <div id="cobResumo" class="help"></div>
         <div class="table-wrap"><table><thead><tr><th>Aluno</th><th>Plano</th><th>Competência</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody id="cobrancas"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Inadimplência por idade (aging)</h2><p class="sub">Quem cobrar primeiro, por faixa de atraso</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarAging()">Atualizar</button></div></div>
+        <div id="agingResumo" class="kpis" style="margin-bottom:14px"></div>
+        <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Cobranças</th><th>Aberto</th><th>Vencido</th><th>Faixa</th><th></th></tr></thead><tbody id="agingLista"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Despesas e fluxo de caixa</h2><p class="sub">Saídas por categoria e saldo do mês</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarFluxo()">Atualizar</button></div></div>
+        <div class="form-grid" style="margin-bottom:10px">
+          <input id="despData" type="date" title="Data">
+          <input id="despValor" type="number" min="0" step="0.01" placeholder="Valor">
+          <input id="despDesc" placeholder="Descrição">
+          <input id="despCategoria" placeholder="Categoria (ex.: aluguel)">
+          <input id="despFornecedor" placeholder="Fornecedor (opcional)">
+          <div class="form-actions"><button class="btn sm" onclick="criarDespesa()">Lançar despesa</button></div>
+        </div>
+        <div id="fluxoResumo" class="kpis" style="margin-bottom:14px"></div>
+        <div class="table-wrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th></th></tr></thead><tbody id="despesasLista"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Aulas e agenda</h2><p class="sub">Grade, reservas, lista de espera e check-in</p></div></div>
+        <div class="list" id="listaAulas" style="margin-bottom:10px"></div>
+        <details id="aulaForm">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:10px">Nova aula</summary>
+          <div class="form-grid">
+            <input id="aulaNome" placeholder="Aula (ex.: Funcional)">
+            <input id="aulaProfessor" placeholder="Professor">
+            <input id="aulaSala" placeholder="Sala/local">
+            <input id="aulaInicio" type="datetime-local" title="Início">
+            <input id="aulaFim" type="datetime-local" title="Fim">
+            <input id="aulaCapacidade" type="number" min="0" placeholder="Capacidade (vazio = livre)">
+            <div class="form-actions"><button class="btn sm" onclick="criarAula()">Criar aula</button></div>
+          </div>
+        </details>
       </div>
 
       <div class="card">
@@ -1115,6 +1163,7 @@ async function carregarInicio() {
   desenharSemana(o.semana || []);
   desenharHoras(o.movimentoHora || []);
   desenharDiaSemana(o.porDiaSemana || []);
+  carregarRiscos();
 
   const dentro = o.presentes || [];
   $('ovDentro').textContent = dentro.length;
@@ -1210,6 +1259,7 @@ async function carregarAluno() {
     return `<tr><td class="mono">${data.toLocaleDateString('pt-BR')}</td><td class="muted" style="text-transform:capitalize">${DIAS[data.getDay()]}</td><td style="text-align:right"><span class="badge ok dot">frequentou</span></td></tr>`;
   }).join('') || '<tr><td colspan="3"><div class="empty">Nenhum dia registrado ainda.</div></td></tr>';
   carregarMeusEventos();
+  carregarMinhasAulas();
 }
 
 // ---------- operação ----------
@@ -1473,6 +1523,38 @@ async function editarDadosPessoa(id) {
   } catch (e) { toast('Falha ao atualizar', e.message, 'err'); }
 }
 
+async function gerenciarPlano(id) {
+  try {
+    const pp = await jget(`/api/persons/${encodeURIComponent(id)}/plano`);
+    const ativas = (pp.assinaturas || []).filter((s) => s.status === 'ATIVA' || s.status === 'TRANCADA');
+    const lista = ativas.map((s, i) => `${i + 1}. ${s.planoNome || s.planId} — ${s.status}${s.fim ? ` até ${dataCurta(s.fim)}` : ''}`).join('\n');
+    const opcao = prompt(`Plano do aluno:\n${lista || 'nenhum contrato'}\n\n1 contratar  2 trancar  3 retomar  4 cancelar`, '1');
+    if (!opcao) return;
+    if (opcao === '1') return atribuirPlano(id);
+    if (opcao === '2') {
+      const ativa = ativas.find((s) => s.status === 'ATIVA');
+      if (!ativa) return toast('Sem plano ativo', '', 'warn');
+      const dias = Number(prompt('Dias de trancamento (1 a 365):', '30'));
+      if (!Number.isInteger(dias) || dias < 1 || dias > 365) return toast('Dias inválidos', '', 'err');
+      const motivo = prompt('Motivo (opcional):', '') || '';
+      await jpost(`/api/persons/${encodeURIComponent(id)}/plano/${encodeURIComponent(ativa.id)}/trancar`, { dias, motivo });
+      toast('Plano trancado', `${dias} dia(s)`);
+    } else if (opcao === '3') {
+      const trancada = ativas.find((s) => s.status === 'TRANCADA');
+      if (!trancada) return toast('Sem plano trancado', '', 'warn');
+      await jpost(`/api/persons/${encodeURIComponent(id)}/plano/${encodeURIComponent(trancada.id)}/retomar`, {});
+      toast('Plano retomado', '');
+    } else if (opcao === '4') {
+      const ativa = ativas.find((s) => s.status === 'ATIVA');
+      if (!ativa) return toast('Sem plano ativo', '', 'warn');
+      if (!confirm('Cancelar este plano?')) return;
+      const motivo = prompt('Motivo do cancelamento:', '') || '';
+      await jdel(`/api/persons/${encodeURIComponent(id)}/plano/${encodeURIComponent(ativa.id)}?motivo=${encodeURIComponent(motivo)}`);
+      toast('Plano cancelado', '');
+    } else return;
+    carregarSistema();
+  } catch (e) { toast('Falha no plano', e.message, 'err'); }
+}
 async function atribuirPlano(id) {
   if (!PLANOS_CACHE.length) await carregarPlanos();
   if (!PLANOS_CACHE.length) return toast('Nenhum plano', 'Cadastre um plano em Sistema', 'err');
@@ -1563,6 +1645,9 @@ async function carregarSistema() {
   await carregarAuditoria();
   await carregarPlanos();
   await carregarCobrancas();
+  await carregarAging();
+  await carregarFluxo();
+  await carregarAulas();
 }
 
 let PLANOS_CACHE = [];
@@ -1684,6 +1769,172 @@ async function pagarCobranca(id) {
     toast('Mensalidade paga', '');
     carregarCobrancas();
   } catch (e) { toast('Falha ao registrar', e.message, 'err'); }
+}
+
+async function carregarAging() {
+  try {
+    const r = await jget('/api/financeiro/aging');
+    const brl = (n) => 'R$ ' + Number(n || 0).toFixed(2).replace('.', ',');
+    $('agingResumo').innerHTML = `
+      <div class="kpi"><div class="v">${brl(r.totalAberto)}</div><div class="l">Em aberto</div></div>
+      <div class="kpi bad"><div class="v">${brl(r.totalVencido)}</div><div class="l">Vencido</div></div>
+      <div class="kpi warn"><div class="v">${brl(r.buckets.d1_30)}</div><div class="l">1–30 dias</div></div>
+      <div class="kpi bad"><div class="v">${brl(r.buckets.d31_60)}</div><div class="l">31–60 dias</div></div>
+      <div class="kpi bad"><div class="v">${brl(r.buckets.d61_90 + r.buckets.d90)}</div><div class="l">61+ dias</div></div>`;
+    $('agingLista').innerHTML = r.pessoas.map((p) => `
+      <tr><td><b>${esc(p.nome)}</b><div class="muted">${esc(p.matricula || '')}${p.telefone ? ' · ' + esc(p.telefone) : ''}</div></td>
+      <td>${p.cobrancas}</td><td>${brl(p.aberto)}</td><td>${brl(p.vencido)}</td>
+      <td><span class="badge ${p.faixa === 'aVencer' ? 'neutral' : 'bad'}">${esc(p.faixa)}</span></td>
+      <td>
+        <button class="btn ghost sm" onclick="contatoCobranca('${esc(p.personId)}')">Contato</button>
+        ${p.telefone ? `<button class="btn ghost sm" onclick="cobrarWhatsApp('${esc(p.personId)}', '${esc(p.nome)}', '${esc(p.telefone)}', ${Number(p.aberto)})">WhatsApp</button>` : ''}
+      </td></tr>`).join('') || '<tr><td colspan="6"><div class="empty">Nenhuma cobrança em aberto.</div></td></tr>';
+  } catch (e) { $('agingLista').innerHTML = '<tr><td colspan="6"><div class="empty">Indisponível.</div></td></tr>'; }
+}
+
+async function contatoCobranca(personId) {
+  const resultado = prompt('Resultado do contato (ex.: prometeu pagar, sem resposta, pagou):', 'tentativa');
+  if (!resultado) return;
+  const observacao = prompt('Observação (opcional):', '') || '';
+  try {
+    await jpost(`/api/persons/${encodeURIComponent(personId)}/contatos`, {
+      canal: 'WHATSAPP', resultado, observacao, por: sess.nome || 'recepção',
+    });
+    toast('Contato registrado', resultado);
+  } catch (e) { toast('Falha ao registrar', e.message, 'err'); }
+}
+
+function cobrarWhatsApp(personId, nome, telefone, valor) {
+  const texto = Number(valor) > 0
+    ? `Olá ${nome}, tudo bem? Identificamos uma mensalidade em aberto no valor de R$ ${Number(valor).toFixed(2).replace('.', ',')}. Podemos ajudar com o pagamento?`
+    : `Olá ${nome}, tudo bem? Podemos conversar sobre seu plano/treinos?`;
+  const digits = String(telefone || '').replace(/\D/g, '');
+  const url = digits ? `https://wa.me/55${digits.replace(/^55/, '')}?text=${encodeURIComponent(texto)}` : '';
+  if (url) window.open(url, '_blank', 'noopener');
+  else { navigator.clipboard?.writeText(texto); toast('Telefone ausente', 'Mensagem copiada para enviar manualmente', 'warn'); }
+}
+
+async function carregarFluxo() {
+  try {
+    const d = new Date();
+    const inicio = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    const ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const fim = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`;
+    const [f, despesas] = await Promise.all([
+      jget(`/api/financeiro/fluxo?inicio=${inicio}&fim=${fim}`),
+      jget('/api/expenses'),
+    ]);
+    const brl = (n) => 'R$ ' + Number(n || 0).toFixed(2).replace('.', ',');
+    $('fluxoResumo').innerHTML = `
+      <div class="kpi ok"><div class="v">${brl(f.totalReceitas)}</div><div class="l">Receitas</div></div>
+      <div class="kpi bad"><div class="v">${brl(f.totalDespesas)}</div><div class="l">Despesas</div></div>
+      <div class="kpi ${f.saldo >= 0 ? 'accent' : 'bad'}"><div class="v">${brl(f.saldo)}</div><div class="l">Saldo</div></div>`;
+    $('despesasLista').innerHTML = despesas.slice(0, 40).map((x) => `
+      <tr><td>${esc(dataCurta(x.data))}</td><td>${esc(x.descricao)}</td><td>${esc(x.categoria)}</td>
+      <td>${brl(x.valor)}</td><td><button class="btn danger sm" onclick="excluirDespesa('${esc(x.id)}')">Excluir</button></td></tr>`).join('')
+      || '<tr><td colspan="5"><div class="empty">Nenhuma despesa.</div></td></tr>';
+  } catch (e) { $('despesasLista').innerHTML = '<tr><td colspan="5"><div class="empty">Indisponível.</div></td></tr>'; }
+}
+
+async function criarDespesa() {
+  const data = $('despData').value || new Date().toISOString().slice(0, 10);
+  const valor = Number($('despValor').value);
+  const descricao = $('despDesc').value.trim();
+  if (!descricao) return toast('Descrição obrigatória', '', 'err');
+  if (!(valor > 0)) return toast('Valor inválido', '', 'err');
+  try {
+    await jpost('/api/expenses', {
+      data, valor, descricao, categoria: $('despCategoria').value.trim() || 'Outros',
+      fornecedor: $('despFornecedor').value.trim() || null,
+    });
+    toast('Despesa lançada', descricao);
+    ['despValor', 'despDesc', 'despCategoria', 'despFornecedor'].forEach((id) => { $(id).value = ''; });
+    carregarFluxo();
+  } catch (e) { toast('Falha ao lançar', e.message, 'err'); }
+}
+
+async function excluirDespesa(id) {
+  if (!confirm('Excluir esta despesa?')) return;
+  try { await jdel(`/api/expenses/${encodeURIComponent(id)}`); toast('Despesa excluída', ''); carregarFluxo(); }
+  catch (e) { toast('Falha ao excluir', e.message, 'err'); }
+}
+
+async function carregarAulas() {
+  try {
+    const lista = await jget('/api/classes');
+    $('listaAulas').innerHTML = lista.map((a) => `
+      <div class="list-item"><div><div class="t">${esc(a.nome)} ${a.ativo === false ? '<span class="badge neutral">inativa</span>' : ''}</div>
+      <div class="d">${esc(dataHoraCurta(a.inicio))}${a.professor ? ' · ' + esc(a.professor) : ''}${a.sala ? ' · ' + esc(a.sala) : ''} · ${a.reservados} reserva(s) · ${a.presentes} presente(s)${a.espera ? ' · ' + a.espera + ' espera' : ''}</div></div>
+      <div style="display:flex;gap:6px"><button class="btn ghost sm" onclick="checkinAulaUI('${esc(a.id)}')">Check-in</button>
+      <button class="btn danger sm" onclick="excluirAula('${esc(a.id)}')">Excluir</button></div></div>`).join('')
+      || '<div class="empty">Nenhuma aula cadastrada.</div>';
+  } catch (e) { $('listaAulas').innerHTML = '<div class="empty">Indisponível.</div>'; }
+}
+
+async function criarAula() {
+  const nome = $('aulaNome').value.trim();
+  if (!nome) return toast('Nome obrigatório', '', 'err');
+  if (!$('aulaInicio').value) return toast('Início obrigatório', '', 'err');
+  try {
+    await jpost('/api/classes', {
+      nome, professor: $('aulaProfessor').value.trim(), sala: $('aulaSala').value.trim(),
+      inicio: new Date($('aulaInicio').value).toISOString(),
+      fim: $('aulaFim').value ? new Date($('aulaFim').value).toISOString() : null,
+      capacidade: $('aulaCapacidade').value ? Number($('aulaCapacidade').value) : null,
+    });
+    toast('Aula criada', nome);
+    ['aulaNome', 'aulaProfessor', 'aulaSala', 'aulaInicio', 'aulaFim', 'aulaCapacidade'].forEach((id) => { $(id).value = ''; });
+    carregarAulas();
+  } catch (e) { toast('Falha ao criar aula', e.message, 'err'); }
+}
+
+async function checkinAulaUI(id) {
+  const codigo = prompt('Código de check-in da reserva:');
+  if (!codigo) return;
+  try { const r = await jpost(`/api/classes/${encodeURIComponent(id)}/checkin`, { codigo }); toast('Check-in', r.personId); carregarAulas(); }
+  catch (e) { toast('Código não encontrado', e.message, 'err'); }
+}
+
+async function excluirAula(id) {
+  if (!confirm('Excluir esta aula e as reservas?')) return;
+  try { await jdel(`/api/classes/${encodeURIComponent(id)}`); toast('Aula excluída', ''); carregarAulas(); }
+  catch (e) { toast('Falha ao excluir', e.message, 'err'); }
+}
+
+async function carregarMinhasAulas() {
+  try {
+    const lista = await jget('/api/me/classes');
+    $('minhasAulas').innerHTML = lista.map((a) => `
+      <div class="list-item"><div><div class="t">${esc(a.nome)}</div>
+      <div class="d">${esc(dataHoraCurta(a.inicio))}${a.professor ? ' · ' + esc(a.professor) : ''}${a.sala ? ' · ' + esc(a.sala) : ''}${a.capacidade ? ' · ' + a.vagas + ' vaga(s)' : ''}</div>
+      ${a.reservado ? `<div class="d">Reserva: <b>${esc(a.statusReserva)}</b>${a.codigo ? ' · código ' + esc(a.codigo) : ''}</div>` : ''}</div>
+      ${a.reservado ? `<button class="btn ghost sm" onclick="cancelarAulaUI('${esc(a.id)}')">Cancelar</button>`
+        : `<button class="btn sm" onclick="reservarAulaUI('${esc(a.id)}')">Reservar</button>`}</div>`).join('')
+      || '<div class="empty">Nenhuma aula aberta.</div>';
+  } catch (e) { $('minhasAulas').innerHTML = '<div class="empty">Aulas indisponíveis.</div>'; }
+}
+
+async function reservarAulaUI(id) {
+  try { const r = await jpost(`/api/me/classes/${encodeURIComponent(id)}/inscrever`, {}); toast(r.status === 'ESPERA' ? 'Lista de espera' : 'Reserva confirmada', r.codigo ? 'Código ' + r.codigo : ''); carregarMinhasAulas(); }
+  catch (e) { toast('Falha ao reservar', e.message, 'err'); }
+}
+async function cancelarAulaUI(id) {
+  if (!confirm('Cancelar sua reserva?')) return;
+  try { await jdel(`/api/me/classes/${encodeURIComponent(id)}/inscricao`); toast('Reserva cancelada', ''); carregarMinhasAulas(); }
+  catch (e) { toast('Falha ao cancelar', e.message, 'err'); }
+}
+
+async function carregarRiscos() {
+  try {
+    const r = await jget('/api/retention/risks');
+    $('ovRisco').innerHTML = (r.pessoas || []).slice(0, 8).map((p) => `
+      <div class="list-item"><div><div class="t">${esc(p.nome)} <span class="badge ${p.pontos >= 50 ? 'bad' : 'warn'}">${p.pontos}</span></div>
+      <div class="d">${esc((p.motivos || []).join(' · '))}</div></div>
+      <div style="display:flex;gap:4px">
+        <button class="btn ghost sm" onclick="contatoCobranca('${esc(p.personId)}')">Contato</button>
+        ${p.telefone ? `<button class="btn ghost sm" onclick="cobrarWhatsApp('${esc(p.personId)}', '${esc(p.nome)}', '${esc(p.telefone)}', 0)">WhatsApp</button>` : ''}
+      </div></div>`).join('') || '<div class="empty">Nenhum risco no momento.</div>';
+  } catch (e) { $('ovRisco').innerHTML = '<div class="empty">Indisponível.</div>'; }
 }
 
 async function carregarAuditoria() {
@@ -1973,7 +2224,7 @@ function renderPessoas() {
       <td style="text-align:right;white-space:nowrap">
         <button class="btn ghost sm" onclick="renovar('${esc(p.id)}', 30)" title="Renovar +30 dias">+30d</button>
         <button class="btn ghost sm" onclick="renovar('${esc(p.id)}', 90)" title="Renovar +90 dias">+90d</button>
-        <button class="btn ghost sm" onclick="atribuirPlano('${esc(p.id)}')">Plano</button>
+        <button class="btn ghost sm" onclick="gerenciarPlano('${esc(p.id)}')">Plano</button>
         <button class="btn ghost sm" onclick="editarDadosPessoa('${esc(p.id)}')">Dados</button>
         <button class="btn ghost sm" onclick="trocarFoto('${esc(p.id)}')">Foto</button>
         <button class="btn ghost sm" onclick="editarHorario('${esc(p.id)}')">Horário</button>

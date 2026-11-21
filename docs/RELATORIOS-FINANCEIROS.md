@@ -49,16 +49,47 @@ GET /api/relatorios/financeiro.pdf?inicio=...&fim=...
 }
 ```
 
-## 4. Interface
+## 5. Inadimplência por idade (aging)
+
+`GET /api/financeiro/aging` (gerência) agrupa cobranças `PENDENTE`/`ATRASADO`:
+
+| Faixa | Critério |
+|-------|----------|
+| `aVencer` | vencimento hoje ou no futuro |
+| `d1_30` | 1 a 30 dias de atraso |
+| `d31_60` | 31 a 60 dias |
+| `d61_90` | 61 a 90 dias |
+| `d90` | mais de 90 dias |
+
+Resposta: `totalAberto`, `totalVencido`, `buckets` e `pessoas` (nome,
+matrícula, telefone, cobranças, aberto, vencido, `maisAntigo` e pior faixa).
+Cobranças canceladas são ignoradas.
+
+## 6. Fluxo de caixa e despesas
+
+- Despesas: `GET/POST /api/expenses` e `PATCH/DELETE /api/expenses/:id`
+  (gerência). Campos: `data`, `valor`, `descricao`, `categoria`, `fornecedor`.
+- `GET /api/financeiro/fluxo?inicio=&fim=` soma:
+  - receitas = cobranças `PAGO` com `pagoEm` no período;
+  - despesas = lançamentos com `data` no período;
+  - `saldo = receitas − despesas`, além de `porCategoria` e `porDia`.
+- O padrão do período é o mês corrente.
+- Indicadores no painel: **Sistema → Despesas e fluxo de caixa**.
+- Exportação CSV/PDF do fluxo ainda não existe; use a tela ou a API JSON.
+
+## 7. Interface
 
 - **Relatórios → Financeiro** (gerência):
   - seletor de mês;
   - KPIs, tabelas por competência, plano, forma e devedores;
   - botões **CSV** e **PDF**.
+- **Sistema → Inadimplência (aging):** faixas, devedores e ações de contato.
+- **Sistema → Despesas e fluxo de caixa:** lançar/editar/excluir despesas e
+  acompanhar receitas, despesas e saldo do mês.
 - **Sistema → Mensalidades** continua sendo a operação do dia a dia
   (gerar mês, registrar pagamento).
 
-## 5. Regras e limitações
+## 8. Regras e limitações
 
 - O pagamento registrado **não altera** automaticamente o limite de dias nem a
   validade; quem controla isso é a assinatura do plano (ou ajuste manual).

@@ -167,6 +167,31 @@ export function cancelarAssinatura(store, assinatura, { motivo = '', agora = new
   return assinatura;
 }
 
+// Trancamento: pausa o acesso e estende o fim da assinatura pelos dias parados.
+export function trancarAssinatura(store, assinatura, { dias = 30, motivo = '', agora = new Date() } = {}) {
+  if (!assinatura || assinatura.status !== 'ATIVA') return null;
+  const total = Math.max(1, Math.min(365, Number(dias) || 30));
+  assinatura.status = 'TRANCADA';
+  assinatura.trancadoEm = agora.toISOString();
+  assinatura.trancadoAte = new Date(agora.getTime() + total * 24 * 3600 * 1000).toISOString();
+  assinatura.diasTrancados = total;
+  assinatura.motivoTrancamento = String(motivo || '').slice(0, 200);
+  const pessoa = store.persons.get(assinatura.personId);
+  if (pessoa) recalcularValidade(store, pessoa, agora);
+  return assinatura;
+}
+
+export function retomarAssinatura(store, assinatura, { agora = new Date() } = {}) {
+  if (!assinatura || assinatura.status !== 'TRANCADA') return null;
+  const dias = Math.max(0, Number(assinatura.diasTrancados) || 0);
+  assinatura.fim = new Date(new Date(assinatura.fim).getTime() + dias * 24 * 3600 * 1000).toISOString();
+  assinatura.status = 'ATIVA';
+  assinatura.retomadoEm = agora.toISOString();
+  const pessoa = store.persons.get(assinatura.personId);
+  if (pessoa) recalcularValidade(store, pessoa, agora);
+  return assinatura;
+}
+
 export function gerarCobrancasMes(store, competencia, { agora = new Date() } = {}) {
   const alvo = String(competencia || competenciaDe(agora));
   const [ano, mes] = alvo.split('-').map(Number);

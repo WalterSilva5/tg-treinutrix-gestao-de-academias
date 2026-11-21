@@ -39,6 +39,8 @@ scripts\iniciar-painel.cmd
 | Retenção LGPD | `api/src/retention.js` |
 | Planos/mensalidades | `api/src/plans.js` + `docs/PLANOS-MENSALIDADES.md` |
 | Relatório financeiro | `api/src/finance.js` + `docs/RELATORIOS-FINANCEIROS.md` |
+| Aulas/reservas | `api/src/classes.js` + `docs/AULAS-RESERVAS.md` |
+| Risco de evasão | `api/src/retention-risk.js` + `docs/RETENCAO-EVASAO.md` |
 | Métricas de movimento | `api/src/reports.js` + `docs/METRICAS-MOVIMENTO.md` |
 | Múltiplas catracas/TLS | `docs/MULTI-CATRACA.md` |
 | Portabilidade Prisma/MySQL | `prisma/schema.access.prisma` + `docs/PORTABILIDADE.md` |

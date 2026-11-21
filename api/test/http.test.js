@@ -987,3 +987,131 @@ test('metricas de movimento por hora e por dia', async () => {
   assert.match(texto, /Por hor.rio/);
   assert.match(texto, /Por dia da semana/);
 });
+
+test('despesas alimentam fluxo de caixa e aging lista devedores', async () => {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const criar = await api('/api/expenses', {
+    method: 'POST', token: admin,
+    body: { data: hoje, valor: 87.5, descricao: 'Luz ' + run, categoria: 'Contas' },
+  });
+  assert.equal(criar.status, 201, criar.text);
+  assert.equal(criar.json.valor, 87.5);
+
+  const invalida = await api('/api/expenses', { method: 'POST', token: admin, body: { data: hoje, valor: 0, descricao: 'x' } });
+  assert.equal(invalida.status, 400);
+
+  const lista = await api('/api/expenses', { token: admin });
+  assert.ok(lista.json.some((e) => e.id === criar.json.id));
+
+  const fluxo = await api('/api/financeiro/fluxo', { token: admin });
+  assert.equal(fluxo.status, 200, fluxo.text);
+  assert.ok(fluxo.json.totalDespesas >= 87.5);
+  assert.ok(fluxo.json.porCategoria.some((c) => c.categoria === 'Contas'));
+  assert.ok(Array.isArray(fluxo.json.porDia));
+
+  const aging = await api('/api/financeiro/aging', { token: admin });
+  assert.equal(aging.status, 200, aging.text);
+  assert.ok(aging.json.buckets);
+  assert.ok(Array.isArray(aging.json.pessoas));
+  assert.ok(aging.json.totalAberto >= 0);
+
+  const alunoLogin = await api('/api/auth/login', { method: 'POST', body: { login: 'EV' + run, senha: 'aluno123' } });
+  assert.equal((await api('/api/financeiro/aging', { token: alunoLogin.json.token })).status, 403);
+
+  assert.equal((await api('/api/expenses/' + criar.json.id, { method: 'DELETE', token: admin })).status, 200);
+});
+
+test('aulas: aluno reserva, recepcao faz check-in e cancelamento promove espera', async () => {
+  const a1 = await api('/api/classes', {
+    method: 'POST', token: admin,
+    body: { nome: 'Funcional ' + run, professor: 'Rafa', sala: 'Studio', inicio: '2027-01-10T19:00', fim: '2027-01-10T20:00', capacidade: 1 },
+  });
+  assert.equal(a1.status, 201, a1.text);
+  assert.ok(a1.json.id);
+
+  const p = await api('/api/persons', {
+    method: 'POST', token: admin,
+    body: { nome: 'Aluno Aula ' + run, matricula: 'AU' + run, senha: 'aluno123', tipo: 'ALUNO', validadeFim: '2027-12-31' },
+  });
+  const login = await api('/api/auth/login', { method: 'POST', body: { login: 'AU' + run, senha: 'aluno123' } });
+  const token = login.json.token;
+
+  const minhas = await api('/api/me/classes', { token });
+  assert.equal(minhas.status, 200, minhas.text);
+  assert.ok(minhas.json.some((c) => c.id === a1.json.id));
+
+  const reserva = await api(`/api/me/classes/${a1.json.id}/inscrever`, { method: 'POST', token, body: {} });
+  assert.equal(reserva.status, 201, reserva.text);
+  assert.equal(reserva.json.status, 'RESERVADO');
+  assert.match(reserva.json.codigo, /^[0-9A-F]{6}$/);
+
+  const checkin = await api(`/api/classes/${a1.json.id}/checkin`, {
+    method: 'POST', token: admin, body: { codigo: reserva.json.codigo },
+  });
+  assert.equal(checkin.status, 200, checkin.text);
+  assert.equal(checkin.json.personId, p.json.id);
+
+  const detalhe = await api(`/api/classes/${a1.json.id}`, { token: admin });
+  assert.equal(detalhe.json.presentes, undefined); // detalhe lista reservas
+  assert.equal(detalhe.json.reservas[0].status, 'PRESENTE');
+
+  const a2 = await api('/api/classes', {
+    method: 'POST', token: admin,
+    body: { nome: 'Espera ' + run, inicio: '2027-01-11T19:00', capacidade: 1 },
+  });
+  const r1 = await api(`/api/me/classes/${a2.json.id}/inscrever`, { method: 'POST', token, body: {} });
+  assert.equal(r1.status, 201);
+  const p2 = await api('/api/persons', {
+    method: 'POST', token: admin,
+    body: { nome: 'Aluno Espera ' + run, matricula: 'ES' + run, senha: 'aluno123', tipo: 'ALUNO', validadeFim: '2027-12-31' },
+  });
+  const login2 = await api('/api/auth/login', { method: 'POST', body: { login: 'ES' + run, senha: 'aluno123' } });
+  const r2 = await api(`/api/me/classes/${a2.json.id}/inscrever`, { method: 'POST', token: login2.json.token, body: {} });
+  assert.equal(r2.json.status, 'ESPERA');
+
+  const cancelar = await api(`/api/me/classes/${a2.json.id}/inscricao`, { method: 'DELETE', token });
+  assert.equal(cancelar.status, 200);
+  const detalhe2 = await api(`/api/classes/${a2.json.id}`, { token: admin });
+  const daEspera = detalhe2.json.reservas.find((b) => b.personId === p2.json.id);
+  assert.equal(daEspera.status, 'RESERVADO');
+});
+
+test('trancamento via HTTP zera validade e retomada reativa', async () => {
+  const plano = await api('/api/plans', {
+    method: 'POST', token: admin,
+    body: { nome: 'Trancavel ' + run, valor: 120, diasPorSemana: 3, duracaoMeses: 1 },
+  });
+  const p = await api('/api/persons', {
+    method: 'POST', token: admin,
+    body: { nome: 'Aluno Tranca ' + run, matricula: 'TR' + run, tipo: 'ALUNO' },
+  });
+  const sub = await api(`/api/persons/${p.json.id}/plano`, {
+    method: 'POST', token: admin,
+    body: { planoId: plano.json.id, inicio: '2026-11-01' },
+  });
+  assert.equal(sub.status, 201, sub.text);
+  const subId = sub.json.id;
+
+  const trancar = await api(`/api/persons/${p.json.id}/plano/${subId}/trancar`, {
+    method: 'POST', token: admin, body: { dias: 15, motivo: 'viagem' },
+  });
+  assert.equal(trancar.status, 200, trancar.text);
+  assert.equal(trancar.json.status, 'TRANCADA');
+  const aposTrancar = await api(`/api/persons/${p.json.id}`, { token: admin });
+  assert.ok(!aposTrancar.json.validadeFim, JSON.stringify(aposTrancar.json));
+
+  const retomar = await api(`/api/persons/${p.json.id}/plano/${subId}/retomar`, { method: 'POST', token: admin, body: {} });
+  assert.equal(retomar.status, 200, retomar.text);
+  assert.equal(retomar.json.status, 'ATIVA');
+
+  const contato = await api(`/api/persons/${p.json.id}/contatos`, {
+    method: 'POST', token: admin, body: { canal: 'WHATSAPP', resultado: 'prometeu pagar' },
+  });
+  assert.equal(contato.status, 201, contato.text);
+  const contatos = await api(`/api/persons/${p.json.id}/contatos`, { token: admin });
+  assert.equal(contatos.json.length, 1);
+
+  const riscos = await api('/api/retention/risks?dias=1', { token: admin });
+  assert.equal(riscos.status, 200, riscos.text);
+  assert.ok(Array.isArray(riscos.json.pessoas));
+});

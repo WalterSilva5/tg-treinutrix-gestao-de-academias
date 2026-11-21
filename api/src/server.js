@@ -30,11 +30,13 @@ import {
 } from './social.js';
 import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento, eventosParaCsv, eventosParaPdf, sorteioParaCsv, sorteioParaPdf, csvTabela, pdfTexto } from './report.js';
 import { relatorioGeral } from './reports.js';
-import { relatorioFinanceiro } from './finance.js';
+import { relatorioFinanceiro, agingFinanceiro, fluxoCaixa } from './finance.js';
+import { riscosRetencao } from './retention-risk.js';
+import { normalizarAula, novaAula, reservarAula, cancelarReserva, checkinAula } from './classes.js';
 import { serialize } from './state.js';
 import {
   normalizarPlano, novoPlano, criarAssinatura, cancelarAssinatura,
-  gerarCobrancasMes, planosAtivos, usoDaSemana,
+  gerarCobrancasMes, planosAtivos, usoDaSemana, trancarAssinatura, retomarAssinatura,
 } from './plans.js';
 import { aplicarRetencao } from './retention.js';
 
@@ -1350,10 +1352,129 @@ async function route(req, res) {
     const sub = (store.subscriptions || []).find((s) => s.id === subId && s.personId === personId);
     if (!sub) return send(res, 404, { error: 'assinatura_not_found' });
     const b = await readBody(req).catch(() => ({}));
-    cancelarAssinatura(store, sub, { motivo: b.motivo });
+    cancelarAssinatura(store, sub, { motivo: b.motivo || url.searchParams.get('motivo') || '' });
     markDirty();
     auditar(user, 'PLANO_CANCELADO', `${personId}: ${sub.planoNome || sub.planId}`, req);
     return send(res, 200, sub);
+  }
+  const personPlanAcaoRoute = url.pathname.match(/^\/api\/persons\/([^/]+)\/plano\/([^/]+)\/(trancar|retomar)$/);
+  if (req.method === 'POST' && personPlanAcaoRoute) {
+    gerenciaOnly();
+    const personId = safeDecode(personPlanAcaoRoute[1]);
+    const subId = safeDecode(personPlanAcaoRoute[2]);
+    const acao = personPlanAcaoRoute[3];
+    const sub = (store.subscriptions || []).find((s) => s.id === subId && s.personId === personId);
+    if (!sub) return send(res, 404, { error: 'assinatura_not_found' });
+    const b = await readBody(req);
+    const out = acao === 'trancar'
+      ? trancarAssinatura(store, sub, { dias: b.dias, motivo: b.motivo })
+      : retomarAssinatura(store, sub, { agora: new Date() });
+    if (!out) return send(res, 409, { error: `não é possível ${acao} esta assinatura` });
+    markDirty();
+    auditar(user, acao === 'trancar' ? 'PLANO_TRANCADO' : 'PLANO_RETOMADO', `${personId}: ${sub.diasTrancados || ''} dia(s)`, req);
+    return send(res, 200, out);
+  }
+
+  // Contatos de cobrança/retenção por pessoa.
+  const contatoRoute = url.pathname.match(/^\/api\/persons\/([^/]+)\/contatos$/);
+  if (contatoRoute) {
+    operadorOnly();
+    const personId = safeDecode(contatoRoute[1]);
+    const pessoa = personId ? store.persons.get(personId) : null;
+    if (!pessoa) return send(res, 404, { error: 'person_not_found' });
+    if (req.method === 'GET') {
+      return send(res, 200, (store.contacts || []).filter((c) => c.personId === personId).slice().reverse());
+    }
+    if (req.method === 'POST') {
+      const b = await readBody(req);
+      const contato = {
+        id: nextId('ctt'), personId,
+        canal: cleanText(b.canal, 30) || 'WHATSAPP',
+        resultado: cleanText(b.resultado, 80) || 'CONTATO',
+        observacao: cleanText(b.observacao, 500) || null,
+        promessaEm: b.promessaEm ? (parseDate(b.promessaEm) ? String(b.promessaEm).slice(0, 10) : null) : null,
+        por: cleanText(b.por, 80) || user.nome || user.sub,
+        em: new Date().toISOString(),
+      };
+      store.contacts = store.contacts || [];
+      store.contacts.push(contato);
+      if (store.contacts.length > 5000) store.contacts.splice(0, store.contacts.length - 5000);
+      markDirty();
+      return send(res, 201, contato);
+    }
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/financeiro/aging') {
+    gerenciaOnly();
+    return send(res, 200, agingFinanceiro(store));
+  }
+  if (req.method === 'GET' && url.pathname === '/api/financeiro/fluxo') {
+    gerenciaOnly();
+    return send(res, 200, fluxoCaixa(store, {
+      inicio: url.searchParams.get('inicio'), fim: url.searchParams.get('fim'),
+    }));
+  }
+  if (req.method === 'GET' && url.pathname === '/api/retention/risks') {
+    operadorOnly();
+    return send(res, 200, riscosRetencao(store, {
+      diasSemVisita: Number(url.searchParams.get('dias') || 14),
+    }));
+  }
+
+  // Despesas (fluxo de caixa).
+  if (url.pathname === '/api/expenses') {
+    gerenciaOnly();
+    if (req.method === 'GET') {
+      const de = url.searchParams.get('de');
+      const ate = url.searchParams.get('ate');
+      let lista = [...(store.expenses || [])];
+      if (de) lista = lista.filter((e) => e.data >= de);
+      if (ate) lista = lista.filter((e) => e.data <= ate);
+      return send(res, 200, lista.sort((a, b) => String(b.data).localeCompare(String(a.data))));
+    }
+    if (req.method === 'POST') {
+      const b = await readBody(req);
+      const valor = Number(b.valor);
+      const descricao = cleanText(b.descricao, 200);
+      if (!descricao) return send(res, 400, { error: 'descrição obrigatória' });
+      if (!Number.isFinite(valor) || valor <= 0) return send(res, 400, { error: 'valor inválido' });
+      if (!parseDate(b.data)) return send(res, 400, { error: 'data inválida' });
+      const despesa = {
+        id: nextId('dsp'), data: String(b.data).slice(0, 10), valor: Math.round(valor * 100) / 100,
+        descricao, categoria: cleanText(b.categoria, 60) || 'Outros',
+        fornecedor: cleanText(b.fornecedor, 120) || null,
+        por: user.nome || user.sub, criadoEm: new Date().toISOString(),
+      };
+      store.expenses.push(despesa);
+      markDirty();
+      auditar(user, 'DESPESA_CRIADA', `${despesa.descricao} R$ ${despesa.valor}`, req);
+      return send(res, 201, despesa);
+    }
+  }
+  const expenseRoute = url.pathname.match(/^\/api\/expenses\/([^/]+)$/);
+  if (expenseRoute && (req.method === 'PATCH' || req.method === 'DELETE')) {
+    gerenciaOnly();
+    const id = safeDecode(expenseRoute[1]);
+    const despesa = (store.expenses || []).find((e) => e.id === id);
+    if (!despesa) return send(res, 404, { error: 'despesa_not_found' });
+    if (req.method === 'DELETE') {
+      store.expenses = store.expenses.filter((e) => e.id !== id);
+      markDirty();
+      auditar(user, 'DESPESA_EXCLUIDA', despesa.descricao, req);
+      return send(res, 200, { ok: true });
+    }
+    const b = await readBody(req);
+    if (b.descricao !== undefined) despesa.descricao = cleanText(b.descricao, 200) || despesa.descricao;
+    if (b.valor !== undefined) {
+      const v = Number(b.valor);
+      if (!Number.isFinite(v) || v <= 0) return send(res, 400, { error: 'valor inválido' });
+      despesa.valor = Math.round(v * 100) / 100;
+    }
+    if (b.data !== undefined && parseDate(b.data)) despesa.data = String(b.data).slice(0, 10);
+    if (b.categoria !== undefined) despesa.categoria = cleanText(b.categoria, 60) || 'Outros';
+    if (b.fornecedor !== undefined) despesa.fornecedor = cleanText(b.fornecedor, 120) || null;
+    markDirty();
+    return send(res, 200, despesa);
   }
 
   if (req.method === 'GET' && url.pathname === '/api/charges') {
@@ -1412,6 +1533,119 @@ async function route(req, res) {
       auditar(user, 'MENSALIDADES_GERADAS', `${criadas.length} em ${b.competencia || 'mês atual'}`, req);
       return send(res, 200, { criadas: criadas.length, cobrancas: criadas });
     } catch (e) { return send(res, 400, { error: e.message }); }
+  }
+
+  // ------------------------------------------------------------------ aulas
+  if (req.method === 'GET' && url.pathname === '/api/classes') {
+    operadorOnly();
+    const de = url.searchParams.get('inicio');
+    const ate = url.searchParams.get('fim');
+    const lista = [...(store.classSessions || [])]
+      .filter((a) => (!de || a.inicio >= de) && (!ate || a.inicio <= `${ate}T23:59:59`))
+      .sort((a, b) => String(a.inicio).localeCompare(String(b.inicio)))
+      .map((a) => {
+        const reservas = (store.classBookings || []).filter((b) => b.sessionId === a.id && b.status !== 'CANCELADO');
+        return {
+          ...a,
+          reservados: reservas.filter((b) => b.status !== 'ESPERA').length,
+          presentes: reservas.filter((b) => b.status === 'PRESENTE').length,
+          espera: reservas.filter((b) => b.status === 'ESPERA').length,
+        };
+      });
+    return send(res, 200, lista);
+  }
+  if (req.method === 'POST' && url.pathname === '/api/classes') {
+    operadorOnly();
+    const b = await readBody(req);
+    try {
+      const aula = novaAula(b);
+      store.classSessions.push(aula);
+      markDirty();
+      auditar(user, 'AULA_CRIADA', `${aula.nome} ${aula.inicio}`, req);
+      return send(res, 201, aula);
+    } catch (e) { return send(res, 400, { error: e.message }); }
+  }
+  const classRoute = url.pathname.match(/^\/api\/classes\/([^/]+)$/);
+  if (classRoute) {
+    const id = safeDecode(classRoute[1]);
+    const aula = id ? (store.classSessions || []).find((a) => a.id === id) : null;
+    if (!aula) return send(res, 404, { error: 'aula_not_found' });
+    if (req.method === 'GET') {
+      operadorOnly();
+      const reservas = (store.classBookings || []).filter((b) => b.sessionId === id)
+        .map((b) => ({ ...b, nome: store.persons.get(b.personId)?.nome || b.personId, matricula: store.persons.get(b.personId)?.matricula || '' }));
+      return send(res, 200, { ...aula, reservas });
+    }
+    if (req.method === 'PATCH') {
+      operadorOnly();
+      const b = await readBody(req);
+      try {
+        Object.assign(aula, normalizarAula(b, aula), { atualizadoEm: new Date().toISOString() });
+        markDirty();
+        return send(res, 200, aula);
+      } catch (e) { return send(res, 400, { error: e.message }); }
+    }
+    if (req.method === 'DELETE') {
+      gerenciaOnly();
+      store.classSessions = store.classSessions.filter((a) => a.id !== id);
+      store.classBookings = store.classBookings.filter((b) => b.sessionId !== id);
+      markDirty();
+      auditar(user, 'AULA_EXCLUIDA', aula.nome, req);
+      return send(res, 200, { ok: true });
+    }
+  }
+  const classCheckinRoute = url.pathname.match(/^\/api\/classes\/([^/]+)\/checkin$/);
+  if (req.method === 'POST' && classCheckinRoute) {
+    operadorOnly();
+    const id = safeDecode(classCheckinRoute[1]);
+    const b = await readBody(req);
+    try {
+      const r = checkinAula(store, id, b.codigo);
+      markDirty();
+      return send(res, 200, r);
+    } catch (e) { return send(res, 400, { error: e.message }); }
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/me/classes') {
+    if (user.perfil !== 'aluno') return send(res, 403, { error: 'só aluno' });
+    const agora = new Date();
+    const lista = (store.classSessions || [])
+      .filter((a) => a.ativo !== false && new Date(a.fim || a.inicio) >= agora)
+      .sort((a, b) => String(a.inicio).localeCompare(String(b.inicio)))
+      .map((a) => {
+        const reserva = (store.classBookings || []).find(
+          (b) => b.sessionId === a.id && b.personId === user.sub && b.status !== 'CANCELADO',
+        );
+        const ativos = (store.classBookings || []).filter((b) => b.sessionId === a.id && (b.status === 'RESERVADO' || b.status === 'PRESENTE')).length;
+        return {
+          id: a.id, nome: a.nome, professor: a.professor, sala: a.sala, inicio: a.inicio, fim: a.fim,
+          capacidade: a.capacidade || null, vagas: a.capacidade ? Math.max(0, a.capacidade - ativos) : null,
+          reservado: Boolean(reserva), statusReserva: reserva ? reserva.status : null,
+          codigo: reserva ? reserva.codigo : null,
+        };
+      });
+    return send(res, 200, lista);
+  }
+  const minhaAulaRoute = url.pathname.match(/^\/api\/me\/classes\/([^/]+)\/(?:inscrever|inscricao)$/);
+  if (minhaAulaRoute) {
+    if (user.perfil !== 'aluno') return send(res, 403, { error: 'só aluno' });
+    const sessionId = safeDecode(minhaAulaRoute[1]);
+    if (req.method === 'POST') {
+      try {
+        const r = reservarAula(store, sessionId, user.sub);
+        markDirty();
+        return send(res, 201, { status: r.status, codigo: r.codigo });
+      } catch (e) { return send(res, 400, { error: e.message }); }
+    }
+    if (req.method === 'DELETE') {
+      const r = (store.classBookings || []).find(
+        (b) => b.sessionId === sessionId && b.personId === user.sub && b.status !== 'CANCELADO',
+      );
+      if (!r) return send(res, 404, { error: 'reserva_not_found' });
+      cancelarReserva(store, r);
+      markDirty();
+      return send(res, 200, { ok: true });
+    }
   }
 
   // ----------------------------------------------------------------- devices

@@ -17,8 +17,7 @@ function mesesEntre(de, ate) {
   return out;
 }
 
-export function relatorioFinanceiro(store, { inicio, fim, agora = new Date() } = {}) {
-  const ate = fim ? parseDate(fim, { endOfDay: true }) : agora;
+export function relatorioFinanceiro(store, { inicio, fim, agora = new Date() } = {}) {  const ate = fim ? parseDate(fim, { endOfDay: true }) : agora;
   const de = inicio ? parseDate(inicio) : new Date(ate.getFullYear(), ate.getMonth(), 1);
   const competencias = mesesEntre(de, ate);
   const primeiroMes = competencias[0];
@@ -100,5 +99,94 @@ export function relatorioFinanceiro(store, { inicio, fim, agora = new Date() } =
     porPlano: [...porPlano.values()].sort((a, b) => b.previsto - a.previsto),
     porForma: [...porForma.values()].sort((a, b) => b.total - a.total),
     devedores: [...devedores.values()].sort((a, b) => b.vencido - a.vencido || b.aberto - a.aberto).slice(0, 50),
+  };
+}
+
+export function agingFinanceiro(store, { agora = new Date() } = {}) {
+  const hoje = localDayKey(agora);
+  const pessoas = new Map();
+  const buckets = { aVencer: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90: 0 };
+
+  for (const c of store.charges || []) {
+    if (c.status !== 'PENDENTE' && c.status !== 'ATRASADO') continue;
+    const venc = new Date(`${c.vencimento}T12:00:00`);
+    const dias = Math.max(0, Math.floor((agora - venc) / (24 * 3600 * 1000)));
+    let faixa = 'aVencer';
+    if (c.vencimento < hoje) {
+      if (dias <= 30) faixa = 'd1_30';
+      else if (dias <= 60) faixa = 'd31_60';
+      else if (dias <= 90) faixa = 'd61_90';
+      else faixa = 'd90';
+    }
+    buckets[faixa] += Number(c.valor) || 0;
+    const p = store.persons.get(c.personId);
+    const row = pessoas.get(c.personId) || {
+      personId: c.personId, nome: p?.nome || c.personId, matricula: p?.matricula || '',
+      telefone: p?.telefone || '', aberto: 0, vencido: 0, cobrancas: 0,
+      maisAntigo: null, faixa: 'aVencer',
+    };
+    row.aberto += Number(c.valor) || 0;
+    row.cobrancas += 1;
+    if (c.vencimento < hoje) {
+      row.vencido += Number(c.valor) || 0;
+      if (!row.maisAntigo || c.vencimento < row.maisAntigo) row.maisAntigo = c.vencimento;
+    }
+    const ordem = { aVencer: 0, d1_30: 1, d31_60: 2, d61_90: 3, d90: 4 };
+    if (ordem[faixa] > ordem[row.faixa]) row.faixa = faixa;
+    pessoas.set(c.personId, row);
+  }
+
+  const lista = [...pessoas.values()].sort((a, b) => b.vencido - a.vencido || b.aberto - a.aberto);
+  return {
+    hoje,
+    totalAberto: lista.reduce((s, p) => s + p.aberto, 0),
+    totalVencido: lista.reduce((s, p) => s + p.vencido, 0),
+    buckets,
+    pessoas: lista,
+  };
+}
+
+function dentro(dataIso, de, ate) {
+  const d = new Date(dataIso);
+  return !Number.isNaN(d.getTime()) && d >= de && d <= ate;
+}
+
+// Fluxo de caixa: recebimentos + despesas no período, com saldo e categorias.
+export function fluxoCaixa(store, { inicio, fim, agora = new Date() } = {}) {
+  const ate = fim ? parseDate(fim, { endOfDay: true }) : agora;
+  const de = inicio ? parseDate(inicio) : new Date(ate.getFullYear(), ate.getMonth(), 1);
+  const receitas = (store.charges || []).filter((c) => c.status === 'PAGO' && c.pagoEm && dentro(c.pagoEm, de, ate));
+  const despesas = (store.expenses || []).filter((e) => dentro(e.data, de, ate));
+  const totalReceitas = receitas.reduce((s, c) => s + Number(c.valor || 0), 0);
+  const totalDespesas = despesas.reduce((s, e) => s + Number(e.valor || 0), 0);
+
+  const porCategoria = new Map();
+  for (const e of despesas) {
+    const k = e.categoria || 'Outros';
+    const row = porCategoria.get(k) || { categoria: k, total: 0, quantidade: 0 };
+    row.total += Number(e.valor || 0);
+    row.quantidade += 1;
+    porCategoria.set(k, row);
+  }
+  const porDia = new Map();
+  for (const c of receitas) {
+    const k = localDayKey(new Date(c.pagoEm));
+    const row = porDia.get(k) || { dia: k, receitas: 0, despesas: 0 };
+    row.receitas += Number(c.valor || 0);
+    porDia.set(k, row);
+  }
+  for (const e of despesas) {
+    const k = localDayKey(new Date(`${e.data}T12:00:00`));
+    const row = porDia.get(k) || { dia: k, receitas: 0, despesas: 0 };
+    row.despesas += Number(e.valor || 0);
+    porDia.set(k, row);
+  }
+  return {
+    periodo: { inicio: de.toISOString(), fim: ate.toISOString() },
+    totalReceitas, totalDespesas, saldo: totalReceitas - totalDespesas,
+    receitas: receitas.map((c) => ({ id: c.id, personId: c.personId, valor: c.valor, pagoEm: c.pagoEm, forma: c.forma })),
+    despesas,
+    porCategoria: [...porCategoria.values()].sort((a, b) => b.total - a.total),
+    porDia: [...porDia.values()].sort((a, b) => a.dia.localeCompare(b.dia)),
   };
 }

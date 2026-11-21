@@ -1,7 +1,7 @@
 // Relatório financeiro: competência, caixa, planos, formas e devedores.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { relatorioFinanceiro } from '../src/finance.js';
+import { relatorioFinanceiro, agingFinanceiro, fluxoCaixa } from '../src/finance.js';
 
 function loja() {
   return {
@@ -51,4 +51,24 @@ test('mês sem cobranças devolve zeros', () => {
   assert.equal(r.kpis.recebido, 0);
   assert.equal(r.kpis.devedores, 0);
   assert.equal(r.porCompetencia[0].competencia, '2027-01');
+});
+
+
+test('aging classifica atraso e fluxo soma receitas e despesas', () => {
+  const store = loja();
+  store.expenses = [
+    { id: 'x1', data: '2026-11-05', valor: 30, descricao: 'Luz', categoria: 'Contas' },
+    { id: 'x2', data: '2026-11-15', valor: 20, descricao: 'Internet', categoria: 'Contas' },
+  ];
+  const a = agingFinanceiro(store, { agora: new Date('2026-11-20T12:00:00') });
+  assert.ok(a.totalVencido >= 150);
+  assert.ok(a.pessoas.length >= 2);
+  assert.ok(a.pessoas.some((p) => p.faixa === 'd1_30'));
+  assert.equal(a.pessoas.find((p) => p.personId === 'a1').faixa, 'd1_30');
+
+  const f = fluxoCaixa(store, { inicio: '2026-11-01', fim: '2026-11-30', agora: new Date('2026-11-20T12:00:00') });
+  assert.equal(f.totalReceitas, 200); // c1 100 + c4 100 pagos em nov
+  assert.equal(f.totalDespesas, 50);
+  assert.equal(f.saldo, 150);
+  assert.equal(f.porCategoria[0].categoria, 'Contas');
 });

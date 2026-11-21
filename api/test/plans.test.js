@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   normalizarPlano, novoPlano, criarAssinatura, cancelarAssinatura,
-  planosAtivos, limiteSemanal, usoDaSemana, gerarCobrancasMes,
+  planosAtivos, limiteSemanal, usoDaSemana, gerarCobrancasMes, trancarAssinatura, retomarAssinatura,
 } from '../src/plans.js';
 
 function loja() {
@@ -59,4 +59,24 @@ test('uso da semana conta dias distintos, nao entradas', () => {
   const u = usoDaSemana(store, 'p1', at);
   assert.equal(u.diasUsadosSemana, 2);
   assert.equal(u.hojeJaUsado, false);
+});
+
+
+test('trancamento bloqueia acesso, estende fim e retomada reativa', () => {
+  const store = loja();
+  const plano = novoPlano({ nome: 'Mensal', valor: 100, diasPorSemana: 3, duracaoMeses: 1 });
+  store.plans.push(plano);
+  const inicio = '2026-11-01';
+  const sub = criarAssinatura(store, 'p1', plano, { inicio, agora: new Date('2026-11-01T10:00:00') });
+  const fimOriginal = new Date(sub.fim).getTime();
+  const agora = new Date('2026-11-10T10:00:00');
+  trancarAssinatura(store, sub, { dias: 30, agora, motivo: 'viagem' });
+  assert.equal(sub.status, 'TRANCADA');
+  assert.equal(store.persons.get('p1').validadeFim, null);
+  assert.equal(planosAtivos(store, 'p1', agora).length, 0);
+
+  retomarAssinatura(store, sub, { agora: new Date('2026-12-10T10:00:00') });
+  assert.equal(sub.status, 'ATIVA');
+  assert.ok(new Date(sub.fim).getTime() >= fimOriginal + 30 * 24 * 3600 * 1000 - 1000);
+  assert.ok(store.persons.get('p1').validadeFim);
 });
