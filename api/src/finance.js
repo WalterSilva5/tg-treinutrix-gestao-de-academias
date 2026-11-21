@@ -25,7 +25,7 @@ export function relatorioFinanceiro(store, { inicio, fim, agora = new Date() } =
   const ultimoMes = competencias[competencias.length - 1];
 
   const charges = store.charges || [];
-  const noPeriodo = charges.filter((c) => c.competencia >= primeiroMes && c.competencia <= ultimoMes);
+  const noPeriodo = charges.filter((c) => c.competencia >= primeiroMes && c.competencia <= ultimoMes && c.status !== 'CANCELADO');
   const pagasNoPeriodo = charges.filter((c) => {
     if (c.status !== 'PAGO' || !c.pagoEm) return false;
     const d = new Date(c.pagoEm);

@@ -2530,7 +2530,7 @@ async function carregarRelatorios() {
         <div class="d">${esc((s.vencedores || []).join(', '))} · ${esc(dataHoraCurta(s.sorteadoEm))}</div></div>
         <span class="badge accent">sorteio</span></div>`).join('')}
       ${(!r.eventosSociais.length && !r.sorteios.length) ? '<div class="empty">Nenhum evento ou sorteio no período.</div>' : ''}</div>`;
-    carregarFinanceiro();
+    await carregarFinanceiro();
   } catch (e) { toast('Falha no relatório', e.message, 'err'); }
 }
 
