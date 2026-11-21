@@ -29,6 +29,8 @@ Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces
   (`docs/SEGURANCA-LGPD.md`).
 - Relatórios por período (CSV/PDF), PWA do aluno com eventos e portabilidade
   (`docs/PORTABILIDADE.md`).
+- Planos de mensalidade (principal/complementar), cobranças por aluno e limite
+  por dias distintos na semana (`docs/PLANOS-MENSALIDADES.md`).
 - Persistência em **SQLite**, sem Docker.
 
 ## Arquitetura

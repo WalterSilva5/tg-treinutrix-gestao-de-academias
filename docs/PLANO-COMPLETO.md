@@ -27,6 +27,7 @@ aceite. Este documento substitui a leitura solta de `PROXIMOS-PASSOS` e
 | 11 | Scripts `.bat`/`.sh` para restaurar admin | ✅ feito | teste do modo offline e serviço |
 | 12 | Sorteios/premiações + eventos + PDF/CSV | ✅ feito | — |
 | 13 | Este plano | ✅ feito | executar as fases abaixo |
+| 14 | Planos, mensalidades e dados extras do aluno | ✅ feito | — |
 
 Legenda: ✅ pronto · 🟡 parcial · ⛔ bloqueado por hardware/terceiros.
 
@@ -251,6 +252,15 @@ inscreve nos próprios eventos (`/api/me/eventos`); export completo
 
 **Aceite:** relatórios conferem com os eventos; aluno vê o próprio histórico;
 contratos HTTP preservados na portabilidade. ✅
+
+### Fase 8 — Planos e mensalidades (pós-plano) — ✅ concluída em 2026-11-21
+
+- Cadastro com CPF/telefone/e-mail/endereço etc. opcionais.
+- Planos principal/complementar com valor, dias/semana, máscara de dias, vigência
+  e vencimento.
+- Assinaturas por aluno, soma de complementares e cobranças mensais.
+- Limite de **dias distintos na semana** (sem limite de entradas/dia).
+- Documento: `docs/PLANOS-MENSALIDADES.md`.
 
 ## 5. Ordem recomendada
 

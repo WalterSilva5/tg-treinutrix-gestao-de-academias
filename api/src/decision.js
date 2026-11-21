@@ -39,6 +39,7 @@ export function ruleMatches(rule, at) {
 export function decideAccess({
   person, rules, deviceId, at = new Date(), score,
   minScore = Number(process.env.MIN_SCORE || 0.7), metodo = 'FACIAL',
+  planos = [], diasUsadosSemana = 0, hojeJaUsado = false,
 }) {
   if (!person) return deny('PESSOA_NAO_ENCONTRADA', 'Acesso negado.');
 
@@ -60,6 +61,17 @@ export function decideAccess({
 
   if (String(metodo).toUpperCase() === 'FACIAL' && !(Number(score) >= minScore)) {
     return deny('SCORE_BAIXO', 'Rosto não confirmado.');
+  }
+
+  // Plano: limita dias distintos na semana, nunca entradas no mesmo dia.
+  if (Array.isArray(planos) && planos.length > 0) {
+    const mascara = planos.reduce((m, p) => m | (Number(p.diasSemana) || 0), 0) || 127;
+    if ((mascara & weekdayBit(when)) === 0) return deny('DIA_NAO_PERMITIDO', 'Fora dos dias do plano.');
+    const ilimitado = planos.some((p) => Number(p.diasPorSemana) === 0);
+    const limite = ilimitado ? 0 : Math.min(7, planos.reduce((s, p) => s + (Number(p.diasPorSemana) || 0), 0));
+    if (limite > 0 && !hojeJaUsado && Number(diasUsadosSemana) >= limite) {
+      return deny('LIMITE_DIAS_SEMANA', `Seu plano permite ${limite} dia(s) por semana.`);
+    }
   }
 
   const doDevice = (rules || []).filter((r) => r.deviceId === deviceId);

@@ -411,7 +411,22 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
               <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Nome</span><input id="visNome" placeholder="Nome completo"></label>
               <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Tipo</span><select id="visTipo"><option>ALUNO</option><option>PERSONAL</option><option>VISITANTE</option></select></label>
               <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Treinutrix</span><input id="visTreinutrix" placeholder="@usuario ou link"></label>
+              <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Plano</span><select id="visPlano"><option value="">Sem plano</option></select></label>
               <label class="field" style="margin:0"><span style="display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Foto do rosto</span><input id="visFoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+              <details style="grid-column:1/-1">
+                <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin:4px 0 8px">Dados complementares (opcional)</summary>
+                <div class="form-grid">
+                  <input id="visCpf" placeholder="CPF">
+                  <input id="visTelefone" placeholder="Telefone/WhatsApp">
+                  <input id="visEmail" placeholder="E-mail">
+                  <input id="visNascimento" type="date" title="Nascimento">
+                  <input id="visEndereco" placeholder="Endereço">
+                  <input id="visBairro" placeholder="Bairro">
+                  <input id="visCidade" placeholder="Cidade">
+                  <input id="visCep" placeholder="CEP">
+                  <input id="visObs" placeholder="Observações" style="grid-column:1/-1">
+                </div>
+              </details>
               <div class="form-actions"><button class="btn" onclick="cadastrarPessoa()">Cadastrar</button></div>
             </div>
             <div class="foto-preview" id="visFotoPreview"></div>
@@ -615,6 +630,39 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
       </div>
 
       <div class="card">
+        <div class="card-head"><div><h2>Planos de mensalidade</h2><p class="sub">Principal e complementares, dias por semana e valores</p></div></div>
+        <div class="list" id="listaPlanos" style="margin-bottom:10px"></div>
+        <details id="planoForm">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:10px">Novo plano</summary>
+          <div class="form-grid">
+            <input id="planoNome" placeholder="Nome (ex.: 3x semana)">
+            <input id="planoValor" type="number" min="0" step="0.01" placeholder="Valor (R$)">
+            <select id="planoCategoria"><option value="PRINCIPAL">Principal</option><option value="COMPLEMENTAR">Complementar</option></select>
+            <input id="planoDiasPorSemana" type="number" min="0" max="7" value="0" placeholder="Dias/semana (0 = livre)">
+            <input id="planoDiasSemana" placeholder="Dias: 1234567 (dom..sáb)">
+            <input id="planoDuracao" type="number" min="1" max="24" value="1" placeholder="Meses">
+            <input id="planoVencimento" type="number" min="1" max="28" value="10" placeholder="Dia vencimento">
+            <textarea id="planoDescricao" placeholder="Descrição/regras" rows="2"></textarea>
+            <div class="form-actions">
+              <button class="btn sm" id="planoSalvar" onclick="salvarPlano()">Criar plano</button>
+              <button class="btn ghost sm" id="planoCancelar" onclick="cancelarEdicaoPlano()" style="display:none">Cancelar edição</button>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Mensalidades</h2><p class="sub">Cobranças por aluno e competência</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarCobrancas()">Atualizar</button></div></div>
+        <div class="form-actions" style="margin-bottom:10px">
+          <input id="cobCompetencia" type="month">
+          <button class="btn ghost sm" onclick="gerarCobrancas()">Gerar mês</button>
+        </div>
+        <div id="cobResumo" class="help"></div>
+        <div class="table-wrap"><table><thead><tr><th>Aluno</th><th>Plano</th><th>Competência</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody id="cobrancas"></tbody></table></div>
+      </div>
+
+      <div class="card">
         <div class="card-head"><div><h2>Backup</h2><p class="sub">Snapshots dos dados locais</p></div>
           <div class="card-head-actions"><button class="btn sm" onclick="backupAgora()">Fazer backup agora</button></div></div>
         <p class="muted" id="lastBackup" style="margin:0 0 12px"></p>
@@ -808,8 +856,9 @@ function diaLocal(d = new Date()) {
 }
 function dataCurta(iso) {
   if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleDateString('pt-BR');
+  const s = String(iso);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T12:00:00') : new Date(s);
+  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('pt-BR');
 }
 function iniciais(nome) {
   const p = String(nome || '?').trim().split(/\s+/);
@@ -1067,6 +1116,17 @@ async function carregarAluno() {
     </div>
     ${vencido || inativo ? '<p class="help">Seu acesso está bloqueado. Fale com a recepção para regularizar.</p>' : '<p class="help">Apresente seu rosto no leitor para entrar.</p>'}
     <div class="form-actions" style="margin-top:10px"><button class="btn ghost sm" onclick="trocarFoto('${esc(p.id)}')">Atualizar minha foto</button></div>`;
+  try {
+    const pp = await jget(`/api/persons/${encodeURIComponent(p.id)}/plano`);
+    const ativos = pp.planosAtivos || [];
+    const pendentes = (pp.cobrancas || []).filter((c) => c.status !== 'PAGO' && c.status !== 'CANCELADO');
+    $('plano').insertAdjacentHTML('beforeend', `
+      <div class="info-grid" style="margin-top:10px">
+        <div class="info-item"><div class="k">Plano</div><div class="v">${ativos.length ? esc(ativos.map((x) => x.nome).join(' + ')) : 'sem plano'}</div></div>
+        <div class="info-item"><div class="k">Dias/semana</div><div class="v">${ativos.length ? (ativos.some((x) => !x.diasPorSemana) ? 'livre' : ativos.reduce((s, x) => s + Number(x.diasPorSemana || 0), 0) + ' dia(s)') : '—'}</div></div>
+        <div class="info-item"><div class="k">Mensalidades</div><div class="v">${pendentes.length ? pendentes.length + ' em aberto' : 'em dia'}</div></div>
+      </div>`);
+  } catch { /* plano opcional */ }
   const freq = await jget('/api/frequency');
   $('freqStats').innerHTML = `
     <div class="kpi ok"><div class="v">${freq.diasNoMes}</div><div class="l">Dias no mês</div></div>
@@ -1086,6 +1146,7 @@ let CATALOGO = [];
 let editandoDevice = null;
 async function carregarOper() {
   $('edgeUrl').value = `http://${location.hostname}:3002`;
+  await carregarPlanos();
   await load(); await loadSync(); await carregarRostos();
 }
 
@@ -1287,13 +1348,73 @@ async function cadastrarPessoa() {
   const treinutrix = $('visTreinutrix').value.trim() || null;
   const foto = $('visFoto').dataset.data || null;
   const fim = tipo === 'VISITANTE' ? new Date(Date.now() + 864e5).toISOString() : null;
+  const extras = {
+    cpf: $('visCpf').value.trim() || null,
+    telefone: $('visTelefone').value.trim() || null,
+    email: $('visEmail').value.trim() || null,
+    nascimento: $('visNascimento').value || null,
+    endereco: $('visEndereco').value.trim() || null,
+    bairro: $('visBairro').value.trim() || null,
+    cidade: $('visCidade').value.trim() || null,
+    cep: $('visCep').value.trim() || null,
+    observacoes: $('visObs').value.trim() || null,
+  };
   try {
-    const p = await jpost('/api/persons', { nome, tipo, treinutrix, foto, ativo: true, validadeFim: fim });
+    const p = await jpost('/api/persons', { nome, tipo, treinutrix, foto, ativo: true, validadeFim: fim, ...extras });
+    const planoId = $('visPlano').value;
+    if (planoId) {
+      try { await jpost(`/api/persons/${encodeURIComponent(p.id)}/plano`, { planoId }); }
+      catch (e) { toast('Cadastro criado, mas o plano falhou', e.message, 'warn'); }
+    }
     toast('Pessoa cadastrada', `${p.nome} · ${tipo} · matrícula ${p.matricula} · senha inicial ${p.matricula}` + (fim ? ' · válido até ' + dataCurta(fim) : ''));
-    $('visNome').value = ''; $('visTreinutrix').value = ''; $('visFoto').value = ''; $('visFoto').dataset.data = '';
+    ['visNome', 'visTreinutrix', 'visCpf', 'visTelefone', 'visEmail', 'visNascimento', 'visEndereco', 'visBairro', 'visCidade', 'visCep', 'visObs'].forEach((id) => { $(id).value = ''; });
+    $('visPlano').value = '';
+    $('visFoto').value = ''; $('visFoto').dataset.data = '';
     $('visFotoPreview').innerHTML = '';
-    load();
+    load(); carregarCobrancas();
   } catch (e) { toast('Falha ao cadastrar', e.message, 'err'); }
+}
+
+async function editarDadosPessoa(id) {
+  const p = (window.__pessoasObj || {})[id];
+  if (!p) return;
+  const perguntar = (rotulo, atual) => prompt(rotulo, atual || '');
+  const cpf = perguntar('CPF (opcional):', p.cpf);
+  if (cpf === null) return;
+  const telefone = perguntar('Telefone (opcional):', p.telefone);
+  if (telefone === null) return;
+  const email = perguntar('E-mail (opcional):', p.email);
+  if (email === null) return;
+  const nascimento = perguntar('Nascimento AAAA-MM-DD (opcional):', p.nascimento);
+  if (nascimento === null) return;
+  const endereco = perguntar('Endereço (opcional):', p.endereco);
+  if (endereco === null) return;
+  const cidade = perguntar('Cidade (opcional):', p.cidade);
+  if (cidade === null) return;
+  const observacoes = perguntar('Observações (opcional):', p.observacoes);
+  if (observacoes === null) return;
+  try {
+    await jpatch(`/api/persons/${encodeURIComponent(id)}`, {
+      cpf, telefone, email, nascimento, endereco, cidade, observacoes,
+    });
+    toast('Dados atualizados', p.nome);
+    carregarSistema();
+  } catch (e) { toast('Falha ao atualizar', e.message, 'err'); }
+}
+
+async function atribuirPlano(id) {
+  if (!PLANOS_CACHE.length) await carregarPlanos();
+  if (!PLANOS_CACHE.length) return toast('Nenhum plano', 'Cadastre um plano em Sistema', 'err');
+  const nomes = PLANOS_CACHE.map((p, i) => `${i + 1}. ${p.nome} — R$ ${Number(p.valor).toFixed(2)}${p.diasPorSemana ? ` (${p.diasPorSemana}x/sem)` : ' (livre)'}`).join('\n');
+  const escolha = prompt(`Escolha o plano:\n${nomes}`, '1');
+  if (!escolha) return;
+  const plano = PLANOS_CACHE[Number(escolha) - 1] || PLANOS_CACHE.find((p) => p.nome === escolha);
+  if (!plano) return toast('Plano inválido', 'Use o número da lista', 'err');
+  try {
+    await jpost(`/api/persons/${encodeURIComponent(id)}/plano`, { planoId: plano.id });
+    toast('Plano contratado', `${plano.nome} · ${plano.duracaoMeses} mês(es)`);
+    carregarSistema();
+  } catch (e) { toast('Falha ao contratar plano', e.message, 'err'); }
 }
 
 // Foto: prévia no cadastro e troca em cadastro existente (inclusive pelo aluno).
@@ -1369,6 +1490,129 @@ async function carregarSistema() {
   await loadBackups(); await loadNotifications();
   await carregarImportacoes();
   await carregarAuditoria();
+  await carregarPlanos();
+  await carregarCobrancas();
+}
+
+let PLANOS_CACHE = [];
+let planoEditando = null;
+
+async function carregarPlanos() {
+  try {
+    PLANOS_CACHE = await jget('/api/plans');
+    const opcoes = PLANOS_CACHE.filter((p) => p.ativo !== false)
+      .map((p) => `<option value="${esc(p.id)}">${esc(p.nome)} — R$ ${Number(p.valor).toFixed(2)}</option>`).join('');
+    $('visPlano').innerHTML = `<option value="">Sem plano</option>${opcoes}`;
+    $('listaPlanos').innerHTML = PLANOS_CACHE.map((p) => `
+      <div class="list-item"><div><div class="t">${esc(p.nome)} ${p.ativo === false ? '<span class="badge neutral">inativo</span>' : ''}</div>
+      <div class="d">${p.categoria} · R$ ${Number(p.valor).toFixed(2)} · ${p.diasPorSemana ? p.diasPorSemana + ' dia(s)/semana' : 'dias livres'} · válido ${p.duracaoMeses} mês(es) · vence dia ${p.diaVencimento}</div></div>
+      <div style="display:flex;gap:6px"><button class="btn ghost sm" onclick="editarPlano('${esc(p.id)}')">Editar</button>
+      <button class="btn danger sm" onclick="excluirPlano('${esc(p.id)}')">Excluir</button></div></div>`).join('')
+      || '<div class="empty">Nenhum plano cadastrado.</div>';
+  } catch (e) { $('listaPlanos').innerHTML = '<div class="empty">Planos indisponíveis.</div>'; }
+}
+
+function limparFormPlano() {
+  planoEditando = null;
+  ['planoNome', 'planoValor', 'planoDiasSemana', 'planoDescricao'].forEach((id) => { $(id).value = ''; });
+  $('planoDiasPorSemana').value = '0';
+  $('planoDuracao').value = '1';
+  $('planoVencimento').value = '10';
+  $('planoSalvar').textContent = 'Criar plano';
+  $('planoCancelar').style.display = 'none';
+}
+function cancelarEdicaoPlano() { limparFormPlano(); }
+
+function editarPlano(id) {
+  const p = PLANOS_CACHE.find((x) => x.id === id);
+  if (!p) return;
+  planoEditando = id;
+  $('planoNome').value = p.nome;
+  $('planoValor').value = p.valor;
+  $('planoCategoria').value = p.categoria;
+  $('planoDiasPorSemana').value = p.diasPorSemana || 0;
+  $('planoDiasSemana').value = diasParaTexto(p.diasSemana || 127);
+  $('planoDuracao').value = p.duracaoMeses || 1;
+  $('planoVencimento').value = p.diaVencimento || 10;
+  $('planoDescricao').value = p.descricao || '';
+  $('planoSalvar').textContent = 'Salvar alterações';
+  $('planoCancelar').style.display = '';
+  $('planoForm').open = true;
+}
+
+async function salvarPlano() {
+  const nome = $('planoNome').value.trim();
+  if (!nome) return toast('Nome obrigatório', 'Informe o nome do plano', 'err');
+  const mask = textoParaDias($('planoDiasSemana').value || '1234567');
+  if (mask === null) return toast('Dias inválidos', 'Use 1=dom ... 7=sáb', 'err');
+  const body = {
+    nome,
+    valor: Number($('planoValor').value) || 0,
+    categoria: $('planoCategoria').value,
+    diasPorSemana: Number($('planoDiasPorSemana').value) || 0,
+    diasSemana: mask,
+    duracaoMeses: Number($('planoDuracao').value) || 1,
+    diaVencimento: Number($('planoVencimento').value) || 10,
+    descricao: $('planoDescricao').value.trim(),
+    ativo: true,
+  };
+  try {
+    const p = planoEditando
+      ? await jpatch(`/api/plans/${encodeURIComponent(planoEditando)}`, body)
+      : await jpost('/api/plans', body);
+    toast(planoEditando ? 'Plano atualizado' : 'Plano criado', p.nome);
+    limparFormPlano();
+    carregarPlanos();
+  } catch (e) { toast('Falha ao salvar plano', e.message, 'err'); }
+}
+
+async function excluirPlano(id) {
+  if (!confirm('Excluir/desativar este plano?')) return;
+  try {
+    const r = await jdel(`/api/plans/${encodeURIComponent(id)}`);
+    toast(r.desativado ? 'Plano desativado' : 'Plano excluído', '');
+    carregarPlanos();
+  } catch (e) { toast('Falha ao excluir', e.message, 'err'); }
+}
+
+async function carregarCobrancas() {
+  try {
+    const competencia = $('cobCompetencia').value;
+    const qs = competencia ? `?competencia=${encodeURIComponent(competencia)}` : '';
+    const lista = await jget('/api/charges' + qs);
+    const total = lista.reduce((s, c) => s + Number(c.valor || 0), 0);
+    const pagos = lista.filter((c) => c.status === 'PAGO').reduce((s, c) => s + Number(c.valor || 0), 0);
+    const atrasados = lista.filter((c) => c.status === 'ATRASADO').length;
+    $('cobResumo').textContent = `${lista.length} cobrança(s) · R$ ${total.toFixed(2)} · pago R$ ${pagos.toFixed(2)} · ${atrasados} atrasada(s)`;
+    $('cobrancas').innerHTML = lista.map((c) => `
+      <tr><td>${esc(c.pessoaNome)}</td><td>${esc(c.planoNome || '—')}</td><td class="mono">${esc(c.competencia)}</td>
+      <td>${esc(dataCurta(c.vencimento))}</td><td>R$ ${Number(c.valor).toFixed(2)}</td>
+      <td><span class="badge ${c.status === 'PAGO' ? 'ok' : c.status === 'ATRASADO' ? 'bad' : c.status === 'CANCELADO' ? 'neutral' : 'warn'}">${esc(c.status)}</span></td>
+      <td>${c.status === 'PAGO' ? '<span class="muted">' + esc(c.pagoPor || '') + '</span>' : `<button class="btn ghost sm" onclick="pagarCobranca('${esc(c.id)}')">Pagar</button>`}</td></tr>`).join('')
+      || '<tr><td colspan="7"><div class="empty">Nenhuma cobrança.</div></td></tr>';
+  } catch (e) { $('cobrancas').innerHTML = '<tr><td colspan="7"><div class="empty">Indisponível.</div></td></tr>'; }
+}
+
+async function gerarCobrancas() {
+  const competencia = $('cobCompetencia').value;
+  if (!competencia) return toast('Informe a competência', 'Selecione o mês', 'err');
+  try {
+    const r = await jpost('/api/charges/gerar', { competencia });
+    toast('Cobranças geradas', `${r.criadas} nova(s)`);
+    carregarCobrancas();
+  } catch (e) { toast('Falha ao gerar', e.message, 'err'); }
+}
+
+async function pagarCobranca(id) {
+  const por = prompt('Quem recebeu?', sess.nome || 'recepção');
+  if (por === null) return;
+  const forma = prompt('Forma de pagamento (pix/dinheiro/cartão):', 'pix');
+  if (forma === null) return;
+  try {
+    await jpost(`/api/charges/${encodeURIComponent(id)}/pagar`, { por, forma });
+    toast('Mensalidade paga', '');
+    carregarCobrancas();
+  } catch (e) { toast('Falha ao registrar', e.message, 'err'); }
 }
 
 async function carregarAuditoria() {
@@ -1405,7 +1649,8 @@ const IMP_ALIAS = {
   'data de vencimento': 'validadeFim', 'data vencimento': 'validadeFim',
   validadeini: 'validadeIni', 'inicio validade': 'validadeIni',
   treinutrix: 'treinutrix', ativo: 'ativo', status: 'ativo', senha: 'senha',
-  contato: 'contato', telefone: 'contato', email: 'contato', documento: 'documento', cpf: 'documento',
+  contato: 'contato', telefone: 'telefone', email: 'email', documento: 'documento', cpf: 'cpf',
+  nascimento: 'nascimento', endereco: 'endereco', bairro: 'bairro', cidade: 'cidade', cep: 'cep', observacoes: 'observacoes',
 };
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
@@ -1657,6 +1902,8 @@ function renderPessoas() {
       <td style="text-align:right;white-space:nowrap">
         <button class="btn ghost sm" onclick="renovar('${esc(p.id)}', 30)" title="Renovar +30 dias">+30d</button>
         <button class="btn ghost sm" onclick="renovar('${esc(p.id)}', 90)" title="Renovar +90 dias">+90d</button>
+        <button class="btn ghost sm" onclick="atribuirPlano('${esc(p.id)}')">Plano</button>
+        <button class="btn ghost sm" onclick="editarDadosPessoa('${esc(p.id)}')">Dados</button>
         <button class="btn ghost sm" onclick="trocarFoto('${esc(p.id)}')">Foto</button>
         <button class="btn ghost sm" onclick="editarHorario('${esc(p.id)}')">Horário</button>
         <button class="btn ghost sm" onclick="renovarValidade('${esc(p.id)}')">Validade</button>
@@ -2113,7 +2360,7 @@ async function importarParticipantesEvento() {
     const linhas = csvParaPessoas(await arquivo.text());
     if (!linhas.length) return toast('CSV vazio', 'Use as colunas nome e matricula/contato', 'err');
     const pessoas = linhas.map((l) => ({
-      nome: l.nome, matricula: l.matricula, contato: l.contato, documento: l.documento,
+      nome: l.nome, matricula: l.matricula, contato: l.contato || l.telefone || l.email, documento: l.documento,
     }));
     const r = await jpost(`/api/eventos/${encodeURIComponent(eventoAtual.id)}/participantes/import`, { pessoas });
     $('parImportResultado').textContent = `${r.total} linha(s): ${r.criados} inscrito(s), ${r.espera} na espera, ${r.erros} erro(s).`;

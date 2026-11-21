@@ -37,6 +37,7 @@ scripts\iniciar-painel.cmd
 | Eventos e sorteios | `api/src/social.js` || Exportação CSV/PDF | `api/src/report.js` |
 | Relatórios agregados | `api/src/reports.js` |
 | Retenção LGPD | `api/src/retention.js` |
+| Planos/mensalidades | `api/src/plans.js` + `docs/PLANOS-MENSALIDADES.md` |
 | Múltiplas catracas/TLS | `docs/MULTI-CATRACA.md` |
 | Portabilidade Prisma/MySQL | `prisma/schema.access.prisma` + `docs/PORTABILIDADE.md` |
 | Fotos (disco) | `api/src/photos.js` |

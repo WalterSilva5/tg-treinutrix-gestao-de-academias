@@ -871,3 +871,75 @@ test('diagnostico de dispositivo retorna TCP e estado do edge', async () => {
   await new Promise((r) => srv.close(r));
   await api('/api/devices/' + dev.json.id, { method: 'DELETE', token: admin });
 });
+
+
+test('planos: dados extras, contrato, cobranca e pagina do aluno', async () => {
+  const plano = await api('/api/plans', {
+    method: 'POST', token: admin,
+    body: { nome: '3x Semana ' + run, valor: 120, categoria: 'PRINCIPAL', diasPorSemana: 3, diasSemana: 127, duracaoMeses: 1, diaVencimento: 5 },
+  });
+  assert.equal(plano.status, 201, plano.text);
+
+  const p = await api('/api/persons', {
+    method: 'POST', token: admin,
+    body: {
+      nome: 'Aluno Plano ' + run, matricula: 'PL' + run, senha: 'plano123', tipo: 'ALUNO',
+      cpf: '123.456.789-00', telefone: '(11) 99999-0000', email: 'aluno@example.com',
+      endereco: 'Rua A, 1', bairro: 'Centro', cidade: 'S?o Paulo', cep: '01000-000', observacoes: 'teste',
+    },
+  });
+  assert.equal(p.status, 201, p.text);
+  assert.equal(p.json.cpf, '12345678900');
+  assert.equal(p.json.telefone, '(11) 99999-0000');
+  assert.equal(p.json.cidade, 'S?o Paulo');
+
+  const sub = await api('/api/persons/' + p.json.id + '/plano', {
+    method: 'POST', token: admin, body: { planoId: plano.json.id, inicio: '2026-11-01' },
+  });
+  assert.equal(sub.status, 201, sub.text);
+
+  const pp = await api('/api/persons/' + p.json.id + '/plano', { token: admin });
+  assert.equal(pp.status, 200);
+  assert.equal(pp.json.planosAtivos.length, 1);
+  assert.ok(pp.json.cobrancas.length >= 1);
+
+  const cob = await api('/api/charges?personId=' + p.json.id, { token: admin });
+  assert.equal(cob.status, 200);
+  const aberta = cob.json[0];
+  const pago = await api('/api/charges/' + aberta.id + '/pagar', {
+    method: 'POST', token: admin, body: { por: 'Recep??o', forma: 'pix' },
+  });
+  assert.equal(pago.status, 200);
+  assert.equal(pago.json.status, 'PAGO');
+
+  const l = await api('/api/auth/login', { method: 'POST', body: { login: 'PL' + run, senha: 'plano123' } });
+  const eu = await api('/api/persons/' + p.json.id + '/plano', { token: l.json.token });
+  assert.equal(eu.status, 200);
+  assert.equal(eu.json.pessoa.nome, 'Aluno Plano ' + run);
+});
+
+test('plano limita dias distintos na semana e nao entradas no mesmo dia', async () => {
+  const plano = await api('/api/plans', {
+    method: 'POST', token: admin,
+    body: { nome: '3x Limite ' + run, valor: 0, categoria: 'PRINCIPAL', diasPorSemana: 3, diasSemana: 127, duracaoMeses: 1 },
+  });
+  const p = await api('/api/persons', {
+    method: 'POST', token: admin,
+    body: { nome: 'Limite ' + run, matricula: 'LM' + run, tipo: 'ALUNO' },
+  });
+  await api('/api/persons/' + p.json.id + '/plano', {
+    method: 'POST', token: admin, body: { planoId: plano.json.id, inicio: '2026-11-01' },
+  });
+  const id = p.json.id;
+  const ident = (dia) => api('/api/identification', {
+    method: 'POST', token: admin,
+    body: { device_id: 'dev_fit4_01', person_id: id, metodo: 'CARTAO', timestamp: dia + 'T10:00:00' },
+  });
+  assert.equal((await ident('2026-11-16')).json.allow, true);
+  assert.equal((await ident('2026-11-16')).json.allow, true); // segunda entrada no mesmo dia
+  assert.equal((await ident('2026-11-17')).json.allow, true);
+  assert.equal((await ident('2026-11-18')).json.allow, true);
+  const quinta = await ident('2026-11-19');
+  assert.equal(quinta.json.allow, false);
+  assert.equal(quinta.json.motivo, 'LIMITE_DIAS_SEMANA');
+});

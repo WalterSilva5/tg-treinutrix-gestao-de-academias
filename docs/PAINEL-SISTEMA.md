@@ -72,6 +72,9 @@ Base de padrões: `wsi-invest-ai` (`back/src/modules/admin` overview,
 | `POST /api/persons/import` | importação em lote (prévia/confirmação) |
 | `GET /api/imports` · `.../relatorio.csv` | histórico e relatório de importações |
 | `GET /api/audit` | trilha de auditoria (gerência) |
+| `GET/POST /api/plans` · `PATCH/DELETE /api/plans/:id` | planos de mensalidade |
+| `GET/POST /api/persons/:id/plano` · `DELETE .../:subId` | assinatura principal/complementar |
+| `GET /api/charges` · `POST .../pagar` · `/gerar` · `/cancelar` | mensalidades |
 | `POST /api/auth/logout` · `POST /api/auth/change-password` | encerra/invalida sessão e troca senha |
 | `POST /api/release` | liberação manual: evento + `POST /open` no edge |
 | `GET /api/notifications` | `alerts/list` |

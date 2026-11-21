@@ -24,6 +24,9 @@ export const store = {
   imports: [], // histórico de importações de cadastros
   audit: [], // trilha de auditoria de ações administrativas
   unknownFaces: [], // rostos não reconhecidos capturados pelo leitor
+  plans: [], // planos de mensalidade (principal/complementar)
+  subscriptions: [], // plano contratado por pessoa
+  charges: [], // mensalidades/cobranças por pessoa
   syncQueue: [], // { id, personId, deviceId, operacao, status, tentativas, payload }
   notifications: [], // { id, key, tipo, titulo, detalhe, createdAt, resolvida, resolvidaPor, resolvidaEm }
   meta: { lastBackupAt: null, nextEnrollid: 1001, dedup: {} },

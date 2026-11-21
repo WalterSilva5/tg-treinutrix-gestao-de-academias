@@ -9,6 +9,14 @@ model AccessPerson {
   tipo       String    @default("ALUNO") // ALUNO | PERSONAL | VISITANTE
   treinutrix String?   // link ou @usuário do perfil na Treinutrix
   cpf        String?
+  telefone   String?
+  email      String?
+  nascimento String?
+  endereco   String?
+  bairro     String?
+  cidade     String?
+  cep        String?
+  observacoes String?
   tokenVersion Int      @default(0)
   mustChangePassword Boolean @default(false)
   ativo      Boolean   @default(true)
@@ -21,6 +29,7 @@ model AccessPerson {
   events     AccessEvent[]
   syncQueue  AccessSyncQueue[]
   eventParticipants AccessEventParticipant[]
+  subscriptions AccessSubscription[]
 }
 
 model AccessDevice {
@@ -95,8 +104,57 @@ model AccessUser {
   createdAt    DateTime @default(now())
 }
 
-model AccessNotification {
+model AccessPlan {
+  id            String   @id @default(cuid())
+  nome          String
+  descricao     String?
+  categoria     String   @default("PRINCIPAL") // PRINCIPAL | COMPLEMENTAR
+  valor         Float
+  diasSemana    Int      @default(127)
+  diasPorSemana Int      @default(0) // 0 = livre
+  duracaoMeses  Int      @default(1)
+  diaVencimento Int      @default(10)
+  ativo         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  subscriptions AccessSubscription[]
+}
+
+model AccessSubscription {
   id          String   @id @default(cuid())
+  personId    String
+  planId      String
+  plan        AccessPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  person      AccessPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+  tipo        String   @default("PRINCIPAL")
+  valor       Float
+  inicio      DateTime
+  fim         DateTime
+  status      String   @default("ATIVA") // ATIVA | CANCELADA | SUBSTITUIDA
+  criadoPor   String?
+  createdAt   DateTime @default(now())
+  charges     AccessCharge[]
+  @@index([personId, status])
+}
+
+model AccessCharge {
+  id             String   @id @default(cuid())
+  personId       String
+  subscriptionId String
+  subscription   AccessSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  planId         String
+  competencia    String   // AAAA-MM
+  valor          Float
+  vencimento     String   // AAAA-MM-DD
+  status         String   @default("PENDENTE") // PENDENTE | PAGO | ATRASADO | CANCELADO
+  pagoEm         DateTime?
+  pagoPor        String?
+  forma          String?
+  observacao     String?
+  createdAt      DateTime @default(now())
+  @@unique([subscriptionId, competencia])
+}
+
+model AccessNotification {  id          String   @id @default(cuid())
   key         String
   tipo        String
   titulo      String

@@ -47,3 +47,30 @@ export function endOfDay(date = new Date()) {
 export function minutesOfDay(date) {
   return date.getHours() * 60 + date.getMinutes();
 }
+
+// Semana local de domingo a sábado (mesma base do diasSemana: dom=1).
+export function startOfWeek(date = new Date()) {
+  const d = startOfDay(date);
+  d.setDate(d.getDate() - d.getDay());
+  return d;
+}
+
+export function endOfWeek(date = new Date()) {
+  const d = startOfWeek(date);
+  d.setDate(d.getDate() + 7);
+  return new Date(d.getTime() - 1);
+}
+
+export function addMonths(date, meses) {
+  const d = new Date(date);
+  const dia = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + Number(meses || 0));
+  const ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(dia, ultimo));
+  return d;
+}
+
+export function endOfMonth(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+}

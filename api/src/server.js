@@ -31,6 +31,10 @@ import {
 import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento, eventosParaCsv, eventosParaPdf, sorteioParaCsv, sorteioParaPdf, csvTabela, pdfTexto } from './report.js';
 import { relatorioGeral } from './reports.js';
 import { serialize } from './state.js';
+import {
+  normalizarPlano, novoPlano, criarAssinatura, cancelarAssinatura,
+  gerarCobrancasMes, planosAtivos, usoDaSemana,
+} from './plans.js';
 import { aplicarRetencao } from './retention.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -442,8 +446,14 @@ function cleanId(value) {
 }
 
 function cleanText(value, max = 120) {
-  const s = String(value ?? '').trim();
+  const s = String(value ?? '').replace(/\s+/g, ' ').trim();
   return s ? s.slice(0, max) : '';
+}
+
+// CPF é opcional e não bloqueia cadastro; guarda só dígitos quando houver.
+function limparCpf(value) {
+  const d = String(value ?? '').replace(/\D/g, '');
+  return d ? d.slice(0, 11) : null;
 }
 
 function safeDecode(value) {
@@ -515,6 +525,15 @@ function criarPessoa(b) {
 
   const person = {
     id, nome, matricula, tipo, treinutrix: cleanText(b.treinutrix, 200) || null,
+    cpf: limparCpf(b.cpf),
+    telefone: cleanText(b.telefone, 40) || null,
+    email: cleanText(b.email, 120).toLowerCase() || null,
+    nascimento: cleanText(b.nascimento, 20) || null,
+    endereco: cleanText(b.endereco, 200) || null,
+    bairro: cleanText(b.bairro, 100) || null,
+    cidade: cleanText(b.cidade, 100) || null,
+    cep: cleanText(b.cep, 20) || null,
+    observacoes: cleanText(b.observacoes, 1000) || null,
     enrollid, ativo: b.ativo !== false,
     validadeIni: normalizeValidity(b.validadeIni),
     validadeFim: normalizeValidity(b.validadeFim),
@@ -554,7 +573,7 @@ function normalizeValidity(value) {
   return isDateOnly(value) ? String(value).trim() : parsed.toISOString();
 }
 
-const IMPORT_FIELDS = new Set(['nome', 'matricula', 'tipo', 'enrollid', 'validadeIni', 'validadeFim', 'treinutrix', 'ativo', 'senha', 'foto']);
+const IMPORT_FIELDS = new Set(['nome', 'matricula', 'tipo', 'enrollid', 'validadeIni', 'validadeFim', 'treinutrix', 'ativo', 'senha', 'foto', 'cpf', 'telefone', 'email', 'nascimento', 'endereco', 'bairro', 'cidade', 'cep', 'observacoes']);
 
 function mapearLinha(linha, mapeamento) {
   if (!mapeamento || typeof mapeamento !== 'object') return linha;
@@ -614,6 +633,17 @@ function importarPessoas(store, b, { por = 'operador' } = {}) {
       const validadeFim = normalizeValidity(linha.validadeFim);
       const ativo = linha.ativo === undefined ? true
         : !['0', 'false', 'nao', 'não', 'inativo', 'n'].includes(String(linha.ativo).trim().toLowerCase());
+      const extras = {
+        cpf: limparCpf(linha.cpf),
+        telefone: cleanText(linha.telefone, 40) || null,
+        email: cleanText(linha.email, 120).toLowerCase() || null,
+        nascimento: cleanText(linha.nascimento, 20) || null,
+        endereco: cleanText(linha.endereco, 200) || null,
+        bairro: cleanText(linha.bairro, 100) || null,
+        cidade: cleanText(linha.cidade, 100) || null,
+        cep: cleanText(linha.cep, 20) || null,
+        observacoes: cleanText(linha.observacoes, 1000) || null,
+      };
       let foto = null;
       if (linha.foto) {
         const parsed = parsePhoto(linha.foto);
@@ -636,7 +666,7 @@ function importarPessoas(store, b, { por = 'operador' } = {}) {
         plano.push({
           acao: 'ATUALIZAR', linha: numero, existente, nome, tipo,
           treinutrix: cleanText(linha.treinutrix, 200) || null,
-          validadeIni, validadeFim, ativo,
+          validadeIni, validadeFim, ativo, ...extras,
           senha: linha.senha ? String(linha.senha) : null,
           foto,
         });
@@ -654,7 +684,7 @@ function importarPessoas(store, b, { por = 'operador' } = {}) {
       plano.push({
         acao: 'CRIAR', linha: numero, id, nome, matricula: novaMatricula, tipo,
         enrollid: novoEnroll, treinutrix: cleanText(linha.treinutrix, 200) || null,
-        validadeIni, validadeFim, ativo,
+        validadeIni, validadeFim, ativo, ...extras,
         senha: linha.senha ? String(linha.senha) : novaMatricula,
         foto,
       });
@@ -697,6 +727,9 @@ function importarPessoas(store, b, { por = 'operador' } = {}) {
         const person = {
           id: item.id, nome: item.nome, matricula: item.matricula, tipo: item.tipo,
           treinutrix: item.treinutrix, enrollid: item.enrollid, ativo: item.ativo,
+          cpf: item.cpf, telefone: item.telefone, email: item.email, nascimento: item.nascimento,
+          endereco: item.endereco, bairro: item.bairro, cidade: item.cidade, cep: item.cep,
+          observacoes: item.observacoes,
           validadeIni: item.validadeIni, validadeFim: item.validadeFim,
           foto: null, senhaHash: hashPassword(item.senha),
           tokenVersion: 0, mustChangePassword: !item.senha,
@@ -715,6 +748,15 @@ function importarPessoas(store, b, { por = 'operador' } = {}) {
         p.nome = item.nome;
         p.tipo = item.tipo;
         p.treinutrix = item.treinutrix;
+        p.cpf = item.cpf;
+        p.telefone = item.telefone;
+        p.email = item.email;
+        p.nascimento = item.nascimento;
+        p.endereco = item.endereco;
+        p.bairro = item.bairro;
+        p.cidade = item.cidade;
+        p.cep = item.cep;
+        p.observacoes = item.observacoes;
         p.validadeIni = item.validadeIni;
         p.validadeFim = item.validadeFim;
         p.ativo = item.ativo;
@@ -1195,6 +1237,15 @@ async function route(req, res) {
     if (TIPOS_PESSOA.includes(b.tipo)) p.tipo = b.tipo;
     if (typeof b.ativo === 'boolean') p.ativo = b.ativo;
     if (b.treinutrix !== undefined) p.treinutrix = cleanText(b.treinutrix, 200) || null;
+    if (b.cpf !== undefined) p.cpf = limparCpf(b.cpf);
+    if (b.telefone !== undefined) p.telefone = cleanText(b.telefone, 40) || null;
+    if (b.email !== undefined) p.email = cleanText(b.email, 120).toLowerCase() || null;
+    if (b.nascimento !== undefined) p.nascimento = cleanText(b.nascimento, 20) || null;
+    if (b.endereco !== undefined) p.endereco = cleanText(b.endereco, 200) || null;
+    if (b.bairro !== undefined) p.bairro = cleanText(b.bairro, 100) || null;
+    if (b.cidade !== undefined) p.cidade = cleanText(b.cidade, 100) || null;
+    if (b.cep !== undefined) p.cep = cleanText(b.cep, 20) || null;
+    if (b.observacoes !== undefined) p.observacoes = cleanText(b.observacoes, 1000) || null;
     if (b.senha) {
       if (String(b.senha).length < 4) return send(res, 400, { error: 'senha curta (mín. 4)' });
       p.senhaHash = hashPassword(b.senha);
@@ -1204,6 +1255,162 @@ async function route(req, res) {
     if (b.foto === null) { deletePhoto(id); p.foto = null; }
     enqueueSync(store, p);
     return send(res, 200, publicPerson(p));
+  }
+
+  // -------------------------------------------------------- planos/mensalidades
+  if (url.pathname === '/api/plans') {
+    if (req.method === 'GET') {
+      operadorOnly();
+      return send(res, 200, (store.plans || []).map((p) => ({ ...p })));
+    }
+    if (req.method === 'POST') {
+      gerenciaOnly();
+      const b = await readBody(req);
+      try {
+        const plano = novoPlano(b);
+        store.plans.push(plano);
+        markDirty();
+        auditar(user, 'PLANO_CRIADO', `${plano.nome} (R$ ${plano.valor})`, req);
+        return send(res, 201, plano);
+      } catch (e) { return send(res, 400, { error: e.message }); }
+    }
+  }
+  const planRoute = url.pathname.match(/^\/api\/plans\/([^/]+)$/);
+  if (planRoute) {
+    gerenciaOnly();
+    const id = safeDecode(planRoute[1]);
+    const plano = (store.plans || []).find((p) => p.id === id);
+    if (!plano) return send(res, 404, { error: 'plano_not_found' });
+    if (req.method === 'PATCH') {
+      const b = await readBody(req);
+      try {
+        Object.assign(plano, normalizarPlano(b, plano), { atualizadoEm: new Date().toISOString() });
+        markDirty();
+        auditar(user, 'PLANO_ATUALIZADO', plano.nome, req);
+        return send(res, 200, plano);
+      } catch (e) { return send(res, 400, { error: e.message }); }
+    }
+    if (req.method === 'DELETE') {
+      const usados = (store.subscriptions || []).some((s) => s.planId === id);
+      if (usados) {
+        plano.ativo = false;
+        markDirty();
+        auditar(user, 'PLANO_DESATIVADO', plano.nome, req);
+        return send(res, 200, { ok: true, desativado: true });
+      }
+      store.plans = store.plans.filter((p) => p.id !== id);
+      markDirty();
+      auditar(user, 'PLANO_EXCLUIDO', plano.nome, req);
+      return send(res, 200, { ok: true });
+    }
+  }
+
+  const personPlanRoute = url.pathname.match(/^\/api\/persons\/([^/]+)\/plano$/);
+  if (personPlanRoute) {
+    const id = safeDecode(personPlanRoute[1]);
+    const pessoa = id ? store.persons.get(id) : null;
+    if (!pessoa) return send(res, 404, { error: 'person_not_found' });
+    if (user.perfil === 'aluno' && user.sub !== id) return send(res, 403, { error: 'sem permissão' });
+    if (req.method === 'GET') {
+      for (const c of store.charges || []) {
+        if (c.status === 'PENDENTE' && c.vencimento < localDayKey()) c.status = 'ATRASADO';
+      }
+      const assinaturas = (store.subscriptions || []).filter((s) => s.personId === id)
+        .sort((a, b) => String(b.inicio).localeCompare(String(a.inicio)));
+      return send(res, 200, {
+        pessoa: { id: pessoa.id, nome: pessoa.nome, validadeFim: pessoa.validadeFim },
+        planosAtivos: planosAtivos(store, id),
+        assinaturas,
+        cobrancas: (store.charges || []).filter((c) => c.personId === id)
+          .sort((a, b) => String(b.competencia).localeCompare(String(a.competencia))),
+        uso: usoDaSemana(store, id),
+      });
+    }
+    if (req.method === 'POST') {
+      operadorOnly();
+      const b = await readBody(req);
+      const plano = (store.plans || []).find((p) => p.id === b.planoId || p.nome === b.planoId);
+      if (!plano || plano.ativo === false) return send(res, 400, { error: 'plano inválido' });
+      try {
+        const assinatura = criarAssinatura(store, id, plano, {
+          inicio: b.inicio, meses: b.meses, por: user.nome || user.sub,
+        });
+        markDirty();
+        auditar(user, 'PLANO_CONTRATADO', `${pessoa.nome}: ${plano.nome}`, req);
+        return send(res, 201, assinatura);
+      } catch (e) { return send(res, 400, { error: e.message }); }
+    }
+  }
+  const personPlanSubRoute = url.pathname.match(/^\/api\/persons\/([^/]+)\/plano\/([^/]+)$/);
+  if (req.method === 'DELETE' && personPlanSubRoute) {
+    operadorOnly();
+    const personId = safeDecode(personPlanSubRoute[1]);
+    const subId = safeDecode(personPlanSubRoute[2]);
+    const sub = (store.subscriptions || []).find((s) => s.id === subId && s.personId === personId);
+    if (!sub) return send(res, 404, { error: 'assinatura_not_found' });
+    const b = await readBody(req).catch(() => ({}));
+    cancelarAssinatura(store, sub, { motivo: b.motivo });
+    markDirty();
+    auditar(user, 'PLANO_CANCELADO', `${personId}: ${sub.planoNome || sub.planId}`, req);
+    return send(res, 200, sub);
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/charges') {
+    operadorOnly();
+    const personId = url.searchParams.get('personId');
+    const competencia = url.searchParams.get('competencia');
+    const status = url.searchParams.get('status');
+    for (const c of store.charges || []) {
+      if (c.status === 'PENDENTE' && c.vencimento < localDayKey()) c.status = 'ATRASADO';
+    }
+    let lista = [...(store.charges || [])];
+    if (personId) lista = lista.filter((c) => c.personId === personId);
+    if (competencia) lista = lista.filter((c) => c.competencia === competencia);
+    if (status) lista = lista.filter((c) => c.status === status);
+    lista.sort((a, b) => String(b.vencimento).localeCompare(String(a.vencimento)));
+    return send(res, 200, lista.map((c) => {
+      const p = store.persons.get(c.personId);
+      const plano = (store.plans || []).find((x) => x.id === c.planId);
+      return { ...c, pessoaNome: p?.nome || c.personId, planoNome: plano?.nome || '' };
+    }));
+  }
+  const chargePayRoute = url.pathname.match(/^\/api\/charges\/([^/]+)\/pagar$/);
+  if (req.method === 'POST' && chargePayRoute) {
+    operadorOnly();
+    const id = safeDecode(chargePayRoute[1]);
+    const c = (store.charges || []).find((x) => x.id === id);
+    if (!c) return send(res, 404, { error: 'cobranca_not_found' });
+    if (c.status === 'PAGO') return send(res, 200, c);
+    const b = await readBody(req);
+    c.status = 'PAGO';
+    c.pagoEm = b.pagoEm ? (parseDate(b.pagoEm) || new Date()).toISOString() : new Date().toISOString();
+    c.pagoPor = cleanText(b.por, 80) || user.nome || user.sub;
+    c.forma = cleanText(b.forma, 40) || 'manual';
+    c.observacao = cleanText(b.observacao, 300) || null;
+    markDirty();
+    auditar(user, 'MENSALIDADE_PAGA', `${c.personId} ${c.competencia} R$ ${c.valor}`, req);
+    return send(res, 200, c);
+  }
+  const chargeCancelRoute = url.pathname.match(/^\/api\/charges\/([^/]+)\/cancelar$/);
+  if (req.method === 'POST' && chargeCancelRoute) {
+    gerenciaOnly();
+    const id = safeDecode(chargeCancelRoute[1]);
+    const c = (store.charges || []).find((x) => x.id === id);
+    if (!c) return send(res, 404, { error: 'cobranca_not_found' });
+    c.status = 'CANCELADO';
+    markDirty();
+    auditar(user, 'MENSALIDADE_CANCELADA', `${c.personId} ${c.competencia}`, req);
+    return send(res, 200, c);
+  }
+  if (req.method === 'POST' && url.pathname === '/api/charges/gerar') {
+    gerenciaOnly();
+    const b = await readBody(req);
+    try {
+      const criadas = gerarCobrancasMes(store, b.competencia);
+      markDirty();
+      auditar(user, 'MENSALIDADES_GERADAS', `${criadas.length} em ${b.competencia || 'mês atual'}`, req);
+      return send(res, 200, { criadas: criadas.length, cobrancas: criadas });
+    } catch (e) { return send(res, 400, { error: e.message }); }
   }
 
   // ----------------------------------------------------------------- devices
@@ -2141,6 +2348,8 @@ async function route(req, res) {
     const person = resolvePerson(b.person_id);
     const metodo = metodoDoEvento(b);
     const at = parseDate(b.timestamp) || new Date();
+    const planos = person ? planosAtivos(store, person.id, at) : [];
+    const uso = person ? usoDaSemana(store, person.id, at) : { diasUsadosSemana: 0, hojeJaUsado: false };
     const result = decideAccess({
       person,
       rules: person ? store.rules.filter((r) => r.personId === person.id) : [],
@@ -2149,6 +2358,9 @@ async function route(req, res) {
       score: b.score,
       minScore: MIN_SCORE,
       metodo,
+      planos,
+      diasUsadosSemana: uso.diasUsadosSemana,
+      hojeJaUsado: uso.hojeJaUsado,
     });
 
     dev.online = true;

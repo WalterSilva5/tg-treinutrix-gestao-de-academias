@@ -89,3 +89,35 @@ test('duas janelas no mesmo dia: qualquer uma libera', () => {
   });
   assert.equal(r.allow, true);
 });
+
+
+test('plano limita dias distintos na semana, nao entradas no mesmo dia', () => {
+  const plano = { diasSemana: 127, diasPorSemana: 3 };
+  const at = new Date('2026-11-18T10:00:00'); // quarta
+  const base = { person: personOk, rules: [SEG_SEX_6_23], deviceId: 'dev_fit4_01', at, score: 0.95 };
+
+  assert.equal(decideAccess({ ...base, planos: [plano], diasUsadosSemana: 0, hojeJaUsado: false }).allow, true);
+  const quarta = decideAccess({ ...base, planos: [plano], diasUsadosSemana: 3, hojeJaUsado: false });
+  assert.equal(quarta.motivo, 'LIMITE_DIAS_SEMANA');
+  assert.equal(decideAccess({ ...base, planos: [plano], diasUsadosSemana: 3, hojeJaUsado: true }).allow, true);
+});
+
+test('plano respeita mascara de dias e complementar soma limite', () => {
+  const at = new Date('2026-11-18T10:00:00');
+  const base = { person: personOk, rules: [SEG_SEX_6_23], deviceId: 'dev_fit4_01', at, score: 0.95 };
+  const soSegunda = { diasSemana: 2, diasPorSemana: 1 };
+  assert.equal(decideAccess({ ...base, planos: [soSegunda] }).motivo, 'DIA_NAO_PERMITIDO');
+  const principal = { diasSemana: 127, diasPorSemana: 3 };
+  const complemento = { diasSemana: 127, diasPorSemana: 1 };
+  assert.equal(decideAccess({ ...base, planos: [principal, complemento], diasUsadosSemana: 3, hojeJaUsado: false }).allow, true);
+  assert.equal(decideAccess({ ...base, planos: [principal, complemento], diasUsadosSemana: 4, hojeJaUsado: false }).motivo, 'LIMITE_DIAS_SEMANA');
+});
+
+test('plano livre nao limita dias', () => {
+  const at = new Date('2026-11-18T10:00:00');
+  const r = decideAccess({
+    person: personOk, rules: [SEG_SEX_6_23], deviceId: 'dev_fit4_01', at, score: 0.95,
+    planos: [{ diasSemana: 127, diasPorSemana: 0 }], diasUsadosSemana: 7, hojeJaUsado: false,
+  });
+  assert.equal(r.allow, true);
+});
