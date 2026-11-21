@@ -72,3 +72,25 @@ test('aging classifica atraso e fluxo soma receitas e despesas', () => {
   assert.equal(f.saldo, 150);
   assert.equal(f.porCategoria[0].categoria, 'Contas');
 });
+
+test('fluxo soma mensalidades, eventos e servicos com origem', () => {
+  const store = loja();
+  store.socialEvents = [{ id: 'e1', nome: 'Workshop', inicio: '2026-11-10T19:00:00', valor: 50 }];
+  store.eventParticipants = [
+    { id: 'ep1', eventId: 'e1', personId: 'a1', nome: 'Ana', pago: true, valorPago: 50, pagoEm: '2026-11-12T10:00:00', formaPagamento: 'pix' },
+    { id: 'ep2', eventId: 'e1', personId: 'a2', nome: 'Beto', pago: false, valorPago: 0, status: 'INSCRITO' },
+  ];
+  store.serviceCharges = [
+    { id: 's1', descricao: 'Personal', categoria: 'Personal', valor: 80, data: '2026-11-15', status: 'PAGO', pagoEm: '2026-11-15T12:00:00', forma: 'dinheiro' },
+    { id: 's2', descricao: 'Camiseta', categoria: 'Produto', valor: 60, data: '2026-11-16', status: 'PENDENTE' },
+  ];
+  store.expenses = [{ id: 'x1', data: '2026-11-05', valor: 30, descricao: 'Luz', categoria: 'Contas' }];
+
+  const f = fluxoCaixa(store, { inicio: '2026-11-01', fim: '2026-11-30', agora: new Date('2026-11-20T12:00:00') });
+  assert.equal(f.totais.mensalidades, 200);
+  assert.equal(f.totais.eventos, 50);
+  assert.equal(f.totais.servicos, 80);
+  assert.equal(f.totalReceitas, 330);
+  assert.equal(f.saldo, 300);
+  assert.deepEqual(f.porOrigem.map((o) => o.origem).sort(), ['EVENTO', 'MENSALIDADE', 'SERVICO']);
+});

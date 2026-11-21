@@ -69,30 +69,49 @@ Cobranças canceladas são ignoradas.
 
 - Despesas: `GET/POST /api/expenses` e `PATCH/DELETE /api/expenses/:id`
   (gerência). Campos: `data`, `valor`, `descricao`, `categoria`, `fornecedor`.
-- `GET /api/financeiro/fluxo?inicio=&fim=` soma:
-  - receitas = cobranças `PAGO` com `pagoEm` no período;
-  - despesas = lançamentos com `data` no período;
-  - `saldo = receitas − despesas`, além de `porCategoria` e `porDia`.
+- `GET /api/financeiro/fluxo?inicio=&fim=` soma **todas as origens**:
+  - mensalidades `PAGO` com `pagoEm` no período;
+  - participações de eventos com `pago:true` e `pagoEm` no período;
+  - serviços avulsos `PAGO` com `pagoEm` no período;
+  - despesas com `data` no período.
+- Retorna `totalReceitas`, `totalDespesas`, `saldo`, `totais` por origem
+  (`mensalidades`, `eventos`, `servicos`), `porOrigem`, `porCategoria`,
+  `porDia` e a lista unificada de `receitas`.
 - O padrão do período é o mês corrente.
-- Indicadores no painel: **Sistema → Despesas e fluxo de caixa**.
 - Exportação CSV/PDF do fluxo ainda não existe; use a tela ou a API JSON.
 
-## 7. Interface
+## 7. Eventos e serviços avulsos
 
-- **Relatórios → Financeiro** (gerência):
-  - seletor de mês;
-  - KPIs, tabelas por competência, plano, forma e devedores;
-  - botões **CSV** e **PDF**.
-- **Sistema → Inadimplência (aging):** faixas, devedores e ações de contato.
-- **Sistema → Despesas e fluxo de caixa:** lançar/editar/excluir despesas e
-  acompanhar receitas, despesas e saldo do mês.
-- **Sistema → Mensalidades** continua sendo a operação do dia a dia
-  (gerar mês, registrar pagamento).
+- `GET /api/financeiro/eventos?inicio=&fim=` lista participações com valor,
+  com previsto/recebido/em aberto e dados do evento e da pessoa.
+- O pagamento usa `PATCH /api/eventos/:eventId/participantes/:id` com
+  `{ pago, valorPago, forma, pagoEm }`; a forma fica em `formaPagamento`.
+- Serviços avulsos (personal, produtos, day-use, taxas):
+  - `GET/POST /api/service-charges`
+  - `PATCH/DELETE /api/service-charges/:id`
+  - `POST /api/service-charges/:id/pagar`
+  - `POST /api/service-charges/:id/cancelar`
+- Campos do serviço: `descricao`, `categoria`, `valor`, `data`, `personId`
+  (opcional), `status`, `pagoEm`, `pagoPor`, `forma` e `observacao`.
+- Status: `PENDENTE`, `PAGO` e `CANCELADO` (cancelar/excluir é gerência).
 
-## 8. Regras e limitações
+## 8. Interface
+
+- **Financeiro** (aba própria):
+  - **Receitas por origem** (mensalidades, eventos, serviços e saldo);
+  - **Mensalidades** (gerar mês e registrar pagamento);
+  - **Eventos** (pagamentos e desfazer);
+  - **Outros serviços** (lançar, pagar, cancelar e excluir);
+  - **Inadimplência (aging)** e **Despesas/fluxo** (gerência);
+  - **Planos de mensalidade** (gerência).
+- **Relatórios → Financeiro** (gerência): competência, plano, forma e
+  devedores, com CSV/PDF.
+
+## 9. Regras e limitações
 
 - O pagamento registrado **não altera** automaticamente o limite de dias nem a
   validade; quem controla isso é a assinatura do plano (ou ajuste manual).
 - Cobranças canceladas não entram em previsto/aberto.
+- Serviços não têm aging próprio; o controle de atraso é das mensalidades.
 - Relatório é financeiro, não contábil/fiscal; não substitui nota fiscal.
 - Dados de CPF/telefone não aparecem no relatório financeiro (só nome/matrícula).

@@ -1181,3 +1181,58 @@ test('ficha do aluno guarda objetivo, peso, saude e necessidades; historico cons
   const negado = await api('/api/persons/' + p.json.id + '/historico', { token: login.json.token });
   assert.equal(negado.status, 403);
 });
+
+test('financeiro: servicos avulsos e participacao em evento entram no fluxo', async () => {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const pf = await api('/api/persons', {
+    method: 'POST', token: admin,
+    body: { nome: 'Fin Pessoa ' + run, matricula: 'FP' + run, tipo: 'ALUNO' },
+  });
+  assert.equal(pf.status, 201, pf.text);
+  const servico = await api('/api/service-charges', {
+    method: 'POST', token: admin,
+    body: { descricao: 'Personal avulso ' + run, categoria: 'Personal', valor: 120, data: hoje, personId: pf.json.id },
+  });
+  assert.equal(servico.status, 201, servico.text);
+  assert.equal(servico.json.status, 'PENDENTE');
+
+  const pago = await api(`/api/service-charges/${servico.json.id}/pagar`, {
+    method: 'POST', token: admin, body: { por: 'recepcao', forma: 'pix' },
+  });
+  assert.equal(pago.status, 200, pago.text);
+  assert.equal(pago.json.status, 'PAGO');
+  assert.equal(pago.json.forma, 'pix');
+
+  const evento = await api('/api/eventos', {
+    method: 'POST', token: admin,
+    body: { nome: 'Evento financeiro ' + run, inicio: hoje + 'T19:00', valor: 40, capacidade: 10 },
+  });
+  assert.equal(evento.status, 201, evento.text);
+  const part = await api(`/api/eventos/${evento.json.id}/participantes`, {
+    method: 'POST', token: admin, body: { personId: pf.json.id },
+  });
+  assert.equal(part.status, 201, part.text);
+  const pagoEvento = await api(`/api/eventos/${evento.json.id}/participantes/${part.json.id}`, {
+    method: 'PATCH', token: admin, body: { pago: true, valorPago: 40, forma: 'dinheiro' },
+  });
+  assert.equal(pagoEvento.status, 200, pagoEvento.text);
+  assert.equal(pagoEvento.json.formaPagamento, 'dinheiro');
+
+  const eventosFin = await api('/api/financeiro/eventos', { token: admin });
+  assert.equal(eventosFin.status, 200, eventosFin.text);
+  assert.ok(eventosFin.json.totalRecebido >= 40);
+  assert.ok(eventosFin.json.participantes.some((p) => p.personId === pf.json.id && p.pago));
+
+  const fluxo = await api('/api/financeiro/fluxo', { token: admin });
+  assert.equal(fluxo.status, 200, fluxo.text);
+  assert.ok(fluxo.json.totais.servicos >= 120);
+  assert.ok(fluxo.json.totais.eventos >= 40);
+  assert.ok(fluxo.json.porOrigem.some((o) => o.origem === 'SERVICO'));
+  assert.ok(fluxo.json.porOrigem.some((o) => o.origem === 'EVENTO'));
+
+  const negado = await api('/api/service-charges', {
+    method: 'POST', token: (await api('/api/auth/login', { method: 'POST', body: { login: 'EV' + run, senha: 'aluno123' } })).json.token,
+    body: { descricao: 'x', valor: 1, data: hoje },
+  });
+  assert.equal(negado.status, 403);
+});

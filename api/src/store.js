@@ -27,6 +27,7 @@ export const store = {
   plans: [], // planos de mensalidade (principal/complementar)
   subscriptions: [], // plano contratado por pessoa
   charges: [], // mensalidades/cobranças por pessoa
+  serviceCharges: [], // serviços avulsos e outras receitas
   expenses: [], // despesas da academia
   contacts: [], // histórico de contato/cobrança com alunos
   classSessions: [], // aulas/agenda

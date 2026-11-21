@@ -109,12 +109,12 @@ Cada assinatura gera **uma cobrança por mês de vigência**:
 
 ## 9. Interface
 
-- **Sistema → Planos de mensalidade:** criar/editar/desativar planos.
+- **Financeiro → Planos de mensalidade** (gerência): criar/editar/desativar planos.
 - **Alunos → Pessoas:** botão **Plano** abre o menu contratar/trancar/
   retomar/cancelar; **Dados** edita os campos opcionais.
-- **Sistema → Mensalidades:** gerar o mês, filtrar, registrar pagamento.
-- **Sistema → Inadimplência (aging):** ver quem cobrar, contatar e abrir
-  WhatsApp.
+- **Financeiro → Mensalidades:** gerar o mês, filtrar, registrar pagamento.
+- **Financeiro → Inadimplência (aging)** (gerência): ver quem cobrar, contatar
+  e abrir WhatsApp.
 - **Meu acesso (aluno):** plano atual, dias/semana e mensalidades em aberto.
 
 ## 10. LGPD

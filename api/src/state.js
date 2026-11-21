@@ -22,6 +22,7 @@ export function serialize(store, at = new Date()) {
     plans: store.plans || [],
     subscriptions: store.subscriptions || [],
     charges: store.charges || [],
+    serviceCharges: store.serviceCharges || [],
     expenses: store.expenses || [],
     contacts: store.contacts || [],
     classSessions: store.classSessions || [],
@@ -36,7 +37,7 @@ export function serialize(store, at = new Date()) {
 // formato não for compatível (restore/persistência nunca sobrescreve no escuro).
 export function hydrate(store, data) {
   if (!data || data.v !== STATE_VERSION) throw new Error('estado incompatível');
-  for (const k of ['persons', 'devices', 'users', 'rules', 'events', 'syncQueue', 'notifications', 'socialEvents', 'eventParticipants', 'raffles', 'raffleDraws', 'imports', 'audit', 'unknownFaces', 'plans', 'subscriptions', 'charges', 'expenses', 'contacts', 'classSessions', 'classBookings']) {
+  for (const k of ['persons', 'devices', 'users', 'rules', 'events', 'syncQueue', 'notifications', 'socialEvents', 'eventParticipants', 'raffles', 'raffleDraws', 'imports', 'audit', 'unknownFaces', 'plans', 'subscriptions', 'charges', 'serviceCharges', 'expenses', 'contacts', 'classSessions', 'classBookings']) {
     if (data[k] !== undefined && !Array.isArray(data[k])) throw new Error(`estado corrompido: ${k}`);
   }
   if (!Array.isArray(data.persons) || !Array.isArray(data.devices)) throw new Error('estado incompatível');
@@ -57,6 +58,7 @@ export function hydrate(store, data) {
   store.plans = data.plans || [];
   store.subscriptions = data.subscriptions || [];
   store.charges = data.charges || [];
+  store.serviceCharges = data.serviceCharges || [];
   store.expenses = data.expenses || [];
   store.contacts = data.contacts || [];
   store.classSessions = data.classSessions || [];

@@ -38,8 +38,10 @@ Desenvolvimento **sem catraca**: toda conversa com hardware passa por interfaces
   (`docs/PORTABILIDADE.md`).
 - Planos de mensalidade (principal/complementar), cobranças por aluno e limite
   por dias distintos na semana (`docs/PLANOS-MENSALIDADES.md`).
-- Relatórios financeiros por período em CSV/PDF
+- **Módulo financeiro** com mensalidades, pagamentos de eventos, serviços
+  avulsos (personal, produtos, day-use), despesas e fluxo por origem
   (`docs/RELATORIOS-FINANCEIROS.md`).
+- Relatórios financeiros por período em CSV/PDF.
 - Métricas de movimento por hora e por dia (`docs/METRICAS-MOVIMENTO.md`).
 - Persistência em **SQLite**, sem Docker.
 

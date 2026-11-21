@@ -1644,6 +1644,149 @@ async function route(req, res) {
     return send(res, 200, despesa);
   }
 
+  // Participações em eventos com valor: previsto, recebido e em aberto.
+  if (req.method === 'GET' && url.pathname === '/api/financeiro/eventos') {
+    operadorOnly();
+    const de = url.searchParams.get('inicio');
+    const ate = url.searchParams.get('fim');
+    const participantes = [];
+    for (const p of store.eventParticipants || []) {
+      const evento = (store.socialEvents || []).find((e) => e.id === p.eventId);
+      if (!evento) continue;
+      const valor = Number(p.valorPago || 0) > 0 ? Number(p.valorPago) : Number(evento.valor || 0);
+      if (valor <= 0 && !p.pago) continue;
+      const dia = String(evento.inicio || '').slice(0, 10);
+      if (de && dia < de) continue;
+      if (ate && dia > ate) continue;
+      participantes.push({
+        id: p.id, eventId: evento.id, evento: evento.nome, eventInicio: evento.inicio,
+        personId: p.personId || null,
+        nome: p.nome || store.persons.get(p.personId)?.nome || 'Participante',
+        status: p.status, pago: p.pago === true,
+        valor, valorPago: Number(p.valorPago || 0),
+        pagoEm: p.pagoEm || null, pagoPor: p.pagoPor || null,
+        forma: p.formaPagamento || null,
+      });
+    }
+    participantes.sort((a, b) => String(b.eventInicio).localeCompare(String(a.eventInicio))
+      || String(a.nome).localeCompare(String(b.nome)));
+    return send(res, 200, {
+      participantes,
+      totalPrevisto: participantes.reduce((s, p) => s + p.valor, 0),
+      totalRecebido: participantes.reduce((s, p) => s + p.valorPago, 0),
+      totalAberto: participantes.reduce((s, p) => s + (p.pago ? 0 : p.valor), 0),
+    });
+  }
+
+  // Serviços avulsos e outras receitas (personal, produtos, day-use etc.).
+  if (url.pathname === '/api/service-charges') {
+    operadorOnly();
+    if (req.method === 'GET') {
+      const status = url.searchParams.get('status');
+      const personId = url.searchParams.get('personId');
+      const de = url.searchParams.get('inicio');
+      const ate = url.searchParams.get('fim');
+      let lista = [...(store.serviceCharges || [])];
+      if (status) lista = lista.filter((c) => c.status === status);
+      if (personId) lista = lista.filter((c) => c.personId === personId);
+      if (de) lista = lista.filter((c) => c.data >= de);
+      if (ate) lista = lista.filter((c) => c.data <= ate);
+      lista.sort((a, b) => String(b.data).localeCompare(String(a.data)));
+      return send(res, 200, lista.map((c) => ({
+        ...c, pessoaNome: c.personId ? (store.persons.get(c.personId)?.nome || c.personId) : null,
+      })));
+    }
+    if (req.method === 'POST') {
+      const b = await readBody(req);
+      const descricao = cleanText(b.descricao, 200);
+      const valor = Number(b.valor);
+      if (!descricao) return send(res, 400, { error: 'descrição obrigatória' });
+      if (!Number.isFinite(valor) || valor <= 0) return send(res, 400, { error: 'valor inválido' });
+      if (!parseDate(b.data)) return send(res, 400, { error: 'data inválida' });
+      const personId = b.personId ? cleanId(b.personId) : null;
+      if (personId && !store.persons.has(personId)) return send(res, 400, { error: 'pessoa não encontrada' });
+      const servico = {
+        id: nextId('srv'), personId,
+        descricao, categoria: cleanText(b.categoria, 60) || 'Serviços',
+        valor: Math.round(valor * 100) / 100,
+        data: String(b.data).slice(0, 10),
+        status: 'PENDENTE',
+        observacao: cleanText(b.observacao, 300) || null,
+        criadoEm: new Date().toISOString(), criadoPor: user.nome || user.sub,
+      };
+      store.serviceCharges.push(servico);
+      markDirty();
+      auditar(user, 'SERVICO_CRIADO', `${servico.descricao} R$ ${servico.valor}`, req);
+      return send(res, 201, servico);
+    }
+  }
+  const serviceChargeRoute = url.pathname.match(/^\/api\/service-charges\/([^/]+)$/);
+  if (serviceChargeRoute && (req.method === 'PATCH' || req.method === 'DELETE')) {
+    const id = safeDecode(serviceChargeRoute[1]);
+    const servico = (store.serviceCharges || []).find((c) => c.id === id);
+    if (!servico) return send(res, 404, { error: 'servico_not_found' });
+    if (req.method === 'DELETE') {
+      gerenciaOnly();
+      store.serviceCharges = store.serviceCharges.filter((c) => c.id !== id);
+      markDirty();
+      auditar(user, 'SERVICO_EXCLUIDO', servico.descricao, req);
+      return send(res, 200, { ok: true });
+    }
+    operadorOnly();
+    if (servico.status === 'PAGO') return send(res, 409, { error: 'serviço já pago' });
+    const b = await readBody(req);
+    if (b.descricao !== undefined) servico.descricao = cleanText(b.descricao, 200) || servico.descricao;
+    if (b.categoria !== undefined) servico.categoria = cleanText(b.categoria, 60) || 'Serviços';
+    if (b.valor !== undefined) {
+      const v = Number(b.valor);
+      if (!Number.isFinite(v) || v <= 0) return send(res, 400, { error: 'valor inválido' });
+      servico.valor = Math.round(v * 100) / 100;
+    }
+    if (b.data !== undefined) {
+      if (!parseDate(b.data)) return send(res, 400, { error: 'data inválida' });
+      servico.data = String(b.data).slice(0, 10);
+    }
+    if (b.personId !== undefined) {
+      const personId = b.personId ? cleanId(b.personId) : null;
+      if (personId && !store.persons.has(personId)) return send(res, 400, { error: 'pessoa não encontrada' });
+      servico.personId = personId;
+    }
+    if (b.observacao !== undefined) servico.observacao = cleanText(b.observacao, 300) || null;
+    markDirty();
+    return send(res, 200, servico);
+  }
+  const servicePayRoute = url.pathname.match(/^\/api\/service-charges\/([^/]+)\/pagar$/);
+  if (req.method === 'POST' && servicePayRoute) {
+    operadorOnly();
+    const id = safeDecode(servicePayRoute[1]);
+    const servico = (store.serviceCharges || []).find((c) => c.id === id);
+    if (!servico) return send(res, 404, { error: 'servico_not_found' });
+    if (servico.status === 'CANCELADO') return send(res, 409, { error: 'serviço cancelado' });
+    const b = await readBody(req);
+    servico.status = 'PAGO';
+    servico.pagoEm = b.pagoEm ? (parseDate(b.pagoEm) || new Date()).toISOString() : new Date().toISOString();
+    servico.pagoPor = cleanText(b.por, 80) || user.nome || user.sub;
+    servico.forma = cleanText(b.forma, 40) || 'manual';
+    if (b.observacao !== undefined) servico.observacao = cleanText(b.observacao, 300) || null;
+    markDirty();
+    auditar(user, 'SERVICO_PAGO', `${servico.descricao} R$ ${servico.valor}`, req);
+    return send(res, 200, servico);
+  }
+  const serviceCancelRoute = url.pathname.match(/^\/api\/service-charges\/([^/]+)\/cancelar$/);
+  if (req.method === 'POST' && serviceCancelRoute) {
+    gerenciaOnly();
+    const id = safeDecode(serviceCancelRoute[1]);
+    const servico = (store.serviceCharges || []).find((c) => c.id === id);
+    if (!servico) return send(res, 404, { error: 'servico_not_found' });
+    const b = await readBody(req).catch(() => ({}));
+    servico.status = 'CANCELADO';
+    servico.canceladoEm = new Date().toISOString();
+    servico.motivoCancelamento = cleanText(b.motivo, 200) || null;
+    markDirty();
+    auditar(user, 'SERVICO_CANCELADO', servico.descricao, req);
+    return send(res, 200, servico);
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/charges') {
     operadorOnly();
     const personId = url.searchParams.get('personId');
@@ -2099,8 +2242,11 @@ async function route(req, res) {
       if (b.pago !== undefined) {
         p.pago = b.pago !== false;
         p.valorPago = p.pago ? Math.max(0, Number(b.valorPago ?? evento?.valor ?? 0) || 0) : 0;
-        p.pagoEm = p.pago ? new Date().toISOString() : null;
+        p.pagoEm = p.pago
+          ? (b.pagoEm ? (parseDate(b.pagoEm) || new Date()).toISOString() : new Date().toISOString())
+          : null;
         p.pagoPor = p.pago ? (cleanText(b.por, 80) || 'operador') : null;
+        p.formaPagamento = p.pago ? (cleanText(b.forma, 40) || p.formaPagamento || 'manual') : null;
       }
       const promovido = p.status === 'CANCELADO' ? promoverEspera(store, eventId) : null;
       markDirty();

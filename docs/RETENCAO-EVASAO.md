@@ -32,7 +32,7 @@ sem visita, `validadeFim`, `diasParaVencer`, planos e motivos.
 
 - **Dashboard → Risco de evasão:** oito principais casos com atalhos de
   contato.
-- **Sistema → Inadimplência (aging):** cruza dívida com contato de cobrança.
+- **Financeiro → Inadimplência (aging):** cruza dívida com contato de cobrança.
 
 ## 4. Privacidade
 

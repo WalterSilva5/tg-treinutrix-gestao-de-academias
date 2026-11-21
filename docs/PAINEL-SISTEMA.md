@@ -48,6 +48,18 @@ Base de padrões: `wsi-invest-ai` (`back/src/modules/admin` overview,
 - Não importa foto nem template facial: o cadastro nasce sem biometria e a foto
   é enviada depois em **Alunos → Foto** (o sync manda `setuserinfo` ao leitor).
 
+## Módulo financeiro (aba Financeiro)
+
+- **Receitas por origem:** mensalidades, eventos e serviços do mês.
+- **Mensalidades:** gerar competência e registrar pagamentos.
+- **Eventos:** participações com valor, previsto/recebido/em aberto e baixa de
+  pagamento com forma.
+- **Outros serviços:** personal, produtos, day-use e taxas, com pagar, cancelar
+  e excluir (gerência).
+- **Inadimplência (aging)**, **despesas/fluxo** e **planos** ficam restritos à
+  gerência; recepção vê mensalidades, eventos e serviços.
+- O caixa soma as três origens de receita e as despesas do período.
+
 ## Endpoints
 
 | Rota | Origem do padrão |

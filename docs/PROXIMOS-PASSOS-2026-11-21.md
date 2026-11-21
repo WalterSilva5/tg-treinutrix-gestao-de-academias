@@ -22,7 +22,9 @@ Lista priorizada a partir do estado atual. O plano completo está em
 - [x] Histórico de contatos de cobrança/retenção no cadastro.
 - [x] Ficha do aluno com objetivo, peso, saúde, necessidades especiais e
       histórico consolidado (acessos, planos, cobranças, contatos e aulas).
-- [x] 157 testes verdes (classes, risco, aging, fluxo, trancamento, ficha e HTTP).
+- [x] Módulo **Financeiro** com mensalidades, pagamentos de eventos, serviços
+      avulsos, despesas/fluxo por origem e aba própria no menu.
+- [x] 159 testes verdes (classes, risco, aging, fluxo, trancamento, ficha e HTTP).
 
 Ainda pendente deste bloco: backup offsite, 2FA e a validação física da
 catraca. O restante segue a ordem abaixo.

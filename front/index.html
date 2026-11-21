@@ -665,6 +665,96 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
       </div>
     </section>
 
+    <!-- FINANCEIRO -->
+    <section id="v-financeiro" class="hidden">
+      <div class="card gerencia-only">
+        <div class="card-head"><div><h2>Receitas por origem</h2><p class="sub">Mensalidades, eventos e serviços do período</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarFinanceiroModulo()">Atualizar</button></div></div>
+        <div class="kpis" id="finOrigemResumo" style="margin-bottom:14px"></div>
+        <div class="table-wrap"><table><thead><tr><th>Origem</th><th>Lançamentos</th><th>Total</th></tr></thead><tbody id="finOrigemLista"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Mensalidades</h2><p class="sub">Cobranças por aluno e competência</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarCobrancas()">Atualizar</button></div></div>
+        <div class="form-actions" style="margin-bottom:10px">
+          <input id="cobCompetencia" type="month">
+          <span class="gerencia-only" style="display:contents"><button class="btn ghost sm" onclick="gerarCobrancas()">Gerar mês</button></span>
+        </div>
+        <div id="cobResumo" class="help"></div>
+        <div class="table-wrap"><table><thead><tr><th>Aluno</th><th>Plano</th><th>Competência</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody id="cobrancas"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Eventos</h2><p class="sub">Participações pagas e em aberto</p></div>
+          <div class="card-head-actions">
+            <input id="finEventoFiltro" placeholder="Filtrar evento ou pessoa" oninput="renderEventosFin()" style="max-width:220px">
+            <button class="btn ghost sm" onclick="carregarEventosFin()">Atualizar</button>
+          </div></div>
+        <div class="kpis" id="finEventoResumo" style="margin-bottom:14px"></div>
+        <div class="table-wrap"><table><thead><tr><th>Evento</th><th>Participante</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody id="finEventosLista"></tbody></table></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Outros serviços</h2><p class="sub">Personal, produtos, day-use e receitas avulsas</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarServicos()">Atualizar</button></div></div>
+        <div class="form-grid" style="margin-bottom:10px">
+          <input id="servData" type="date" title="Data">
+          <input id="servDesc" placeholder="Descrição (ex.: personal 1 aula)">
+          <input id="servCategoria" placeholder="Categoria (personal, produto)">
+          <input id="servValor" type="number" min="0" step="0.01" placeholder="Valor (R$)">
+          <select id="servPessoa"><option value="">Sem vínculo</option></select>
+          <div class="form-actions"><button class="btn sm" onclick="criarServico()">Lançar serviço</button></div>
+        </div>
+        <div id="servResumo" class="help"></div>
+        <div class="table-wrap"><table><thead><tr><th>Data</th><th>Serviço</th><th>Pessoa</th><th>Categoria</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody id="servicosLista"></tbody></table></div>
+      </div>
+
+      <div class="card gerencia-only">
+        <div class="card-head"><div><h2>Inadimplência por idade (aging)</h2><p class="sub">Quem cobrar primeiro, por faixa de atraso</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarAging()">Atualizar</button></div></div>
+        <div id="agingResumo" class="kpis" style="margin-bottom:14px"></div>
+        <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Cobranças</th><th>Aberto</th><th>Vencido</th><th>Faixa</th><th></th></tr></thead><tbody id="agingLista"></tbody></table></div>
+      </div>
+
+      <div class="card gerencia-only">
+        <div class="card-head"><div><h2>Despesas e fluxo de caixa</h2><p class="sub">Saídas por categoria e saldo do mês</p></div>
+          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarFluxo()">Atualizar</button></div></div>
+        <div class="form-grid" style="margin-bottom:10px">
+          <input id="despData" type="date" title="Data">
+          <input id="despValor" type="number" min="0" step="0.01" placeholder="Valor">
+          <input id="despDesc" placeholder="Descrição">
+          <input id="despCategoria" placeholder="Categoria (ex.: aluguel)">
+          <input id="despFornecedor" placeholder="Fornecedor (opcional)">
+          <div class="form-actions"><button class="btn sm" onclick="criarDespesa()">Lançar despesa</button></div>
+        </div>
+        <div id="fluxoResumo" class="kpis" style="margin-bottom:14px"></div>
+        <div class="table-wrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th></th></tr></thead><tbody id="despesasLista"></tbody></table></div>
+      </div>
+
+      <div class="card gerencia-only">
+        <div class="card-head"><div><h2>Planos de mensalidade</h2><p class="sub">Principal e complementares, dias por semana e valores</p></div></div>
+        <div class="list" id="listaPlanos" style="margin-bottom:10px"></div>
+        <details id="planoForm">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:10px">Novo plano</summary>
+          <div class="form-grid">
+            <input id="planoNome" placeholder="Nome (ex.: 3x semana)">
+            <input id="planoValor" type="number" min="0" step="0.01" placeholder="Valor (R$)">
+            <select id="planoCategoria"><option value="PRINCIPAL">Principal</option><option value="COMPLEMENTAR">Complementar</option></select>
+            <input id="planoDiasPorSemana" type="number" min="0" max="7" value="0" placeholder="Dias/semana (0 = livre)">
+            <input id="planoDiasSemana" placeholder="Dias: 1234567 (dom..sáb)">
+            <input id="planoDuracao" type="number" min="1" max="24" value="1" placeholder="Meses">
+            <input id="planoVencimento" type="number" min="1" max="28" value="10" placeholder="Dia vencimento">
+            <textarea id="planoDescricao" placeholder="Descrição/regras" rows="2"></textarea>
+            <div class="form-actions">
+              <button class="btn sm" id="planoSalvar" onclick="salvarPlano()">Criar plano</button>
+              <button class="btn ghost sm" id="planoCancelar" onclick="cancelarEdicaoPlano()" style="display:none">Cancelar edição</button>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
     <!-- RELATÓRIOS -->
     <section id="v-relatorios" class="hidden">
       <div class="card">
@@ -750,60 +840,13 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
         </details>
       </div>
 
-      <div class="card">
-        <div class="card-head"><div><h2>Planos de mensalidade</h2><p class="sub">Principal e complementares, dias por semana e valores</p></div></div>
-        <div class="list" id="listaPlanos" style="margin-bottom:10px"></div>
-        <details id="planoForm">
-          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:10px">Novo plano</summary>
-          <div class="form-grid">
-            <input id="planoNome" placeholder="Nome (ex.: 3x semana)">
-            <input id="planoValor" type="number" min="0" step="0.01" placeholder="Valor (R$)">
-            <select id="planoCategoria"><option value="PRINCIPAL">Principal</option><option value="COMPLEMENTAR">Complementar</option></select>
-            <input id="planoDiasPorSemana" type="number" min="0" max="7" value="0" placeholder="Dias/semana (0 = livre)">
-            <input id="planoDiasSemana" placeholder="Dias: 1234567 (dom..sáb)">
-            <input id="planoDuracao" type="number" min="1" max="24" value="1" placeholder="Meses">
-            <input id="planoVencimento" type="number" min="1" max="28" value="10" placeholder="Dia vencimento">
-            <textarea id="planoDescricao" placeholder="Descrição/regras" rows="2"></textarea>
-            <div class="form-actions">
-              <button class="btn sm" id="planoSalvar" onclick="salvarPlano()">Criar plano</button>
-              <button class="btn ghost sm" id="planoCancelar" onclick="cancelarEdicaoPlano()" style="display:none">Cancelar edição</button>
-            </div>
-          </div>
-        </details>
-      </div>
 
-      <div class="card">
-        <div class="card-head"><div><h2>Mensalidades</h2><p class="sub">Cobranças por aluno e competência</p></div>
-          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarCobrancas()">Atualizar</button></div></div>
-        <div class="form-actions" style="margin-bottom:10px">
-          <input id="cobCompetencia" type="month">
-          <button class="btn ghost sm" onclick="gerarCobrancas()">Gerar mês</button>
-        </div>
-        <div id="cobResumo" class="help"></div>
-        <div class="table-wrap"><table><thead><tr><th>Aluno</th><th>Plano</th><th>Competência</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody id="cobrancas"></tbody></table></div>
-      </div>
 
-      <div class="card">
-        <div class="card-head"><div><h2>Inadimplência por idade (aging)</h2><p class="sub">Quem cobrar primeiro, por faixa de atraso</p></div>
-          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarAging()">Atualizar</button></div></div>
-        <div id="agingResumo" class="kpis" style="margin-bottom:14px"></div>
-        <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Cobranças</th><th>Aberto</th><th>Vencido</th><th>Faixa</th><th></th></tr></thead><tbody id="agingLista"></tbody></table></div>
-      </div>
 
-      <div class="card">
-        <div class="card-head"><div><h2>Despesas e fluxo de caixa</h2><p class="sub">Saídas por categoria e saldo do mês</p></div>
-          <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarFluxo()">Atualizar</button></div></div>
-        <div class="form-grid" style="margin-bottom:10px">
-          <input id="despData" type="date" title="Data">
-          <input id="despValor" type="number" min="0" step="0.01" placeholder="Valor">
-          <input id="despDesc" placeholder="Descrição">
-          <input id="despCategoria" placeholder="Categoria (ex.: aluguel)">
-          <input id="despFornecedor" placeholder="Fornecedor (opcional)">
-          <div class="form-actions"><button class="btn sm" onclick="criarDespesa()">Lançar despesa</button></div>
-        </div>
-        <div id="fluxoResumo" class="kpis" style="margin-bottom:14px"></div>
-        <div class="table-wrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th></th></tr></thead><tbody id="despesasLista"></tbody></table></div>
-      </div>
+
+
+
+
 
       <div class="card">
         <div class="card-head"><div><h2>Aulas e agenda</h2><p class="sub">Grade, reservas, lista de espera e check-in</p></div></div>
@@ -953,6 +996,7 @@ const PAGINAS = {
   oper: ['Operação', 'Acessos, catraca e equipamentos'],
   eventos: ['Eventos', 'Inscrições de alunos e visitantes'],
   sorteios: ['Sorteios', 'Premiações programáveis e roleta'],
+  financeiro: ['Financeiro', 'Mensalidades, eventos, serviços, despesas e caixa'],
   relatorios: ['Relatórios', 'Frequência, inadimplência, eventos e sorteios'],
   sistema: ['Sistema', 'Servidor, backup e pessoas'],
   aluno: ['Meu acesso', 'Seu plano e frequência'],
@@ -1069,7 +1113,7 @@ function entraUI() {
   if (!sess) return;
   // Aluno tem acesso limitado: remove do DOM tudo que é operacional.
   if (sess.perfil === 'aluno') {
-    for (const id of ['v-inicio', 'v-alunos', 'v-oper', 'v-eventos', 'v-sorteios', 'v-relatorios', 'v-sistema']) {
+    for (const id of ['v-inicio', 'v-alunos', 'v-oper', 'v-eventos', 'v-sorteios', 'v-financeiro', 'v-relatorios', 'v-sistema']) {
       const el = $(id); if (el) el.remove();
     }
     const top = $('topActions'); if (top) top.remove();
@@ -1086,9 +1130,9 @@ function entraUI() {
   const tabs = $('tabs'); tabs.innerHTML = '';
   const abas = sess.perfil === 'aluno' ? [['aluno', 'Meu acesso']]
     : sess.perfil === 'gerencia'
-      ? [['inicio', 'Início'], ['alunos', 'Alunos'], ['oper', 'Operação'], ['eventos', 'Eventos'], ['sorteios', 'Sorteios'], ['relatorios', 'Relatórios'], ['sistema', 'Sistema']]
-      : [['inicio', 'Início'], ['alunos', 'Alunos'], ['oper', 'Operação'], ['eventos', 'Eventos']];
-  const icones = { inicio: '◧', alunos: '👥', oper: '⇄', eventos: '★', sorteios: '🎁', relatorios: '▤', sistema: '⚙', aluno: '◎' };
+      ? [['inicio', 'Início'], ['alunos', 'Alunos'], ['oper', 'Operação'], ['eventos', 'Eventos'], ['sorteios', 'Sorteios'], ['financeiro', 'Financeiro'], ['relatorios', 'Relatórios'], ['sistema', 'Sistema']]
+      : [['inicio', 'Início'], ['alunos', 'Alunos'], ['oper', 'Operação'], ['eventos', 'Eventos'], ['financeiro', 'Financeiro']];
+  const icones = { inicio: '◧', alunos: '👥', oper: '⇄', eventos: '★', sorteios: '🎁', financeiro: 'R$', relatorios: '▤', sistema: '⚙', aluno: '◎' };
   abas.forEach(([id, label], i) => {
     const b = document.createElement('button');
     b.innerHTML = `<span class="ico">${icones[id] || '•'}</span><span>${label}</span>`;
@@ -1116,7 +1160,7 @@ function entraUI() {
   }
 }
 function mostrar(id) {
-  for (const v of ['aluno', 'alunos', 'oper', 'eventos', 'sorteios', 'relatorios', 'sistema', 'inicio']) {
+  for (const v of ['aluno', 'alunos', 'oper', 'eventos', 'sorteios', 'financeiro', 'relatorios', 'sistema', 'inicio']) {
     const el = $('v-' + v); if (el) el.classList.toggle('hidden', id !== v);
   }
   const pg = PAGINAS[id] || PAGINAS.inicio;
@@ -1124,6 +1168,7 @@ function mostrar(id) {
   $('pageSub').textContent = pg[1];
   if (id === 'sistema' && $('v-sistema')) carregarSistema();
   if (id === 'alunos' && $('v-alunos')) carregarAlunos();
+  if (id === 'financeiro' && $('v-financeiro')) carregarFinanceiroModulo();
   if (id === 'inicio' && $('v-inicio')) carregarInicio();
   if (id === 'oper' && $('v-oper') && sess && sess.perfil !== 'aluno') carregarOper();
   if (id === 'eventos' && $('v-eventos')) carregarEventos();
@@ -1733,10 +1778,6 @@ async function carregarSistema() {
   await loadBackups(); await loadNotifications();
   await carregarImportacoes();
   await carregarAuditoria();
-  await carregarPlanos();
-  await carregarCobrancas();
-  await carregarAging();
-  await carregarFluxo();
   await carregarAulas();
 }
 
@@ -1748,14 +1789,18 @@ async function carregarPlanos() {
     PLANOS_CACHE = await jget('/api/plans');
     const opcoes = PLANOS_CACHE.filter((p) => p.ativo !== false)
       .map((p) => `<option value="${esc(p.id)}">${esc(p.nome)} — R$ ${Number(p.valor).toFixed(2)}</option>`).join('');
-    $('visPlano').innerHTML = `<option value="">Sem plano</option>${opcoes}`;
-    $('listaPlanos').innerHTML = PLANOS_CACHE.map((p) => `
+    if ($('visPlano')) $('visPlano').innerHTML = `<option value="">Sem plano</option>${opcoes}`;
+    const alvo = $('listaPlanos');
+    if (!alvo) return;
+    alvo.innerHTML = PLANOS_CACHE.map((p) => `
       <div class="list-item"><div><div class="t">${esc(p.nome)} ${p.ativo === false ? '<span class="badge neutral">inativo</span>' : ''}</div>
       <div class="d">${p.categoria} · R$ ${Number(p.valor).toFixed(2)} · ${p.diasPorSemana ? p.diasPorSemana + ' dia(s)/semana' : 'dias livres'} · válido ${p.duracaoMeses} mês(es) · vence dia ${p.diaVencimento}</div></div>
       <div style="display:flex;gap:6px"><button class="btn ghost sm" onclick="editarPlano('${esc(p.id)}')">Editar</button>
       <button class="btn danger sm" onclick="excluirPlano('${esc(p.id)}')">Excluir</button></div></div>`).join('')
       || '<div class="empty">Nenhum plano cadastrado.</div>';
-  } catch (e) { $('listaPlanos').innerHTML = '<div class="empty">Planos indisponíveis.</div>'; }
+  } catch (e) {
+    if ($('listaPlanos')) $('listaPlanos').innerHTML = '<div class="empty">Planos indisponíveis.</div>';
+  }
 }
 
 function limparFormPlano() {
@@ -1923,6 +1968,20 @@ async function carregarFluxo() {
       <tr><td>${esc(dataCurta(x.data))}</td><td>${esc(x.descricao)}</td><td>${esc(x.categoria)}</td>
       <td>${brl(x.valor)}</td><td><button class="btn danger sm" onclick="excluirDespesa('${esc(x.id)}')">Excluir</button></td></tr>`).join('')
       || '<tr><td colspan="5"><div class="empty">Nenhuma despesa.</div></td></tr>';
+
+    const nomesOrigem = { MENSALIDADE: 'Mensalidades', EVENTO: 'Eventos', SERVICO: 'Serviços' };
+    if ($('finOrigemResumo')) {
+      $('finOrigemResumo').innerHTML = `
+        <div class="kpi ok"><div class="v">${brl(f.totais ? f.totais.mensalidades : 0)}</div><div class="l">Mensalidades</div></div>
+        <div class="kpi accent"><div class="v">${brl(f.totais ? f.totais.eventos : 0)}</div><div class="l">Eventos</div></div>
+        <div class="kpi info"><div class="v">${brl(f.totais ? f.totais.servicos : 0)}</div><div class="l">Serviços</div></div>
+        <div class="kpi ${f.saldo >= 0 ? 'ok' : 'bad'}"><div class="v">${brl(f.saldo)}</div><div class="l">Saldo</div></div>`;
+    }
+    if ($('finOrigemLista')) {
+      $('finOrigemLista').innerHTML = (f.porOrigem || []).map((o) => `
+        <tr><td>${esc(nomesOrigem[o.origem] || o.origem)}</td><td>${o.quantidade}</td><td>${brl(o.total)}</td></tr>`).join('')
+        || '<tr><td colspan="3"><div class="empty">Sem receitas no período.</div></td></tr>';
+    }
   } catch (e) { $('despesasLista').innerHTML = '<tr><td colspan="5"><div class="empty">Indisponível.</div></td></tr>'; }
 }
 
@@ -1947,6 +2006,166 @@ async function excluirDespesa(id) {
   if (!confirm('Excluir esta despesa?')) return;
   try { await jdel(`/api/expenses/${encodeURIComponent(id)}`); toast('Despesa excluída', ''); carregarFluxo(); }
   catch (e) { toast('Falha ao excluir', e.message, 'err'); }
+}
+
+// ---------- módulo financeiro (aba própria) ----------
+async function carregarFinanceiroModulo() {
+  await carregarPlanos();
+  await carregarCobrancas();
+  if (sess.perfil === 'gerencia') {
+    await carregarAging();
+    await carregarFluxo();
+  }
+  await carregarEventosFin();
+  await carregarServicos();
+}
+
+let EVENTOS_FIN = { participantes: [], totalPrevisto: 0, totalRecebido: 0, totalAberto: 0 };
+
+async function carregarEventosFin() {
+  try {
+    EVENTOS_FIN = await jget('/api/financeiro/eventos');
+    renderEventosFin();
+  } catch (e) {
+    if ($('finEventosLista')) $('finEventosLista').innerHTML = '<tr><td colspan="5"><div class="empty">Indisponível.</div></td></tr>';
+  }
+}
+
+function renderEventosFin() {
+  if (!$('finEventosLista')) return;
+  const brl = (n) => 'R$ ' + Number(n || 0).toFixed(2).replace('.', ',');
+  const q = ($('finEventoFiltro') ? $('finEventoFiltro').value : '').toLowerCase().trim();
+  const lista = (EVENTOS_FIN.participantes || []).filter(
+    (p) => !q || `${p.evento} ${p.nome}`.toLowerCase().includes(q),
+  );
+  if ($('finEventoResumo')) {
+    $('finEventoResumo').innerHTML = `
+      <div class="kpi"><div class="v">${brl(EVENTOS_FIN.totalPrevisto)}</div><div class="l">Previsto</div></div>
+      <div class="kpi ok"><div class="v">${brl(EVENTOS_FIN.totalRecebido)}</div><div class="l">Recebido</div></div>
+      <div class="kpi warn"><div class="v">${brl(EVENTOS_FIN.totalAberto)}</div><div class="l">Em aberto</div></div>`;
+  }
+  $('finEventosLista').innerHTML = lista.map((p) => `
+    <tr>
+      <td>${esc(p.evento)}<div class="muted">${esc(dataCurta(p.eventInicio))}</div></td>
+      <td>${esc(p.nome)}${p.personId ? '' : '<div class="muted">externo</div>'}</td>
+      <td>${brl(p.valor)}</td>
+      <td><span class="badge ${p.pago ? 'ok' : 'warn'}">${p.pago ? 'pago' : 'a pagar'}</span>${p.forma ? `<div class="muted">${esc(p.forma)}</div>` : ''}</td>
+      <td style="text-align:right;white-space:nowrap">
+        ${p.pago
+          ? `<button class="btn ghost sm" onclick="marcarPagoEventoFin('${esc(p.eventId)}','${esc(p.id)}',false)">Desfazer</button>`
+          : `<button class="btn ghost sm" onclick="marcarPagoEventoFin('${esc(p.eventId)}','${esc(p.id)}',true)">Pagar</button>`}
+      </td>
+    </tr>`).join('') || '<tr><td colspan="5"><div class="empty">Nenhuma participação com valor.</div></td></tr>';
+}
+
+async function marcarPagoEventoFin(eventId, pid, pago) {
+  let forma = null;
+  if (pago) {
+    forma = prompt('Forma de pagamento (pix/dinheiro/cartão):', 'pix');
+    if (forma === null) return;
+  }
+  try {
+    await jpatch(`/api/eventos/${encodeURIComponent(eventId)}/participantes/${encodeURIComponent(pid)}`, {
+      pago, forma, por: sess.nome || 'operador',
+    });
+    toast(pago ? 'Pagamento registrado' : 'Pagamento desfeito', '');
+    carregarEventosFin();
+    if (sess.perfil === 'gerencia') carregarFluxo();
+  } catch (e) { toast('Falha no pagamento', e.message, 'err'); }
+}
+
+let SERVICOS_CACHE = [];
+
+async function carregarServicos() {
+  try {
+    if (!PESSOAS_CACHE.length) PESSOAS_CACHE = await jget('/api/persons');
+    if ($('servPessoa')) {
+      const atual = $('servPessoa').value;
+      $('servPessoa').innerHTML = '<option value="">Sem vínculo</option>' + PESSOAS_CACHE
+        .map((p) => `<option value="${esc(p.id)}">${esc(p.nome)} · ${esc(p.matricula)}</option>`).join('');
+      $('servPessoa').value = atual;
+    }
+    if ($('servData') && !$('servData').value) $('servData').value = new Date().toISOString().slice(0, 10);
+    SERVICOS_CACHE = await jget('/api/service-charges');
+    renderServicos();
+  } catch (e) {
+    if ($('servicosLista')) $('servicosLista').innerHTML = '<tr><td colspan="7"><div class="empty">Indisponível.</div></td></tr>';
+  }
+}
+
+function renderServicos() {
+  if (!$('servicosLista')) return;
+  const brl = (n) => 'R$ ' + Number(n || 0).toFixed(2).replace('.', ',');
+  const abertos = SERVICOS_CACHE.filter((c) => c.status === 'PENDENTE');
+  if ($('servResumo')) {
+    $('servResumo').textContent = `${SERVICOS_CACHE.length} lançamento(s) · ${abertos.length} em aberto · `
+      + `${brl(abertos.reduce((s, c) => s + Number(c.valor || 0), 0))} a receber`;
+  }
+  $('servicosLista').innerHTML = SERVICOS_CACHE.slice(0, 100).map((c) => `
+    <tr>
+      <td>${esc(dataCurta(c.data))}</td>
+      <td>${esc(c.descricao)}</td>
+      <td>${esc(c.pessoaNome || '—')}</td>
+      <td>${esc(c.categoria)}</td>
+      <td>${brl(c.valor)}</td>
+      <td><span class="badge ${c.status === 'PAGO' ? 'ok' : c.status === 'CANCELADO' ? 'neutral' : 'warn'}">${esc(c.status)}</span></td>
+      <td style="text-align:right;white-space:nowrap">
+        ${c.status === 'PENDENTE' ? `<button class="btn ghost sm" onclick="pagarServico('${esc(c.id)}')">Pagar</button>` : ''}
+        ${c.status === 'PENDENTE' && sess.perfil === 'gerencia' ? `<button class="btn ghost sm" onclick="cancelarServico('${esc(c.id)}')">Cancelar</button>` : ''}
+        ${sess.perfil === 'gerencia' ? `<button class="btn danger sm" onclick="excluirServico('${esc(c.id)}')">Excluir</button>` : ''}
+      </td>
+    </tr>`).join('') || '<tr><td colspan="7"><div class="empty">Nenhum serviço lançado.</div></td></tr>';
+}
+
+async function criarServico() {
+  const descricao = $('servDesc').value.trim();
+  const valor = Number($('servValor').value);
+  const data = $('servData').value || new Date().toISOString().slice(0, 10);
+  if (!descricao) return toast('Descrição obrigatória', '', 'err');
+  if (!(valor > 0)) return toast('Valor inválido', '', 'err');
+  try {
+    await jpost('/api/service-charges', {
+      data, descricao, valor,
+      categoria: $('servCategoria').value.trim() || 'Serviços',
+      personId: $('servPessoa').value || null,
+    });
+    toast('Serviço lançado', descricao);
+    ['servDesc', 'servValor', 'servCategoria'].forEach((id) => { $(id).value = ''; });
+    carregarServicos();
+    if (sess.perfil === 'gerencia') carregarFluxo();
+  } catch (e) { toast('Falha ao lançar serviço', e.message, 'err'); }
+}
+
+async function pagarServico(id) {
+  const forma = prompt('Forma de pagamento (pix/dinheiro/cartão):', 'pix');
+  if (forma === null) return;
+  try {
+    await jpost(`/api/service-charges/${encodeURIComponent(id)}/pagar`, { por: sess.nome || 'recepção', forma });
+    toast('Serviço pago', '');
+    carregarServicos();
+    if (sess.perfil === 'gerencia') carregarFluxo();
+  } catch (e) { toast('Falha ao registrar', e.message, 'err'); }
+}
+
+async function cancelarServico(id) {
+  if (!confirm('Cancelar este serviço?')) return;
+  const motivo = prompt('Motivo (opcional):', '') || '';
+  try {
+    await jpost(`/api/service-charges/${encodeURIComponent(id)}/cancelar`, { motivo });
+    toast('Serviço cancelado', '');
+    carregarServicos();
+    if (sess.perfil === 'gerencia') carregarFluxo();
+  } catch (e) { toast('Falha ao cancelar', e.message, 'err'); }
+}
+
+async function excluirServico(id) {
+  if (!confirm('Excluir este lançamento?')) return;
+  try {
+    await jdel(`/api/service-charges/${encodeURIComponent(id)}`);
+    toast('Lançamento excluído', '');
+    carregarServicos();
+    if (sess.perfil === 'gerencia') carregarFluxo();
+  } catch (e) { toast('Falha ao excluir', e.message, 'err'); }
 }
 
 async function carregarAulas() {

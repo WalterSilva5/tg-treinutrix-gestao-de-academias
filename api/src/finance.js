@@ -151,11 +151,42 @@ function dentro(dataIso, de, ate) {
   return !Number.isNaN(d.getTime()) && d >= de && d <= ate;
 }
 
-// Fluxo de caixa: recebimentos + despesas no período, com saldo e categorias.
+// Fluxo de caixa: mensalidades, eventos, serviços avulsos e despesas.
 export function fluxoCaixa(store, { inicio, fim, agora = new Date() } = {}) {
   const ate = fim ? parseDate(fim, { endOfDay: true }) : agora;
   const de = inicio ? parseDate(inicio) : new Date(ate.getFullYear(), ate.getMonth(), 1);
-  const receitas = (store.charges || []).filter((c) => c.status === 'PAGO' && c.pagoEm && dentro(c.pagoEm, de, ate));
+  const receitas = [];
+
+  for (const c of store.charges || []) {
+    if (c.status !== 'PAGO' || !c.pagoEm || !dentro(c.pagoEm, de, ate)) continue;
+    receitas.push({
+      id: c.id, origem: 'MENSALIDADE',
+      descricao: `Mensalidade ${c.competencia || ''}`.trim(),
+      personId: c.personId || null, valor: Number(c.valor || 0),
+      pagoEm: c.pagoEm, forma: c.forma || null,
+    });
+  }
+  for (const p of store.eventParticipants || []) {
+    if (!p.pago || !p.pagoEm || !dentro(p.pagoEm, de, ate)) continue;
+    const valor = Number(p.valorPago || 0);
+    if (valor <= 0) continue;
+    const evento = (store.socialEvents || []).find((e) => e.id === p.eventId);
+    receitas.push({
+      id: p.id, origem: 'EVENTO',
+      descricao: `Evento ${evento?.nome || ''}`.trim(),
+      personId: p.personId || null, valor,
+      pagoEm: p.pagoEm, forma: p.formaPagamento || null,
+    });
+  }
+  for (const s of store.serviceCharges || []) {
+    if (s.status !== 'PAGO' || !s.pagoEm || !dentro(s.pagoEm, de, ate)) continue;
+    receitas.push({
+      id: s.id, origem: 'SERVICO', descricao: s.descricao || 'Serviço',
+      personId: s.personId || null, valor: Number(s.valor || 0),
+      pagoEm: s.pagoEm, forma: s.forma || null,
+    });
+  }
+
   const despesas = (store.expenses || []).filter((e) => dentro(e.data, de, ate));
   const totalReceitas = receitas.reduce((s, c) => s + Number(c.valor || 0), 0);
   const totalDespesas = despesas.reduce((s, e) => s + Number(e.valor || 0), 0);
@@ -167,6 +198,14 @@ export function fluxoCaixa(store, { inicio, fim, agora = new Date() } = {}) {
     row.total += Number(e.valor || 0);
     row.quantidade += 1;
     porCategoria.set(k, row);
+  }
+  const porOrigem = new Map();
+  for (const r of receitas) {
+    const k = r.origem;
+    const row = porOrigem.get(k) || { origem: k, total: 0, quantidade: 0 };
+    row.total += Number(r.valor || 0);
+    row.quantidade += 1;
+    porOrigem.set(k, row);
   }
   const porDia = new Map();
   for (const c of receitas) {
@@ -181,12 +220,19 @@ export function fluxoCaixa(store, { inicio, fim, agora = new Date() } = {}) {
     row.despesas += Number(e.valor || 0);
     porDia.set(k, row);
   }
+  const totalPorOrigem = (origem) => (porOrigem.get(origem)?.total || 0);
   return {
     periodo: { inicio: de.toISOString(), fim: ate.toISOString() },
     totalReceitas, totalDespesas, saldo: totalReceitas - totalDespesas,
-    receitas: receitas.map((c) => ({ id: c.id, personId: c.personId, valor: c.valor, pagoEm: c.pagoEm, forma: c.forma })),
+    totais: {
+      mensalidades: totalPorOrigem('MENSALIDADE'),
+      eventos: totalPorOrigem('EVENTO'),
+      servicos: totalPorOrigem('SERVICO'),
+    },
+    receitas: receitas.sort((a, b) => String(b.pagoEm).localeCompare(String(a.pagoEm))),
     despesas,
     porCategoria: [...porCategoria.values()].sort((a, b) => b.total - a.total),
+    porOrigem: [...porOrigem.values()].sort((a, b) => b.total - a.total),
     porDia: [...porDia.values()].sort((a, b) => a.dia.localeCompare(b.dia)),
   };
 }
