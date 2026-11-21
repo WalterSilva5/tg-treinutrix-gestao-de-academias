@@ -770,3 +770,59 @@ test('cabecalhos de seguranca e auditoria de acoes', async () => {
   assert.equal(aud.status, 200);
   assert.ok(aud.json.some((a) => a.acao === 'IMPORTACAO'));
 });
+
+
+test('aluno ve eventos e se inscreve; relatorio geral e export completo', async () => {
+  const p = await api('/api/persons', {
+    method: 'POST', token: admin,
+    body: { nome: 'Aluno Eventos ' + run, matricula: 'EV' + run, senha: 'aluno123', tipo: 'ALUNO', validadeFim: '2027-12-31' },
+  });
+  assert.equal(p.status, 201, p.text);
+  const ev = await api('/api/eventos', {
+    method: 'POST', token: admin,
+    body: { nome: 'Evento Aluno ' + run, inicio: '2026-12-20T19:00', capacidade: 5, valor: 20, permiteVisitantes: true },
+  });
+  assert.equal(ev.status, 201, ev.text);
+
+  const login = await api('/api/auth/login', { method: 'POST', body: { login: 'EV' + run, senha: 'aluno123' } });
+  assert.equal(login.status, 200);
+  assert.equal(login.json.mustChangePassword, false);
+  const alunoToken = login.json.token;
+
+  const me = await api('/api/me/eventos', { token: alunoToken });
+  assert.equal(me.status, 200);
+  const meu = me.json.find((e) => e.id === ev.json.id);
+  assert.ok(meu);
+  assert.equal(meu.inscrito, false);
+
+  const ins = await api('/api/me/eventos/' + ev.json.id + '/inscrever', { method: 'POST', token: alunoToken, body: {} });
+  assert.equal(ins.status, 201, ins.text);
+  assert.match(ins.json.codigo, /^[0-9A-F]{6}$/);
+
+  const me2 = await api('/api/me/eventos', { token: alunoToken });
+  assert.equal(me2.json.find((e) => e.id === ev.json.id).inscrito, true);
+
+  const cancel = await api('/api/me/eventos/' + ev.json.id + '/inscricao', { method: 'DELETE', token: alunoToken });
+  assert.equal(cancel.status, 200);
+  const me3 = await api('/api/me/eventos', { token: alunoToken });
+  assert.equal(me3.json.find((e) => e.id === ev.json.id).inscrito, false);
+
+  const rel = await api('/api/relatorios/geral?inicio=2026-11-01&fim=2026-12-31', { token: admin });
+  assert.equal(rel.status, 200);
+  assert.ok(rel.json.kpis.eventos >= 1);
+  assert.ok(Array.isArray(rel.json.porDia));
+  assert.ok(rel.json.eventosSociais.some((e) => e.nome === 'Evento Aluno ' + run));
+
+  const csv = await fetch(base + '/api/relatorios/geral.csv?inicio=2026-11-01&fim=2026-12-31', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(csv.status, 200);
+  assert.match(await csv.text(), /Por dia/);
+  const pdf = await fetch(base + '/api/relatorios/geral.pdf?inicio=2026-11-01&fim=2026-12-31', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(pdf.status, 200);
+  assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 8).toString(), '%PDF-1.4');
+
+  const exp = await fetch(base + '/api/export/dados', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(exp.status, 200);
+  const dados = await exp.json();
+  assert.ok(dados.persons.some((x) => x.matricula === 'EV' + run));
+  assert.ok(Array.isArray(dados.raffleDraws));
+});

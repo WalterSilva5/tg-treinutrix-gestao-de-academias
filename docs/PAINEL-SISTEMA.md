@@ -61,6 +61,9 @@ Base de padrões: `wsi-invest-ai` (`back/src/modules/admin` overview,
 | `POST /api/eventos/:id/checkin` · `/duplicar` · `/recorrencia` · `/token` | check-in por código, cópia, recorrência e link público |
 | `GET/POST /api/public/eventos/:token` | inscrição pública sem login |
 | `GET /api/relatorios/eventos[.csv|.pdf]` | relatório de eventos por período |
+| `GET /api/relatorios/geral[.csv|.pdf]` | frequência, inadimplência, agenda e sorteios |
+| `GET /api/me/eventos` · `POST .../inscrever` · `DELETE .../inscricao` | eventos do aluno |
+| `GET /api/export/dados` | exportação completa para migração |
 | `GET/POST /api/sorteios` · `.../elegiveis` · `.../sortear` | sorteios programáveis e roleta |
 | `GET /api/sorteios/:id/historico` · `.../resultado.csv|pdf` | auditoria e exportação do resultado |
 | `GET /api/public/sorteios/:token` | tela pública do sorteio |

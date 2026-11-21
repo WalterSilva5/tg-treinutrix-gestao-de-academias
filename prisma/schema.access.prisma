@@ -9,6 +9,8 @@ model AccessPerson {
   tipo       String    @default("ALUNO") // ALUNO | PERSONAL | VISITANTE
   treinutrix String?   // link ou @usuário do perfil na Treinutrix
   cpf        String?
+  tokenVersion Int      @default(0)
+  mustChangePassword Boolean @default(false)
   ativo      Boolean   @default(true)
   foto       String?   // caminho/extensão no diretório de fotos (não o binário)
   validadeIni DateTime?
@@ -18,6 +20,7 @@ model AccessPerson {
   rules      AccessRule[]
   events     AccessEvent[]
   syncQueue  AccessSyncQueue[]
+  eventParticipants AccessEventParticipant[]
 }
 
 model AccessDevice {
@@ -26,6 +29,10 @@ model AccessDevice {
   ip        String
   porta     Int       @default(3570)
   tipo      String    @default("FIT4")
+  fabricante String?
+  modelo    String?
+  driver    String    @default("topdata_easyinner")
+  endpoint  String?
   online    Boolean   @default(false)
   lastSeen  DateTime?
   createdAt DateTime  @default(now())
@@ -68,11 +75,145 @@ model AccessEvent {
   personId   String?
   timestamp  DateTime      @default(now())
   direcao    String        // IN | OUT
-  metodo     String        // FACIAL | MANUAL | QR
+  metodo     String        // FACIAL | CARTAO | SENHA | MANUAL
   score      Float?
   decisao    String        // ALLOW | DENY
   motivo     String?
   createdAt  DateTime      @default(now())
   device     AccessDevice  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   person     AccessPerson? @relation(fields: [personId], references: [id], onDelete: SetNull)
+}
+
+model AccessUser {
+  id           String   @id @default(cuid())
+  nome         String
+  login        String   @unique
+  senhaHash    String
+  perfil       String   // recepcao | gerencia
+  tokenVersion Int      @default(0)
+  mustChangePassword Boolean @default(false)
+  createdAt    DateTime @default(now())
+}
+
+model AccessNotification {
+  id          String   @id @default(cuid())
+  key         String
+  tipo        String
+  titulo      String
+  detalhe     String?
+  resolvida   Boolean  @default(false)
+  resolvidaPor String?
+  resolvidaEm DateTime?
+  createdAt   DateTime @default(now())
+  @@index([tipo])
+}
+
+model AccessSocialEvent {
+  id              String   @id @default(cuid())
+  nome            String
+  descricao       String?
+  local           String?
+  inicio          DateTime
+  fim             DateTime?
+  capacidade      Int?
+  valor           Float    @default(0)
+  permiteVisitantes Boolean @default(true)
+  listaEspera     Boolean  @default(true)
+  inscricoesAbertas Boolean @default(true)
+  ativo           Boolean  @default(true)
+  publicToken     String   @unique
+  serieId         String?
+  createdAt       DateTime @default(now())
+  participants    AccessEventParticipant[]
+}
+
+model AccessEventParticipant {
+  id          String   @id @default(cuid())
+  eventId     String
+  personId    String?
+  nome        String
+  tipo        String   // ALUNO | VISITANTE | EXTERNO
+  matricula   String?
+  documento   String?
+  contato     String?
+  codigo      String?
+  status      String   @default("INSCRITO") // INSCRITO | ESPERA | PRESENTE | CANCELADO
+  pago        Boolean  @default(false)
+  valorPago   Float    @default(0)
+  checkinAt   DateTime?
+  createdAt   DateTime @default(now())
+  event       AccessSocialEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  person      AccessPerson? @relation(fields: [personId], references: [id], onDelete: SetNull)
+  @@unique([eventId, codigo])
+}
+
+model AccessRaffle {
+  id            String   @id @default(cuid())
+  nome          String
+  premio        String?
+  descricao     String?
+  publico       String
+  eventId       String?
+  inicio        DateTime?
+  fim           DateTime?
+  sorteioEm     DateTime?
+  agendamentoConfirmado Boolean @default(false)
+  ativo         Boolean  @default(true)
+  status        String   @default("ATIVA")
+  entradasBase  Int      @default(1)
+  bonusEmDia    Int      @default(0)
+  bonusEvento   Int      @default(0)
+  ganhadoresQtd Int      @default(1)
+  estoquePremios Int?
+  excluidos     String?  // JSON array
+  publicToken   String   @unique
+  vencedores     String? // JSON snapshot
+  sorteadoEm    DateTime?
+  createdAt     DateTime @default(now())
+  draws         AccessRaffleDraw[]
+}
+
+model AccessRaffleDraw {
+  id          String   @id @default(cuid())
+  raffleId    String
+  raffle      AccessRaffle @relation(fields: [raffleId], references: [id], onDelete: Cascade)
+  vencedores  String   // JSON
+  totalParticipantes Int
+  totalEntradas Int
+  automatico  Boolean  @default(false)
+  por         String?
+  sorteadoEm  DateTime @default(now())
+}
+
+model AccessImport {
+  id        String   @id @default(cuid())
+  arquivo   String?
+  modo      String
+  total     Int
+  criados   Int
+  atualizados Int
+  ignorados Int
+  erros     Int
+  itens     String?  // JSON
+  por       String?
+  createdAt DateTime @default(now())
+}
+
+model AccessAudit {
+  id        String   @id @default(cuid())
+  por       String
+  perfil    String?
+  ip        String?
+  acao      String
+  detalhe   String?
+  createdAt DateTime @default(now())
+  @@index([acao])
+}
+
+model AccessMeta {
+  id            Int    @id @default(1)
+  lastBackupAt  DateTime?
+  nextEnrollid  Int    @default(1001)
+  sessionEpoch  Int    @default(0)
+  dedup         String? // JSON
 }

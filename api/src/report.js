@@ -189,8 +189,7 @@ export function eventosParaCsv(eventos) {
   return `\uFEFF${linhas.map((l) => l.map(csvCelula).join(';')).join('\r\n')}\r\n`;
 }
 
-function pdfDeLinhas(titulo, subtitulo, linhas, { geradoEm = new Date() } = {}) {
-  const paginas = [];
+function pdfDeLinhas(titulo, subtitulo, linhas, { geradoEm = new Date() } = {}) {  const paginas = [];
   let pagina = [];
   let y = A4.altura - A4.margem;
   const novaPagina = (continuacao = false) => {
@@ -218,6 +217,10 @@ function pdfDeLinhas(titulo, subtitulo, linhas, { geradoEm = new Date() } = {}) 
     p.push(`BT /F1 8 Tf ${A4.largura - A4.margem - 60} ${A4.margem - 16} Td (Pagina ${i + 1} de ${paginas.length}) Tj ET`);
   });
   return montarPdf(paginas);
+}
+
+export function pdfTexto(titulo, subtitulo, linhas, { geradoEm = new Date() } = {}) {
+  return pdfDeLinhas(titulo, subtitulo, linhas, { geradoEm });
 }
 
 export function sorteioParaCsv(sorteio) {

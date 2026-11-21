@@ -397,9 +397,11 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
           <div class="table-wrap"><table><thead><tr><th>Data</th><th>Dia</th><th></th></tr></thead><tbody id="freqList"></tbody></table></div>
         </div>
       </div>
+      <div class="card">
+        <div class="card-head"><div><h2>Próximos eventos</h2><p class="sub">Inscreva-se ou cancele sua inscrição</p></div></div>
+        <div class="list" id="meusEventos"></div>
+      </div>
     </section>
-
-    <!-- OPERAÇÃO -->
     <section id="v-oper" class="hidden">
       <div class="grid2">
         <div>
@@ -545,6 +547,31 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
         <div class="card-head"><div><h2 id="sorResNome">Resultado</h2><p class="sub" id="sorResMeta"></p></div></div>
         <div id="sorResCorpo"></div>
       </div>
+    </section>
+
+    <!-- RELATÓRIOS -->
+    <section id="v-relatorios" class="hidden">
+      <div class="card">
+        <div class="card-head"><div><h2>Relatórios por período</h2><p class="sub">Frequência, inadimplência, agenda e sorteios</p></div></div>
+        <div class="form-actions">
+          <input id="relGInicio" type="date" title="Início">
+          <input id="relGFim" type="date" title="Fim">
+          <button class="btn sm" onclick="carregarRelatorios()">Atualizar</button>
+          <button class="btn ghost sm" onclick="baixarRelatorioGeral('csv')">CSV</button>
+          <button class="btn ghost sm" onclick="baixarRelatorioGeral('pdf')">PDF</button>
+        </div>
+        <div id="relGResumo" class="kpis" style="margin-top:14px"></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><div class="card-head"><div><h2>Por dia</h2><p class="sub">Acessos e pessoas distintas</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Dia</th><th>Total</th><th>Liberados</th><th>Negados</th><th>Pessoas</th></tr></thead><tbody id="relGDias"></tbody></table></div></div>
+        <div class="card"><div class="card-head"><div><h2>Top pessoas</h2><p class="sub">Mais acessos no período</p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Acessos</th><th>Dias</th></tr></thead><tbody id="relGTop"></tbody></table></div></div>
+      </div>
+      <div class="card"><div class="card-head"><div><h2>Inadimplentes</h2><p class="sub">Plano vencido no fim do período</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Matrícula</th><th>Vencimento</th></tr></thead><tbody id="relGInad"></tbody></table></div></div>
+      <div class="card"><div class="card-head"><div><h2>Eventos e sorteios</h2><p class="sub">Agenda e resultados do período</p></div></div>
+        <div id="relGEventos"></div></div>
     </section>
 
     <!-- SISTEMA -->
@@ -730,6 +757,7 @@ const PAGINAS = {
   oper: ['Operação', 'Acessos, cadastros e equipamentos'],
   eventos: ['Eventos', 'Inscrições de alunos e visitantes'],
   sorteios: ['Sorteios', 'Premiações programáveis e roleta'],
+  relatorios: ['Relatórios', 'Frequência, inadimplência, eventos e sorteios'],
   sistema: ['Sistema', 'Servidor, backup e pessoas'],
   aluno: ['Meu acesso', 'Seu plano e frequência'],
 };
@@ -844,7 +872,7 @@ function entraUI() {
   if (!sess) return;
   // Aluno tem acesso limitado: remove do DOM tudo que é operacional.
   if (sess.perfil === 'aluno') {
-    for (const id of ['v-inicio', 'v-oper', 'v-eventos', 'v-sorteios', 'v-sistema']) {
+    for (const id of ['v-inicio', 'v-oper', 'v-eventos', 'v-sorteios', 'v-relatorios', 'v-sistema']) {
       const el = $(id); if (el) el.remove();
     }
     const top = $('topActions'); if (top) top.remove();
@@ -858,9 +886,9 @@ function entraUI() {
   const tabs = $('tabs'); tabs.innerHTML = '';
   const abas = sess.perfil === 'aluno' ? [['aluno', 'Meu acesso']]
     : sess.perfil === 'gerencia'
-      ? [['inicio', 'Início'], ['oper', 'Operação'], ['eventos', 'Eventos'], ['sorteios', 'Sorteios'], ['sistema', 'Sistema']]
+      ? [['inicio', 'Início'], ['oper', 'Operação'], ['eventos', 'Eventos'], ['sorteios', 'Sorteios'], ['relatorios', 'Relatórios'], ['sistema', 'Sistema']]
       : [['inicio', 'Início'], ['oper', 'Operação'], ['eventos', 'Eventos']];
-  const icones = { inicio: '◧', oper: '⇄', eventos: '★', sorteios: '🎁', sistema: '⚙', aluno: '◎' };
+  const icones = { inicio: '◧', oper: '⇄', eventos: '★', sorteios: '🎁', relatorios: '▤', sistema: '⚙', aluno: '◎' };
   abas.forEach(([id, label], i) => {
     const b = document.createElement('button');
     b.innerHTML = `<span class="ico">${icones[id] || '•'}</span><span>${label}</span>`;
@@ -880,7 +908,7 @@ function entraUI() {
   }
 }
 function mostrar(id) {
-  for (const v of ['aluno', 'oper', 'eventos', 'sorteios', 'sistema', 'inicio']) {
+  for (const v of ['aluno', 'oper', 'eventos', 'sorteios', 'relatorios', 'sistema', 'inicio']) {
     const el = $('v-' + v); if (el) el.classList.toggle('hidden', id !== v);
   }
   const pg = PAGINAS[id] || PAGINAS.inicio;
@@ -891,6 +919,7 @@ function mostrar(id) {
   if (id === 'oper' && $('v-oper') && sess && sess.perfil !== 'aluno') carregarOper();
   if (id === 'eventos' && $('v-eventos')) carregarEventos();
   if (id === 'sorteios' && $('v-sorteios')) carregarSorteios();
+  if (id === 'relatorios' && $('v-relatorios')) carregarRelatorios();
   if (id === 'aluno' && $('v-aluno')) carregarAluno();
 }
 function mostrarNav(id) {
@@ -1043,6 +1072,7 @@ async function carregarAluno() {
     const data = new Date(d + 'T12:00:00');
     return `<tr><td class="mono">${data.toLocaleDateString('pt-BR')}</td><td class="muted" style="text-transform:capitalize">${DIAS[data.getDay()]}</td><td style="text-align:right"><span class="badge ok dot">frequentou</span></td></tr>`;
   }).join('') || '<tr><td colspan="3"><div class="empty">Nenhum dia registrado ainda.</div></td></tr>';
+  carregarMeusEventos();
 }
 
 // ---------- operação ----------
@@ -2146,6 +2176,97 @@ async function baixarRelatorioEventos(formato) {
     a.href = url; a.download = `relatorio-eventos.${formato}`; a.click();
     URL.revokeObjectURL(url);
   } catch (e) { toast('Falha no relatório', e.message, 'err'); }
+}
+
+// ---------- relatórios gerais ----------
+function diaLocalISO(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function periodoRelatorioGeral() {
+  if (!$('relGInicio').value) {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    $('relGInicio').value = diaLocalISO(d);
+  }
+  if (!$('relGFim').value) $('relGFim').value = diaLocalISO();
+  return new URLSearchParams({ inicio: $('relGInicio').value, fim: $('relGFim').value });
+}
+
+async function carregarRelatorios() {
+  try {
+    const r = await jget(`/api/relatorios/geral?${periodoRelatorioGeral()}`);
+    const k = r.kpis;
+    $('relGResumo').innerHTML = `
+      <div class="kpi"><div class="v">${k.eventos}</div><div class="l">Acessos</div></div>
+      <div class="kpi ok"><div class="v">${k.liberados}</div><div class="l">Liberados</div></div>
+      <div class="kpi bad"><div class="v">${k.negados}</div><div class="l">Negados</div></div>
+      <div class="kpi accent"><div class="v">${k.pessoasUnicas}</div><div class="l">Pessoas</div></div>
+      <div class="kpi"><div class="v">${k.novos}</div><div class="l">Novos</div></div>
+      <div class="kpi bad"><div class="v">${k.inadimplentes}</div><div class="l">Inadimplentes</div></div>`;
+    $('relGDias').innerHTML = r.porDia.map((d) => `
+      <tr><td class="mono">${esc(new Date(d.dia + 'T12:00:00').toLocaleDateString('pt-BR'))}</td>
+      <td>${d.total}</td><td>${d.liberados}</td><td>${d.negados}</td><td>${d.pessoas}</td></tr>`).join('')
+      || '<tr><td colspan="5"><div class="empty">Sem acessos no período.</div></td></tr>';
+    $('relGTop').innerHTML = r.topPessoas.map((p) => `
+      <tr><td><b>${esc(p.nome)}</b><div class="muted">${esc(p.matricula || '')}</div></td><td>${p.acessos}</td><td>${p.dias}</td></tr>`).join('')
+      || '<tr><td colspan="3"><div class="empty">Sem dados.</div></td></tr>';
+    $('relGInad').innerHTML = r.inadimplentes.map((p) => `
+      <tr><td>${esc(p.nome)}</td><td class="mono">${esc(p.matricula)}</td><td>${esc(dataCurta(p.validadeFim))}</td></tr>`).join('')
+      || '<tr><td colspan="3"><div class="empty">Nenhum inadimplente.</div></td></tr>';
+    $('relGEventos').innerHTML = `
+      <div class="list">${r.eventosSociais.map((e) => `
+        <div class="list-item"><div><div class="t">${esc(e.nome)}</div>
+        <div class="d">${esc(dataHoraCurta(e.inicio))} · ${e.inscritos} inscrito(s) · ${e.presentes} presente(s) · ${e.espera} espera</div></div>
+        <span class="badge neutral">R$ ${Number(e.receita || 0).toFixed(2)}</span></div>`).join('')}
+      ${r.sorteios.map((s) => `
+        <div class="list-item"><div><div class="t">${esc(s.nome)}</div>
+        <div class="d">${esc((s.vencedores || []).join(', '))} · ${esc(dataHoraCurta(s.sorteadoEm))}</div></div>
+        <span class="badge accent">sorteio</span></div>`).join('')}
+      ${(!r.eventosSociais.length && !r.sorteios.length) ? '<div class="empty">Nenhum evento ou sorteio no período.</div>' : ''}</div>`;
+  } catch (e) { toast('Falha no relatório', e.message, 'err'); }
+}
+
+async function baixarRelatorioGeral(formato) {
+  try {
+    const r = await req(`/api/relatorios/geral.${formato}?${periodoRelatorioGeral()}`);
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `relatorio-geral.${formato}`; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { toast('Falha ao exportar', e.message, 'err'); }
+}
+
+// ---------- aluno: eventos ----------
+async function carregarMeusEventos() {
+  try {
+    const evs = await jget('/api/me/eventos');
+    $('meusEventos').innerHTML = evs.map((e) => `
+      <div class="list-item"><div><div class="t">${esc(e.nome)}</div>
+      <div class="d">${esc(dataHoraCurta(e.inicio))}${e.local ? ' · ' + esc(e.local) : ''}${e.valor > 0 ? ' · R$ ' + Number(e.valor).toFixed(2) : ' · grátis'}</div>
+      ${e.inscrito ? `<div class="d">Inscrição: <b>${esc(e.statusInscricao)}</b>${e.codigo ? ' · código ' + esc(e.codigo) : ''}</div>` : ''}</div>
+      ${!e.inscricoesAbertas ? '<span class="badge neutral">fechado</span>'
+        : e.inscrito ? `<button class="btn ghost sm" onclick="cancelarMeuEvento('${esc(e.id)}')">Cancelar</button>`
+          : `<button class="btn sm" onclick="inscreverMeuEvento('${esc(e.id)}')">Inscrever</button>`}</div>`).join('')
+      || '<div class="empty">Nenhum evento aberto no momento.</div>';
+  } catch (e) { $('meusEventos').innerHTML = '<div class="empty">Eventos indisponíveis.</div>'; }
+}
+async function inscreverMeuEvento(id) {
+  try {
+    const r = await jpost(`/api/me/eventos/${encodeURIComponent(id)}/inscrever`, {});
+    toast(r.status === 'ESPERA' ? 'Lista de espera' : 'Inscrição confirmada', r.codigo ? 'Código ' + r.codigo : '');
+    carregarMeusEventos();
+  } catch (e) { toast('Falha ao inscrever', e.message, 'err'); }
+}
+async function cancelarMeuEvento(id) {
+  if (!confirm('Cancelar sua inscrição?')) return;
+  try {
+    await jdel(`/api/me/eventos/${encodeURIComponent(id)}/inscricao`);
+    toast('Inscrição cancelada', '');
+    carregarMeusEventos();
+  } catch (e) { toast('Falha ao cancelar', e.message, 'err'); }
 }
 
 // ---------- sorteios ----------

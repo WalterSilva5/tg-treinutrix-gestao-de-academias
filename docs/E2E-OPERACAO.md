@@ -22,6 +22,10 @@ Execução manual no navegador interno em **2026-11-20**, com a API em
 - [x] **Sorteios**: editar, prévia de elegíveis, múltiplos ganhadores, histórico,
   exclusão de pessoa, exportação e tela pública `/s/<token>`.
 - [x] **Sistema → Auditoria** com ações administrativas.
+- [x] **Relatórios → período**: frequência, top pessoas, inadimplentes, agenda e
+  sorteios em CSV/PDF.
+- [x] **Aluno → Próximos eventos**: inscrever/cancelar e ver código.
+- [x] **Exportação completa** dos dados (JSON) para portabilidade.
 - [x] Sessão por cookie HttpOnly (sem token no localStorage) e cabeçalhos CSP.
 - [x] Retenção LGPD configurável (`RETENTION_*`).
 - [x] `/api/health` com `edge.ok=true` e contadores.

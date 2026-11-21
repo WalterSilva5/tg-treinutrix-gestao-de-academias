@@ -28,7 +28,9 @@ import {
   normalizarEvento, normalizarSorteio, novoEvento, novaInscricao, elegiveis, sortear, sortearVarios,
   STATUS_PARTICIPANTE, promoverEspera, gerarRecorrencias, eventoPorToken,
 } from './social.js';
-import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento, eventosParaCsv, eventosParaPdf, sorteioParaCsv, sorteioParaPdf, csvTabela } from './report.js';
+import { eventoParaCsv, eventoParaPdf, nomeArquivoEvento, eventosParaCsv, eventosParaPdf, sorteioParaCsv, sorteioParaPdf, csvTabela, pdfTexto } from './report.js';
+import { relatorioGeral } from './reports.js';
+import { serialize } from './state.js';
 import { aplicarRetencao } from './retention.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -1567,6 +1569,81 @@ async function route(req, res) {
     return res.end(pdf);
   }
 
+  // Relatório geral do período (frequência, inadimplência, eventos e sorteios).
+  const relatorioGeralRoute = url.pathname.match(/^\/api\/relatorios\/geral(?:\.(csv|pdf))?$/);
+  if (req.method === 'GET' && relatorioGeralRoute) {
+    operadorOnly();
+    const formato = relatorioGeralRoute[1];
+    const inicio = url.searchParams.get('inicio');
+    const fim = url.searchParams.get('fim');
+    const r = relatorioGeral(store, { inicio, fim });
+    if (!formato) return send(res, 200, r);
+    const periodoTxt = `${new Date(r.periodo.inicio).toLocaleDateString('pt-BR')} a ${new Date(r.periodo.fim).toLocaleDateString('pt-BR')}`;
+    if (formato === 'csv') {
+      const secoes = [
+        ['Resumo', [['Indicador', 'Valor'], ...Object.entries(r.kpis)]],
+        ['Por dia', [['Dia', 'Total', 'Liberados', 'Negados', 'Pessoas'], ...r.porDia.map((d) => [d.dia, d.total, d.liberados, d.negados, d.pessoas])]],
+        ['Top pessoas', [['Nome', 'Matrícula', 'Acessos', 'Dias'], ...r.topPessoas.map((p) => [p.nome, p.matricula, p.acessos, p.dias])]],
+        ['Inadimplentes', [['Nome', 'Matrícula', 'Vencimento'], ...r.inadimplentes.map((p) => [p.nome, p.matricula, p.validadeFim || ''])]],
+        ['Eventos', [['Evento', 'Início', 'Inscritos', 'Presentes', 'Espera', 'Receita'], ...r.eventosSociais.map((e) => [e.nome, e.inicio, e.inscritos, e.presentes, e.espera, e.receita])]],
+        ['Sorteios', [['Sorteio', 'Ganhadores', 'Data'], ...r.sorteios.map((s) => [s.nome, s.vencedores.join(', '), s.sorteadoEm])]],
+      ];
+      const corpo = secoes.map(([titulo, tabela], i) => {
+        const csv = csvTabela(tabela[0], tabela.slice(1)).replace(/^\uFEFF/, '');
+        return `${i ? '' : '\uFEFF'}${titulo}\r\n${csv}`;
+      }).join('\r\n');
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="relatorio-geral.csv"',
+        ...corsHeaders(),
+      });
+      return res.end(corpo);
+    }
+    const linhas = [
+      `Período: ${periodoTxt}`,
+      '',
+      `Eventos: ${r.kpis.eventos} · liberados: ${r.kpis.liberados} · negados: ${r.kpis.negados} · pessoas: ${r.kpis.pessoasUnicas}`,
+      `Novos cadastros: ${r.kpis.novos} · inadimplentes: ${r.kpis.inadimplentes}`,
+      `Eventos da agenda: ${r.kpis.eventosSociais} · sorteios: ${r.kpis.sorteios}`,
+      '',
+      'Por dia:',
+      ...r.porDia.map((d) => `${d.dia}: ${d.total} total, ${d.liberados} liberados, ${d.negados} negados, ${d.pessoas} pessoa(s)`),
+      '',
+      'Top pessoas:',
+      ...r.topPessoas.map((p) => `${p.nome} (${p.matricula}): ${p.acessos} acesso(s) em ${p.dias} dia(s)`),
+      '',
+      'Inadimplentes:',
+      ...r.inadimplentes.map((p) => `${p.nome} (${p.matricula}) venceu em ${p.validadeFim || '-'}`),
+      '',
+      'Eventos da agenda:',
+      ...r.eventosSociais.map((e) => `${e.nome}: ${e.inscritos} inscrito(s), ${e.presentes} presente(s), ${e.espera} espera`),
+      '',
+      'Sorteios:',
+      ...r.sorteios.map((s) => `${s.nome}: ${s.vencedores.join(', ')} (${new Date(s.sorteadoEm).toLocaleString('pt-BR')})`),
+    ];
+    const pdf = pdfTexto('Relatório geral', periodoTxt, linhas);
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="relatorio-geral.pdf"',
+      'Content-Length': pdf.length,
+      ...corsHeaders(),
+    });
+    return res.end(pdf);
+  }
+
+  // Exportação completa para migração/portabilidade (JSON).
+  if (req.method === 'GET' && url.pathname === '/api/export/dados') {
+    gerenciaOnly();
+    const data = serialize(store);
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="painel-dados-${localDayKey()}.json"`,
+      ...corsHeaders(),
+    });
+    auditar(user, 'EXPORTACAO_DADOS', 'JSON completo', req);
+    return res.end(JSON.stringify(data, null, 2));
+  }
+
   const eventoExportRoute = url.pathname.match(/^\/api\/eventos\/([^/]+)\/export\.(csv|pdf)$/);
   if (req.method === 'GET' && eventoExportRoute) {
     operadorOnly();
@@ -1833,6 +1910,53 @@ async function route(req, res) {
     if (!alvo) return send(res, 400, { error: 'informe personId' });
     if (user.perfil === 'aluno' && alvo !== user.sub) return send(res, 403, { error: 'sem permissão' });
     return send(res, 200, diasFrequentados(store.events, alvo));
+  }
+
+  // Eventos do aluno (próximos) e autoinscrição.
+  if (req.method === 'GET' && url.pathname === '/api/me/eventos') {
+    if (user.perfil !== 'aluno') return send(res, 403, { error: 'só aluno' });
+    const agora = new Date();
+    const lista = store.socialEvents
+      .filter((e) => e.ativo !== false && new Date(e.fim || e.inicio) >= agora)
+      .sort((a, b) => String(a.inicio).localeCompare(String(b.inicio)))
+      .map((e) => {
+        const p = store.eventParticipants.find(
+          (x) => x.eventId === e.id && x.personId === user.sub && x.status !== 'CANCELADO',
+        );
+        return {
+          id: e.id, nome: e.nome, local: e.local, inicio: e.inicio, fim: e.fim,
+          valor: e.valor || 0, inscricoesAbertas: e.inscricoesAbertas !== false,
+          inscrito: Boolean(p), statusInscricao: p ? p.status : null,
+          codigo: p ? p.codigo : null,
+        };
+      });
+    return send(res, 200, lista);
+  }
+  const meuEventoRoute = url.pathname.match(/^\/api\/me\/eventos\/([^/]+)\/(?:inscrever|inscricao)$/);
+  if (meuEventoRoute) {
+    if (user.perfil !== 'aluno') return send(res, 403, { error: 'só aluno' });
+    const eventId = safeDecode(meuEventoRoute[1]);
+    const evento = store.socialEvents.find((e) => e.id === eventId);
+    if (!evento) return send(res, 404, { error: 'evento_not_found' });
+    if (req.method === 'POST') {
+      try {
+        const p = novaInscricao(store, eventId, { personId: user.sub });
+        store.eventParticipants.push(p);
+        if (p.status === 'ESPERA') notificarEspera(eventId, p);
+        markDirty();
+        return send(res, 201, { status: p.status, codigo: p.codigo });
+      } catch (e) { return send(res, 400, { error: e.message }); }
+    }
+    if (req.method === 'DELETE') {
+      const p = store.eventParticipants.find(
+        (x) => x.eventId === eventId && x.personId === user.sub && x.status !== 'CANCELADO',
+      );
+      if (!p) return send(res, 404, { error: 'inscricao_not_found' });
+      p.status = 'CANCELADO';
+      promoverEspera(store, eventId);
+      markDirty();
+      return send(res, 200, { ok: true });
+    }
   }
 
   // --------------------------------------------------------------- sincronismo

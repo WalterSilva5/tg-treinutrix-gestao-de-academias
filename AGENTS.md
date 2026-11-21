@@ -35,6 +35,9 @@ scripts\iniciar-painel.cmd
 | Persistência SQLite | `api/src/persist.js` |
 | Descoberta/teste de rede | `api/src/discovery.js` |
 | Eventos e sorteios | `api/src/social.js` || Exportação CSV/PDF | `api/src/report.js` |
+| Relatórios agregados | `api/src/reports.js` |
+| Retenção LGPD | `api/src/retention.js` |
+| Portabilidade Prisma/MySQL | `prisma/schema.access.prisma` + `docs/PORTABILIDADE.md` |
 | Fotos (disco) | `api/src/photos.js` |
 | Notificações e inativação | `api/src/notify.js` |
 | Backup/restore | `api/src/backup.js` |

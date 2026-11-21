@@ -228,14 +228,19 @@ importação/exportação, auditoria (`/api/audit`) e retenção configurável
 **Aceite:** checklist de segurança sem itens abertos; sessão não vaza em XSS
 básico; dados expiram conforme política. ✅ (HTTPS/Secure depende do proxy).
 
-### Fase 7 — Relatórios, PWA e portabilidade (3–5 dias)
+### Fase 7 — Relatórios, PWA e portabilidade (3–5 dias) — ✅ concluída em 2026-11-20
 
 1. Relatórios por período.
 2. PWA do aluno com eventos/frequência.
-3. Prisma/MySQL e multi-unidade (se ainda fizer sentido).
+3. Prisma/MySQL e multi-unidade (referência).
+
+**Entregue:** `/api/relatorios/geral` (JSON/CSV/PDF) com frequência, picos,
+pessoas, inadimplência, agenda e sorteios; aba **Relatórios**; aluno vê e se
+inscreve nos próprios eventos (`/api/me/eventos`); export completo
+`/api/export/dados`; schema Prisma atualizado; `docs/PORTABILIDADE.md`.
 
 **Aceite:** relatórios conferem com os eventos; aluno vê o próprio histórico;
-contratos HTTP preservados na portabilidade.
+contratos HTTP preservados na portabilidade. ✅
 
 ## 5. Ordem recomendada
 
