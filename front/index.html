@@ -440,6 +440,12 @@ html[data-theme="dark"] .nav button.on{background:linear-gradient(90deg,rgba(249
             <div class="card-head"><div><h2>Fila de sincronização</h2><p class="sub">Cadastros pendentes no leitor</p></div></div>
             <div class="table-wrap"><table><thead><tr><th>Pessoa</th><th>Operação</th><th>Status</th></tr></thead><tbody id="sync"></tbody></table></div>
           </div>
+
+          <div class="card">
+            <div class="card-head"><div><h2>Rostos desconhecidos</h2><p class="sub">Capturados pelo leitor, acesso restrito</p></div>
+              <div class="card-head-actions"><button class="btn ghost sm" onclick="carregarRostos()">Atualizar</button></div></div>
+            <div class="list" id="rostosDesconhecidos"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -1080,7 +1086,19 @@ let CATALOGO = [];
 let editandoDevice = null;
 async function carregarOper() {
   $('edgeUrl').value = `http://${location.hostname}:3002`;
-  await load(); await loadSync();
+  await load(); await loadSync(); await carregarRostos();
+}
+
+async function carregarRostos() {
+  try {
+    const lista = await jget('/api/facial/unknown?limit=24');
+    $('rostosDesconhecidos').innerHTML = lista.map((u) => `
+      <div class="list-item"><div class="stack">
+        <img src="/api/facial/unknown/${encodeURIComponent(u.id)}/photo" alt="rosto desconhecido" style="width:44px;height:44px;border-radius:8px;object-fit:cover">
+        <div><div class="t">${esc(new Date(u.at).toLocaleString('pt-BR'))}</div><div class="d">${esc(u.deviceId || 'equipamento')} · ${Math.round((u.bytes || 0) / 1024)} KB</div></div>
+      </div><span class="badge warn">revisar</span></div>`).join('')
+      || '<div class="empty">Nenhum rosto desconhecido registrado.</div>';
+  } catch (e) { $('rostosDesconhecidos').innerHTML = '<div class="empty">Recurso indisponível.</div>'; }
 }
 async function carregarCatalogo() {
   try {
@@ -1150,6 +1168,26 @@ async function testarDevice(id) {
     loadDevices();
   } catch (e) { toast('Falha no teste', e.message, 'err'); }
 }
+
+async function diagnosticarDevice(id) {
+  try {
+    const r = await jget(`/api/devices/${encodeURIComponent(id)}/diagnostics`);
+    const tcp = r.tcp.ok ? `TCP ok (${r.tcp.latencyMs} ms)` : `TCP falhou (${r.tcp.error})`;
+    const edge = r.edge
+      ? `edge ${r.edge.mode} · catraca ${r.edge.catraca?.modo === 'simulado' ? 'simulada' : (r.edge.catraca?.conectado ? 'ok' : 'offline')} · facial ${r.edge.facial?.modo === 'simulado' ? 'simulado' : (r.edge.facial?.conectado ? 'ok' : 'offline')}${r.edge.bridge ? ' · bridge pid ' + r.edge.bridge.pid : ''}`
+      : 'edge offline';
+    $('devDiscover').textContent = `${r.device.nome}: ${tcp} · ${edge}`;
+    toast('Diagnóstico', `${tcp} · ${edge}`, r.tcp.ok && r.edge ? 'ok' : 'warn');
+  } catch (e) { toast('Falha no diagnóstico', e.message, 'err'); }
+}
+
+async function reiniciarBridgeDevice(id) {
+  if (!confirm('Reiniciar o bridge da catraca? A sincronização pausa por alguns segundos.')) return;
+  try {
+    const r = await jpost(`/api/devices/${encodeURIComponent(id)}/restart`, {});
+    toast(r.ok ? 'Bridge reiniciado' : 'Bridge não reiniciado', r.motivo || '', r.ok ? 'ok' : 'warn');
+  } catch (e) { toast('Falha ao reiniciar', e.message, 'err'); }
+}
 async function excluirDevice(id) {
   const d = (window.__devices || []).find(x => x.id === id);
   if (!confirm(`Excluir ${d ? d.nome : id}? As regras e a fila de sync deste equipamento serão removidas.`)) return;
@@ -1194,6 +1232,8 @@ async function loadDevices() {
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       ${d.online ? '<span class="badge ok dot">online</span>' : '<span class="badge bad dot">offline</span>'}
       <button class="btn ghost sm" onclick="testarDevice('${esc(d.id)}')">Testar</button>
+      <button class="btn ghost sm" onclick="diagnosticarDevice('${esc(d.id)}')">Diagnóstico</button>
+      ${String(d.driver || '').includes('easyinner') ? `<button class="btn ghost sm" onclick="reiniciarBridgeDevice('${esc(d.id)}')">Reiniciar bridge</button>` : ''}
       <button class="btn ghost sm" onclick="editarDevice('${esc(d.id)}')">Editar</button>
       <button class="btn danger sm" onclick="excluirDevice('${esc(d.id)}')">Excluir</button>
     </div></div>`).join('') || '<div class="empty">Nenhum equipamento cadastrado.</div>';

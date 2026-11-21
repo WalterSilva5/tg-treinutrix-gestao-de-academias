@@ -203,12 +203,22 @@ limites 20k/10 MB e rollback em memória. Documentado em `docs/IMPORTACAO.md`.
 **Aceite:** importar 1000 linhas com 3 erros, receber relatório, nenhum cadastro
 parcial; repetir a importação sem duplicar. ✅
 
-### Fase 5 — Hardware real (bancada; 1–2 dias + dependências)
+### Fase 5 — Hardware real (bancada; 1–2 dias + dependências) — 🟡 avançada sem bancada
 
 1. Executar `docs/VALIDACOES-PENDENTES.md`.
 2. Corrigir bridge conforme firmware/DLL.
 3. Offline, diagnóstico, foto de desconhecido, `senduser`.
 4. Múltiplas catracas.
+
+**Entregue sem hardware:** `GET /api/devices/:id/diagnostics` + `/hardware` no
+edge, reinício do bridge pelo painel, fallback de porta 3000/3570 e tolerância
+a DLL sem `DefinirIP`, versão no status do bridge, `senduser` refletido na API
+(`/api/facial/users`), captura/listagem de rosto desconhecido
+(`/api/facial/unknown`, retenção de 30 dias) e documentação de múltiplas
+catracas/TLS.
+
+**Bloqueado:** validar o giro/leitor reais, `setdevlock`/`getalllog` e TLS no
+WebSocket (dependem do firmware/certificado).
 
 **Aceite:** giro liberado e negado reais, leitor cadastrando/reconhecendo,
 reconexão automática, evidências registradas.

@@ -150,6 +150,25 @@ function iniciarBridge() {
   console.log(`[edge] bridge iniciado (${ip || 'sem ip'}:${portaInner})`);
 }
 
+function pararBridge() {
+  if (!bridge) return false;
+  const pid = bridge.pid;
+  try { bridge.kill(); } catch { /* já saiu */ }
+  bridge = null;
+  console.log(`[edge] bridge encerrado (pid ${pid})`);
+  return true;
+}
+
+async function reiniciarBridge() {
+  pararBridge();
+  if (!DRIVER_EASYINNER || !AUTOSTART_BRIDGE || process.platform !== 'win32') {
+    return { ok: false, motivo: 'autostart do bridge desligado' };
+  }
+  await new Promise((r) => setTimeout(r, 800));
+  iniciarBridge();
+  return { ok: Boolean(bridge), pid: bridge?.pid || null };
+}
+
 // ---------------------------------------------------------------------------
 // hardware: real ou simulado
 // ---------------------------------------------------------------------------
@@ -187,6 +206,12 @@ if (FACIAL_REAL) {
     deviceId: FACIAL_DEVICE_ID,
     // No facial quem mostra a mensagem é o campo `message` da resposta online.
     onAccess: (evt) => decidir(evt),
+    onSendUser: (u) => postJson('/api/facial/users', {
+      device_id: FACIAL_DEVICE_ID, enrollid: u.enrollid, name: u.name, card: u.card,
+    }).catch((e) => console.log('[edge] senduser não refletido na API:', e.message)),
+    onUnknown: (u) => postJson('/api/facial/unknown', {
+      device_id: FACIAL_DEVICE_ID, image: u.image, timestamp: u.timestamp,
+    }).catch((e) => console.log('[edge] rosto desconhecido não enviado:', e.message)),
   });
 } else {
   facial = new SimulatedFacial(FACIAL_DEVICE_ID);
@@ -301,6 +326,28 @@ const server = http.createServer(async (req, res) => {
         facial: facial.conectado === undefined ? 'simulado' : (facial.conectado ? 'conectado' : 'desconectado'),
         catraca: placa.conectado === undefined ? 'simulado' : (placa.conectado ? 'conectado' : 'desconectado'),
       });
+    }
+
+    // Diagnóstico do hardware para o painel/API.
+    if (req.method === 'GET' && url.pathname === '/hardware') {
+      return json(res, 200, {
+        device: DEVICE_ID,
+        driver: DEVICE_DRIVER,
+        mode: HARDWARE_REAL ? 'REAL' : 'SIMULADO',
+        config: deviceConfig ? {
+          id: deviceConfig.id, ip: deviceConfig.ip, porta: deviceConfig.porta, driver: deviceConfig.driver,
+        } : null,
+        facial: facial.status ? facial.status() : { modo: 'simulado' },
+        catraca: placa.status ? placa.status() : { modo: 'simulado' },
+        bridge: bridge ? { pid: bridge.pid, porta: EASYINNER_BRIDGE_PORT, ip: deviceConfig?.ip || null } : null,
+        ultimoErro,
+      });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/hardware/restart') {
+      if (EDGE_TOKEN && req.headers['x-edge-token'] !== EDGE_TOKEN) return json(res, 401, { error: 'não autorizado' });
+      const r = await reiniciarBridge();
+      return json(res, r.ok ? 200 : 409, r);
     }
 
     // Abre o giro a pedido da API (liberação manual do operador).

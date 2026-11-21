@@ -104,7 +104,6 @@ Falhas comuns:
 | Nenhum evento no polling | formato de cartão/origem diferente | validar `--padrao-cartao` e `--origem-saida` |
 
 ### 3.4 Suposições do SDK a confirmar
-
 - [ ] `DefinirIP(string)` existe nesta versão da DLL e é necessário para TCP.
 - [ ] Valor de `PADRAO_LIVRE` usada em `--padrao-cartao` (default `1`).
 - [ ] `ReceberDadosOnLine`: `Origem` de saída é `2` (default de `--origem-saida`).
@@ -112,6 +111,17 @@ Falhas comuns:
 - [ ] `LiberarCatracaEntrada/Saida` abrem o giro correto (entrada × saída).
 - [ ] `EnviarMensagemPadraoOnLine` exibe a mensagem no display.
 - [ ] Repetição de `LiberarCatraca*` não trava o polling.
+
+## 3.5 Já automatizado (validar na bancada)
+
+- Diagnóstico: `GET /api/devices/:id/diagnostics` (TCP + `/hardware` do edge).
+- Reinício do bridge pelo painel (`POST /api/devices/:id/restart`).
+- Fallback automático de porta (`--porta-inner`, 3000, 3570) e tolerância a DLL
+  sem `DefinirIP`.
+- `senduser` do leitor cria cadastro na API; rosto desconhecido é salvo e
+  listado em **Operação → Rostos desconhecidos** (retenção 30 dias).
+- Múltiplas catracas: uma instância de edge por `DEVICE_ID`/`EDGE_PORT`;
+  heartbeat e sync independentes (ver `docs/MULTI-CATRACA.md`).
 
 ## 4. Edge em modo real
 

@@ -65,6 +65,16 @@ export class EasyInnerReal {
     return this._comando({ cmd: 'ping' });
   }
 
+  status() {
+    return {
+      conectado: this.conectado,
+      host: this.host,
+      porta: this.port,
+      ultimoErro: this.ultimoErro || null,
+      pendentes: this.pendentes.size,
+    };
+  }
+
   _comando(payload, { timeoutMs = this.commandTimeoutMs } = {}) {
     if (!this.conectado || !this.socket || this.socket.destroyed) {
       return Promise.reject(new Error('catraca desconectada (bridge EasyInner fora do ar)'));

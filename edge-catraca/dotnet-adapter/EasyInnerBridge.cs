@@ -216,6 +216,7 @@ public sealed class Bridge
     {
         innerOk = conectado;
         string json = "{\"evento\":\"status\",\"conectado\":" + (conectado ? "true" : "false")
+            + ",\"versao\":\"0.1.0\""
             + (erro != null ? ",\"erro\":\"" + Escapar(erro) + "\"" : "") + "}";
         Enviar(json);
     }
@@ -318,17 +319,41 @@ public sealed class Bridge
             if (ret != EasyInnerRetorno.RET_COMANDO_OK) { Status(false, "DefinirTipoConexao=" + ret); return false; }
             if (!string.IsNullOrEmpty(ip))
             {
-                // TCP por IP: a versão do SDK que aceita DefinirIP precisa dele.
-                ret = EasyInner.DefinirIP(ip);
-                if (ret != EasyInnerRetorno.RET_COMANDO_OK) { Status(false, "DefinirIP(" + ip + ")=" + ret); return false; }
+                // TCP por IP: nem todas as versões do SDK exportam DefinirIP.
+                try
+                {
+                    ret = EasyInner.DefinirIP(ip);
+                    if (ret != EasyInnerRetorno.RET_COMANDO_OK) { Status(false, "DefinirIP(" + ip + ")=" + ret); return false; }
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    Console.WriteLine("[bridge] DefinirIP nao existe nesta EasyInner.dll; seguindo sem IP");
+                }
             }
             EasyInner.DefinirPadraoCartao((byte)padraoCartao);
             ret = EasyInner.ConfigurarInnerOnLine();
             if (ret != EasyInnerRetorno.RET_COMANDO_OK) { Status(false, "ConfigurarInnerOnLine=" + ret); return false; }
-            ret = EasyInner.AbrirPortaComunicacao(portaInner);
-            if (ret != EasyInnerRetorno.RET_COMANDO_OK && ret != EasyInnerRetorno.RET_PORTA_JA_ABERTA)
+
+            // Tenta a porta configurada e as portas usuais da Topdata (3000/3570).
+            int portaEfetiva = portaInner;
+            bool portaAberta = false;
+            int[] tentativas = new int[] { portaInner, 3000, 3570 };
+            foreach (int p in tentativas)
             {
-                Status(false, "AbrirPortaComunicacao(" + portaInner + ")=" + ret);
+                if (p <= 0) continue;
+                ret = EasyInner.AbrirPortaComunicacao(p);
+                if (ret == EasyInnerRetorno.RET_COMANDO_OK || ret == EasyInnerRetorno.RET_PORTA_JA_ABERTA)
+                {
+                    portaEfetiva = p;
+                    portaAberta = true;
+                    if (p != portaInner) Console.WriteLine("[bridge] porta " + portaInner + " falhou; usando " + p);
+                    break;
+                }
+                try { EasyInner.FecharPortaComunicacao(); } catch { }
+            }
+            if (!portaAberta)
+            {
+                Status(false, "AbrirPortaComunicacao(" + portaInner + ")=erro");
                 return false;
             }
 
@@ -352,7 +377,7 @@ public sealed class Bridge
             }
             EasyInner.EnviarMensagemPadraoOnLine(inner, 1, " ACESSO LIBERADO ");
             Status(true, null);
-            Console.WriteLine("[bridge] EasyInner on-line (inner " + inner + ", porta " + portaInner + ")");
+            Console.WriteLine("[bridge] EasyInner on-line (inner " + inner + ", porta " + portaEfetiva + ")");
             return true;
         }
         catch (DllNotFoundException)

@@ -8,11 +8,12 @@ export function aplicarRetencao(store, {
   externosDias = 365,
   socialDias = 0,
   fotosDias = 0,
+  unknownDias = 0,
 } = {}) {
   const corte = (dias) => new Date(agora.getTime() - dias * DIA);
   const resultado = {
     eventosRemovidos: 0, externosAnonimizados: 0, eventosSociaisRemovidos: 0,
-    participantesRemovidos: 0, fotosParaRemover: [],
+    participantesRemovidos: 0, fotosParaRemover: [], rostosParaRemover: [],
   };
 
   if (eventosDias > 0) {
@@ -64,6 +65,14 @@ export function aplicarRetencao(store, {
       if (!Number.isNaN(quando.getTime()) && quando < limite) {
         resultado.fotosParaRemover.push(p.id);
       }
+    }
+  }
+
+  if (unknownDias > 0) {
+    const limite = corte(unknownDias);
+    for (const u of store.unknownFaces || []) {
+      const d = new Date(u.at);
+      if (!Number.isNaN(d.getTime()) && d < limite) resultado.rostosParaRemover.push(u.id);
     }
   }
 

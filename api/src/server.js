@@ -75,9 +75,11 @@ const RETENCAO = {
   externosDias: Number(process.env.RETENTION_EXTERNAL_DAYS ?? 365),
   socialDias: Number(process.env.RETENTION_SOCIAL_DAYS ?? 0),
   fotosDias: Number(process.env.RETENTION_PHOTO_DAYS ?? 0),
+  unknownDias: Number(process.env.RETENTION_UNKNOWN_DAYS ?? 30),
 };
 const RETENCAO_INTERVALO_H = Number(process.env.RETENTION_INTERVAL_HOURS ?? 24);
 let retentionTimer = null;
+const UNKNOWN_DIR = process.env.UNKNOWN_DIR || path.join(path.dirname(DB_FILE), 'unknown');
 let ultimaVarredura = 0;
 let varrendo = false;
 let raffleTimer = null;
@@ -152,6 +154,15 @@ function executarRetencao(agora = new Date()) {
     if (!p) continue;
     try { deletePhoto(id); } catch { /* arquivo já ausente */ }
     p.foto = null;
+    mudou = true;
+  }
+  if (r.rostosParaRemover.length) {
+    const remover = new Set(r.rostosParaRemover);
+    for (const u of store.unknownFaces || []) {
+      if (!remover.has(u.id)) continue;
+      try { fs.rmSync(path.join(UNKNOWN_DIR, `${u.id}.${u.ext}`), { force: true }); } catch { }
+    }
+    store.unknownFaces = (store.unknownFaces || []).filter((u) => !remover.has(u.id));
     mudou = true;
   }
   if (r.eventosRemovidos > 0) {
@@ -1258,6 +1269,50 @@ async function route(req, res) {
     }
     return send(res, 201, dev);
   }
+  const deviceDiagnosticsRoute = url.pathname.match(/^\/api\/devices\/([^/]+)\/diagnostics$/);
+  if (req.method === 'GET' && deviceDiagnosticsRoute) {
+    operadorOnly();
+    const id = safeDecode(deviceDiagnosticsRoute[1]);
+    const dev = id ? store.devices.get(id) : null;
+    if (!dev) return send(res, 404, { error: 'device_not_found' });
+    const tcp = dev.ip ? await probarTcp(dev.ip, dev.porta, 1500) : { ok: false, error: 'sem IP' };
+    let edge = null;
+    try {
+      const r = await fetch(`${EDGE_URL.replace(/\/$/, '')}/hardware`, {
+        headers: EDGE_TOKEN ? { 'X-Edge-Token': EDGE_TOKEN } : {},
+        signal: AbortSignal.timeout(Number(process.env.EDGE_TIMEOUT_MS || 1500)),
+      });
+      if (r.ok) edge = await r.json();
+    } catch { /* edge offline */ }
+    return send(res, 200, {
+      device: { id: dev.id, nome: dev.nome, ip: dev.ip, porta: dev.porta, driver: dev.driver },
+      tcp,
+      edge,
+      edgeOnline: Boolean(edge),
+      verificadoEm: new Date().toISOString(),
+    });
+  }
+  const deviceRestartRoute = url.pathname.match(/^\/api\/devices\/([^/]+)\/restart$/);
+  if (req.method === 'POST' && deviceRestartRoute) {
+    gerenciaOnly();
+    const id = safeDecode(deviceRestartRoute[1]);
+    const dev = id ? store.devices.get(id) : null;
+    if (!dev) return send(res, 404, { error: 'device_not_found' });
+    try {
+      const r = await fetch(`${EDGE_URL.replace(/\/$/, '')}/hardware/restart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(EDGE_TOKEN ? { 'X-Edge-Token': EDGE_TOKEN } : {}) },
+        body: JSON.stringify({ device_id: dev.id }),
+        signal: AbortSignal.timeout(Number(process.env.EDGE_TIMEOUT_MS || 3000)),
+      });
+      const body = await r.json().catch(() => ({}));
+      auditar(user, 'BRIDGE_REINICIADO', dev.nome, req);
+      return send(res, r.status, body);
+    } catch (e) {
+      return send(res, 502, { error: `edge indisponível: ${e.message}` });
+    }
+  }
+
   const deviceTestRoute = url.pathname.match(/^\/api\/devices\/([^/]+)\/test$/);
   if (req.method === 'POST' && deviceTestRoute) {
     operadorOnly();
@@ -1912,9 +1967,95 @@ async function route(req, res) {
     return send(res, 200, diasFrequentados(store.events, alvo));
   }
 
+  // Cadastro feito no próprio leitor (senduser) refletido na API.
+  if (req.method === 'POST' && url.pathname === '/api/facial/users') {
+    operadorOnly();
+    const b = await readBody(req);
+    const enrollid = Number(b.enrollid);
+    if (!Number.isInteger(enrollid) || enrollid < 1 || enrollid > 99999999) {
+      return send(res, 400, { error: 'enrollid inválido' });
+    }
+    const existente = [...store.persons.values()].find((p) => Number(p.enrollid) === enrollid);
+    if (existente) {
+      return send(res, 200, { ok: true, existente: true, id: existente.id, matricula: existente.matricula });
+    }
+    try {
+      const p = criarPessoa({
+        nome: cleanText(b.name, 120) || `Usuário ${enrollid}`,
+        tipo: 'ALUNO', enrollid, ativo: true,
+      });
+      store.persons.set(p.id, p);
+      ensureRules(store, p.id);
+      enqueueSync(store, p);
+      markDirty();
+      auditar(user, 'CADASTRO_NO_LEITOR', `${p.nome} (enrollid ${enrollid})`, req);
+      return send(res, 201, { ok: true, id: p.id, matricula: p.matricula, enrollid: p.enrollid });
+    } catch (e) {
+      return send(res, e.status || 400, { error: e.message });
+    }
+  }
+
+  // Rosto desconhecido capturado pelo leitor (LGPD: acesso restrito).
+  if (req.method === 'POST' && url.pathname === '/api/facial/unknown') {
+    operadorOnly();
+    const b = await readBody(req, 1024 * 1024 + 1024);
+    const parsed = parsePhoto(b.image);
+    const ok = parsed && validatePhoto(parsed);
+    if (!ok || !ok.ok) return send(res, 400, { error: ok ? ok.error : 'imagem inválida' });
+    fs.mkdirSync(UNKNOWN_DIR, { recursive: true });
+    const id = nextId('unk');
+    const arquivo = `${id}.${ok.ext}`;
+    try {
+      fs.writeFileSync(path.join(UNKNOWN_DIR, arquivo), parsed.buffer);
+    } catch (e) {
+      return send(res, 500, { error: `não foi possível salvar a imagem: ${e.message}` });
+    }
+    const registro = {
+      id,
+      deviceId: cleanId(b.device_id) || null,
+      at: b.timestamp ? (parseDate(b.timestamp) || new Date()).toISOString() : new Date().toISOString(),
+      ext: ok.ext,
+      bytes: ok.bytes,
+      mime: ok.mime,
+    };
+    store.unknownFaces = store.unknownFaces || [];
+    store.unknownFaces.unshift(registro);
+    while (store.unknownFaces.length > 500) {
+      const velho = store.unknownFaces.pop();
+      try { fs.rmSync(path.join(UNKNOWN_DIR, `${velho.id}.${velho.ext}`), { force: true }); } catch { }
+    }
+    store.notifications.push({
+      id: nextId('ntf'), key: `rosto-desconhecido:${id}`, tipo: 'SEGURANCA',
+      titulo: 'Rosto desconhecido detectado',
+      detalhe: `Equipamento ${registro.deviceId || '?'} em ${new Date(registro.at).toLocaleString('pt-BR')}.`,
+      createdAt: new Date().toISOString(), resolvida: false, resolvidaPor: null, resolvidaEm: null,
+    });
+    markDirty();
+    auditar(user, 'ROSTO_DESCONHECIDO', `${registro.deviceId || '?'} (${id})`, req);
+    return send(res, 201, registro);
+  }
+  if (req.method === 'GET' && url.pathname === '/api/facial/unknown') {
+    operadorOnly();
+    const limit = Math.min(500, Math.max(1, Number(url.searchParams.get('limit')) || 100));
+    return send(res, 200, (store.unknownFaces || []).slice(0, limit));
+  }
+  const unknownPhotoRoute = url.pathname.match(/^\/api\/facial\/unknown\/([^/]+)\/photo$/);
+  if (req.method === 'GET' && unknownPhotoRoute) {
+    operadorOnly();
+    const id = safeDecode(unknownPhotoRoute[1]);
+    const rec = (store.unknownFaces || []).find((u) => u.id === id);
+    if (!rec) return send(res, 404, { error: 'not_found' });
+    try {
+      const buf = fs.readFileSync(path.join(UNKNOWN_DIR, `${rec.id}.${rec.ext}`));
+      res.writeHead(200, { 'Content-Type': rec.mime || 'image/jpeg', 'Cache-Control': 'private, max-age=30' });
+      return res.end(buf);
+    } catch {
+      return send(res, 404, { error: 'arquivo_ausente' });
+    }
+  }
+
   // Eventos do aluno (próximos) e autoinscrição.
-  if (req.method === 'GET' && url.pathname === '/api/me/eventos') {
-    if (user.perfil !== 'aluno') return send(res, 403, { error: 'só aluno' });
+  if (req.method === 'GET' && url.pathname === '/api/me/eventos') {    if (user.perfil !== 'aluno') return send(res, 403, { error: 'só aluno' });
     const agora = new Date();
     const lista = store.socialEvents
       .filter((e) => e.ativo !== false && new Date(e.fim || e.inicio) >= agora)

@@ -282,6 +282,7 @@ Repetir seções 1–8 em cada unidade (uma instalação por rede local). Regras
 | `RETENTION_EVENT_DAYS` | 365 | API — retenção de eventos de acesso |
 | `RETENTION_EXTERNAL_DAYS` | 365 | API — anonimiza externos antigos |
 | `RETENTION_PHOTO_DAYS` | 0 | API — fotos de inativos (0 desliga) |
+| `RETENTION_UNKNOWN_DAYS` | 30 | API — capturas de rostos desconhecidos |
 | `NOTIFY_INTERVAL_MS` | 300000 | API |
 | `AUTH_SECRET` | aleatório (reinício invalida tokens) | API — defina um fixo em produção |
 | `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD` | admin / admin123 | API — primeiro operador |

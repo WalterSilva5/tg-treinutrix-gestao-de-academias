@@ -53,6 +53,7 @@ Configurável por ambiente; roda no boot e a cada `RETENTION_INTERVAL_HOURS`:
 | `RETENTION_EXTERNAL_DAYS` | 365 | anonimiza participantes externos antigos (nome/contato/documento) |
 | `RETENTION_SOCIAL_DAYS` | 0 | remove eventos da agenda encerrados (e inscrições) |
 | `RETENTION_PHOTO_DAYS` | 0 | remove foto de pessoa **inativa** após o prazo |
+| `RETENTION_UNKNOWN_DAYS` | 30 | remove capturas de rostos desconhecidos |
 | `RETENTION_INTERVAL_HOURS` | 24 | frequência da rotina; 0 desliga |
 
 Recomendação: definir os prazos com a academia/advogado e manter backup com

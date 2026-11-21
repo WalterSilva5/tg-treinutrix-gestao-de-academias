@@ -826,3 +826,48 @@ test('aluno ve eventos e se inscreve; relatorio geral e export completo', async 
   assert.ok(dados.persons.some((x) => x.matricula === 'EV' + run));
   assert.ok(Array.isArray(dados.raffleDraws));
 });
+
+
+test('facial: senduser vira cadastro e rosto desconhecido e salvo', async () => {
+  const u = await api('/api/facial/users', {
+    method: 'POST', token: admin,
+    body: { device_id: 'dev_fit4_01', enrollid: 777001, name: 'Cadastro Leitor ' + run },
+  });
+  assert.equal(u.status, 201, u.text);
+  assert.equal(u.json.enrollid, 777001);
+  const u2 = await api('/api/facial/users', {
+    method: 'POST', token: admin,
+    body: { device_id: 'dev_fit4_01', enrollid: 777001, name: 'Cadastro Leitor ' + run },
+  });
+  assert.equal(u2.status, 200);
+  assert.equal(u2.json.existente, true);
+
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64');
+  const r = await api('/api/facial/unknown', {
+    method: 'POST', token: admin,
+    body: { device_id: 'dev_fit4_01', image: 'data:image/jpeg;base64,' + jpeg, timestamp: new Date().toISOString() },
+  });
+  assert.equal(r.status, 201, r.text);
+  const list = await api('/api/facial/unknown', { token: admin });
+  assert.ok(list.json.some((x) => x.id === r.json.id));
+  const foto = await fetch(base + '/api/facial/unknown/' + r.json.id + '/photo', { headers: { Authorization: 'Bearer ' + admin } });
+  assert.equal(foto.status, 200);
+  assert.equal(foto.headers.get('content-type'), 'image/jpeg');
+});
+
+test('diagnostico de dispositivo retorna TCP e estado do edge', async () => {
+  const srv = net.createServer((s) => s.end());
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const porta = srv.address().port;
+  const dev = await api('/api/devices', {
+    method: 'POST', token: admin,
+    body: { nome: 'Diag ' + run, driver: 'generic_http', ip: '127.0.0.1', porta },
+  });
+  assert.equal(dev.status, 201, dev.text);
+  const d = await api('/api/devices/' + dev.json.id + '/diagnostics', { token: admin });
+  assert.equal(d.status, 200, d.text);
+  assert.equal(d.json.tcp.ok, true);
+  assert.ok('edgeOnline' in d.json);
+  await new Promise((r) => srv.close(r));
+  await api('/api/devices/' + dev.json.id, { method: 'DELETE', token: admin });
+});

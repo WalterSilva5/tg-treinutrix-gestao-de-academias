@@ -24,6 +24,8 @@ export class FacialReal {
     host = process.env.FACIAL_WS_HOST || '0.0.0.0',
     deviceId,
     onAccess,
+    onSendUser = null,
+    onUnknown = null,
     accessTimeoutMs = Number(process.env.FACIAL_ACCESS_TIMEOUT_MS || 4000),
     commandTimeoutMs = Number(process.env.FACIAL_CMD_TIMEOUT_MS || 15000),
     scoreConfiavel = Number(process.env.FACIAL_SCORE || 1),
@@ -33,6 +35,8 @@ export class FacialReal {
     this.host = host;
     this.deviceId = deviceId;
     this.onAccess = onAccess;
+    this.onSendUser = onSendUser;
+    this.onUnknown = onUnknown;
     this.accessTimeoutMs = accessTimeoutMs;
     this.commandTimeoutMs = commandTimeoutMs;
     this.scoreConfiavel = scoreConfiavel;
@@ -60,6 +64,16 @@ export class FacialReal {
 
   get conectado() {
     return Boolean(this.leitor && this.leitor.aberto);
+  }
+
+  status() {
+    return {
+      conectado: this.conectado,
+      host: this.host,
+      porta: this.port,
+      sn: this.sn,
+      pendentes: this.pendentes.length,
+    };
   }
 
   // Envia um comando (`buildSetUserinfo`, `buildDeleteUser`, ...) e espera o
@@ -132,9 +146,10 @@ export class FacialReal {
     }
 
     if (json.cmd === 'senduser') {
-      // Cadastro feito no próprio leitor; por enquanto só confirmamos.
+      // Cadastro feito no próprio leitor: confirma e tenta refletir na API.
       conn.send({ ret: 'senduser', result: true });
       this.log(`[facial] cadastro local recebido enrollid=${json.enrollid}`);
+      try { this.onSendUser?.(json); } catch (e) { this.log('[facial] senduser não encaminhado:', e.message); }
       return;
     }
 
@@ -156,6 +171,8 @@ export class FacialReal {
       logindex: msg.logindex,
     };
     if (msg.desconhecido) {
+      try { this.onUnknown?.({ deviceId: this.deviceId, image: bruto?.record?.[0]?.image || null, timestamp: msg.time }); }
+      catch (e) { this.log('[facial] rosto desconhecido não encaminhado:', e.message); }
       return { allow: false, motivo: 'PESSOA_NAO_ENCONTRADA', display_msg: 'Rosto não cadastrado.' };
     }
     if (!this.onAccess) return { allow: false, motivo: 'SEM_MOTOR', display_msg: 'Sistema indisponível.' };
