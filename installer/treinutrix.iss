@@ -1,4 +1,4 @@
-; TG Treinutrix - Instalador Windows
+﻿; TG Treinutrix - Instalador Windows
 ; Inno Setup 6 - https://jrsoftware.org/isinfo.php
 ; Gera um wizard .exe que instala API + Edge + PWA sem exigir Node pré-instalado.
 ; Build: powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
@@ -27,10 +27,9 @@ OutputBaseFilename=Treinutrix-Setup-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-SetupIconFile=..\front\icon.svg
-UninstallDisplayIcon={app}\runtime\node.exe
+SetupIconFile=treinutrix.ico
+UninstallDisplayIcon={app}\treinutrix.ico
 PrivilegesRequired=admin
-PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesInstallIn64BitMode=x64compatible
 VersionInfoVersion={#MyAppVersion}
 VersionInfoDescription=Instalador TG Treinutrix - Gestao de academias
@@ -52,6 +51,7 @@ Name: "firewall"; Description: "Liberar portas 3001-3003 no Firewall do Windows"
 [Files]
 ; Runtime Node 22 portátil (baixado por build-installer.ps1 para installer\runtime\node.exe)
 Source: "runtime\node.exe"; DestDir: "{app}\runtime"; Flags: ignoreversion
+Source: "treinutrix.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; App — lista explícita para não levar .git/data/logs/backups/node_modules
 Source: "..\api\*"; DestDir: "{app}\api"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\edge-catraca\*"; DestDir: "{app}\edge-catraca"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -72,11 +72,11 @@ Name: "{app}\backups"; Permissions: users-modify
 Name: "{app}\logs"; Permissions: users-modify
 
 [Icons]
-Name: "{group}\Treinutrix - Painel"; Filename: "http://localhost:3001"; IconFilename: "{app}\front\icon.svg"
-Name: "{group}\Treinutrix - Verificar instalacao"; Filename: "{app}\scripts\verificar.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\runtime\node.exe"
+Name: "{group}\Treinutrix - Painel"; Filename: "http://localhost:3001"; IconFilename: "{app}\treinutrix.ico"
+Name: "{group}\Treinutrix - Verificar instalacao"; Filename: "{app}\scripts\verificar.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\treinutrix.ico"
 Name: "{group}\Treinutrix - Parar servicos"; Filename: "{app}\scripts\parar-servico.cmd"; WorkingDir: "{app}"
 Name: "{group}\Treinutrix - Desinstalar"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Treinutrix"; Filename: "http://localhost:3001"; IconFilename: "{app}\front\icon.svg"; Tasks: desktopicon
+Name: "{autodesktop}\Treinutrix"; Filename: "http://localhost:3001"; IconFilename: "{app}\treinutrix.ico"; Tasks: desktopicon
 
 [Run]
 ; 1. Gera data\auth.secret se não existir (mesma lógica de scripts\iniciar-painel.cmd:19)
@@ -84,38 +84,46 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Com
 ; 2. Firewall (equivale a scripts\liberar-firewall.cmd:12)
 Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""TG Treinutrix"""; Flags: runhidden; Tasks: firewall; StatusMsg: "Liberando portas no firewall..."
 Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""TG Treinutrix"" dir=in action=allow protocol=TCP localport=3001-3003 profile=private,domain"; Flags: runhidden; Tasks: firewall
-; 3. Instala tarefas agendadas PainelCatracaAPI / PainelCatracaEdge (scripts\servico.ps1:28)
-;    Usa o node embarcado, não o do PATH, para não depender de instalação prévia.
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""$node='{app}\runtime\node.exe'; $raiz='{app}'; $tasks=@(@{{N='PainelCatracaAPI';T='api';P=3001}},@{{N='PainelCatracaEdge';T='edge';P=3002}}); New-Item -ItemType Directory -Force (Join-Path $raiz 'logs')|Out-Null; foreach($t in $tasks){{ $args2='\"'+(Join-Path $raiz 'scripts\servico.js')+'\" '+$t.T; $a=New-ScheduledTaskAction -Execute $node -Argument $args2 -WorkingDirectory $raiz; $tr=New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; $st=New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero); Register-ScheduledTask -TaskName $t.N -Action $a -Trigger $tr -Settings $st -Description 'Treinutrix - supervisor com logs e reinicio' -Force|Out-Null; Start-ScheduledTask -TaskName $t.N }}"""; Flags: runhidden; Tasks: autostart; StatusMsg: "Registrando inicializacao automatica..."
-; 4. Inicia agora mesmo (sem esperar logon) para validação imediata
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""$node='{app}\runtime\node.exe'; $raiz='{app}'; foreach($t in @('api','edge')){{ Start-Process -FilePath $node -ArgumentList (Join-Path $raiz ""scripts\servico.js $t"") -WorkingDirectory $raiz -WindowStyle Hidden }}; Start-Sleep 3; try{{ Invoke-RestMethod http://127.0.0.1:3001/health -TimeoutSec 5 | Out-Null; Write-Host 'API OK' }}catch{{ Write-Host 'API ainda iniciando' }}"""; Flags: runhidden; StatusMsg: "Iniciando servicos..."
+; 3. Registra as tarefas agendadas (sempre) e inicia agora.
+;    Com autostart, cria também o gatilho de logon; sem ele, a tarefa fica
+;    registrada para poder ser parada/removida corretamente na desinstalação.
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\instalar-tarefas.ps1"" -Raiz ""{app}"" -Node ""{app}\runtime\node.exe"" -Autostart"; Flags: runhidden; Tasks: autostart; StatusMsg: "Registrando e iniciando serviços..."
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\instalar-tarefas.ps1"" -Raiz ""{app}"" -Node ""{app}\runtime\node.exe"""; Flags: runhidden; Tasks: not autostart; StatusMsg: "Iniciando serviços..."
 ; 5. Abre o painel no navegador ao final
-Filename: "http://localhost:3001"; Description: "Abrir o painel agora"; Flags: postinstall nowait skipifsilent
+Filename: "http://localhost:3001"; Description: "Abrir o painel agora"; Flags: postinstall nowait skipifsilent shellexec
 
 [UninstallRun]
-; Para tarefas e remove regra de firewall; dados são preservados
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""foreach($n in @('PainelCatracaAPI','PainelCatracaEdge')){{ try{{ Stop-ScheduledTask -TaskName $n -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName $n -Confirm:$false -ErrorAction SilentlyContinue }}catch{{}} }}"""; Flags: runhidden
-Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""TG Treinutrix"""; Flags: runhidden
+; Para tarefas e processos nas portas antes de remover arquivos/dados.
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\servico.ps1"" parar"; Flags: runhidden; RunOnceId: "PararServicos"
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""foreach($n in @('PainelCatracaAPI','PainelCatracaEdge')){{ try{{ Unregister-ScheduledTask -TaskName $n -Confirm:$false -ErrorAction SilentlyContinue }}catch{{}} }}"""; Flags: runhidden; RunOnceId: "RemoverTarefas"
+Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""TG Treinutrix"""; Flags: runhidden; RunOnceId: "RemoverFirewall"
 
 [UninstallDelete]
 ; Não apaga data/ nem backups/ automaticamente — usuário decide na desinstalação
 ; (Inno pergunta se deve remover arquivos adicionais)
 
 [Code]
-function InitializeUninstall(): Boolean;
 var
-  V: string;
+  ApagarDados: Boolean;
+
+function InitializeUninstall(): Boolean;
 begin
-  // Pergunta se deve apagar dados (evita perda de cadastros/fotos)
-  if MsgBox('Manter os dados da academia (cadastros, fotos e backups em data/ e backups/)?' + #13#10 + 'Escolha NAO para apagar tudo.', mbConfirmation, MB_YESNO) = IDYES then
-  begin
-    // Mantém — nada a fazer
-  end
+  // Pergunta se deve apagar dados (evita perda de cadastros/fotos).
+  // Em desinstalação silenciosa, mantém os dados por segurança.
+  if UninstallSilent then
+    ApagarDados := False
   else
+    ApagarDados := MsgBox('Manter os dados da academia (cadastros, fotos e backups em data/ e backups/)?' + #13#10 + 'Escolha NAO para apagar tudo.', mbConfirmation, MB_YESNO) = IDNO;
+  Result := True;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  // Só apaga depois que [UninstallRun] parou as tarefas, evitando arquivo em uso.
+  if (CurUninstallStep = usPostUninstall) and ApagarDados then
   begin
     DelTree(ExpandConstant('{app}\data'), True, True, True);
     DelTree(ExpandConstant('{app}\backups'), True, True, True);
     DelTree(ExpandConstant('{app}\logs'), True, True, True);
   end;
-  Result := True;
 end;

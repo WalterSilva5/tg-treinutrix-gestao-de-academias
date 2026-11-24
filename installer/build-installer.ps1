@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
   Gera o instalador Treinutrix-Setup-*.exe via Inno Setup 6.
@@ -27,6 +27,11 @@ param(
 $ErrorActionPreference = "Stop"
 $raiz = Split-Path -Parent $PSScriptRoot
 Set-Location $raiz
+
+# Garante TLS 1.2 no Windows PowerShell 5.1 antes de baixar o runtime.
+try {
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+} catch { }
 
 function Fail($msg) { Write-Host "[ERRO] $msg" -ForegroundColor Red; exit 1 }
 function Ok($msg) { Write-Host "[ok] $msg" -ForegroundColor Green }
@@ -119,7 +124,8 @@ if ($LASTEXITCODE -ne 0) { Fail "ISCC falhou (exit $LASTEXITCODE)" }
 $exe = Get-ChildItem $outDir -Filter "Treinutrix-Setup-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $exe) { Fail "Instalador não gerado em $outDir" }
 
-Ok "Instalador: $($exe.FullName) ($([math]::Round($exe.Length/1MB,1)) MB)"
+$tamanhoMb = [math]::Round($exe.Length / 1MB, 1)
+Ok "Instalador: $($exe.FullName) - $tamanhoMb MB"
 Write-Host @"
 
 Próximos passos:

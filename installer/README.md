@@ -18,7 +18,7 @@ Na desinstalação: para as tarefas, remove a regra de firewall e **pergunta** s
 
 ## Gerar o .exe
 
-Pré-requisito único na máquina de build: **Inno Setup 6** (https://jrsoftware.org/isdl.php) com `ISCC.exe` no PATH.
+Pré-requisito único na máquina de build: **Inno Setup 6.3+** (https://jrsoftware.org/isdl.php) com `ISCC.exe` no PATH.
 
 ```powershell
 # na raiz do repo

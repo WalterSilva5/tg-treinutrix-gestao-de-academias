@@ -1,4 +1,4 @@
-param(
+﻿param(
   [ValidateSet('instalar', 'remover', 'iniciar', 'parar', 'status')]
   [string]$Acao = 'status',
   [int]$ApiPort = 3001,
@@ -7,7 +7,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $raiz = Split-Path -Parent $PSScriptRoot
-$node = (Get-Command node -ErrorAction Stop | Select-Object -First 1).Source
+$nodeCmd = Get-Command node -ErrorAction SilentlyContinue | Select-Object -First 1
+$node = if ($nodeCmd) { $nodeCmd.Source }
+  elseif (Test-Path (Join-Path $raiz 'runtime\node.exe')) { Join-Path $raiz 'runtime\node.exe' }
+  else { $null }
 $tarefas = @(
   @{ Nome = 'PainelCatracaAPI'; Tipo = 'api'; Porta = $ApiPort },
   @{ Nome = 'PainelCatracaEdge'; Tipo = 'edge'; Porta = $EdgePort }
@@ -26,6 +29,7 @@ function Parar-Portas {
 }
 
 function Instalar {
+  if (-not $node) { throw 'node.exe não encontrado. Instale Node 22 ou use uma instalação com runtime embarcado.' }
   New-Item -ItemType Directory -Force (Join-Path $raiz 'logs') | Out-Null
   foreach ($t in $tarefas) {
     $argumentos = "`"$($raiz)\scripts\servico.js`" $($t.Tipo)"
