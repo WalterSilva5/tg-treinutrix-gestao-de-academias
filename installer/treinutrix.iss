@@ -14,7 +14,7 @@
 #define MyAppURL "https://github.com/WalterSilva5/tg-treinutrix-gestao-de-academias"
 
 [Setup]
-AppId={{#MyAppId}}
+AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -79,8 +79,6 @@ Name: "{group}\Treinutrix - Desinstalar"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Treinutrix"; Filename: "http://localhost:3001"; IconFilename: "{app}\treinutrix.ico"; Tasks: desktopicon
 
 [Run]
-; 1. Gera data\auth.secret se não existir (mesma lógica de scripts\iniciar-painel.cmd:19)
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""if(-not (Test-Path '{app}\data\auth.secret')){{ $s=[guid]::NewGuid().ToString('N'); Set-Content -Path '{app}\data\auth.secret' -Value $s -Encoding ascii; Write-Host 'auth.secret criado' }}"""; Flags: runhidden; StatusMsg: "Configurando..."
 ; 2. Firewall (equivale a scripts\liberar-firewall.cmd:12)
 Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""TG Treinutrix"""; Flags: runhidden; Tasks: firewall; StatusMsg: "Liberando portas no firewall..."
 Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""TG Treinutrix"" dir=in action=allow protocol=TCP localport=3001-3003 profile=private,domain"; Flags: runhidden; Tasks: firewall

@@ -6,7 +6,7 @@ Wizard `.exe` para leigos: duplo clique, Avançar, Abrir.
 
 * Copia para `C:\Program Files\Treinutrix\`: `api/`, `edge-catraca/`, `front/`, `scripts/`, `prisma/`, `package.json` e o **Node 22 portátil** (`runtime/node.exe` — sem exigir Node pré-instalado).
 * Cria `data/`, `data/photos/`, `backups/`, `logs/` com permissão de escrita.
-* Gera `data/auth.secret` na primeira instalação (mesma lógica de `scripts/iniciar-painel.cmd`).
+* A API cria `data/auth.secret` no primeiro start (tokens sobrevivem a reinícios; pode ser fixado por `AUTH_SECRET`).
 * Libera `TCP 3001-3003` no Firewall (API/edge/facial).
 * Registra `PainelCatracaAPI` e `PainelCatracaEdge` no Agendador de Tarefas (logon) usando o Node embarcado e `scripts/servico.js` (logs com rotação em `logs/`).
 * Cria atalhos no Menu Iniciar e opcional na Área de Trabalho apontando para `http://localhost:3001`.
