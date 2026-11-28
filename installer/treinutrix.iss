@@ -81,7 +81,7 @@ Name: "{autodesktop}\Treinutrix"; Filename: "http://localhost:3001"; IconFilenam
 [Run]
 ; 2. Firewall (equivale a scripts\liberar-firewall.cmd:12)
 Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""TG Treinutrix"""; Flags: runhidden; Tasks: firewall; StatusMsg: "Liberando portas no firewall..."
-Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""TG Treinutrix"" dir=in action=allow protocol=TCP localport=3001-3003 profile=private,domain"; Flags: runhidden; Tasks: firewall
+Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""TG Treinutrix"" dir=in action=allow protocol=TCP localport=3001-3003 profile=any"; Flags: runhidden; Tasks: firewall
 ; 3. Registra as tarefas agendadas (sempre) e inicia agora.
 ;    Com autostart, cria também o gatilho de logon; sem ele, a tarefa fica
 ;    registrada para poder ser parada/removida corretamente na desinstalação.
